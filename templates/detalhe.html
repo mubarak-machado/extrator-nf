@@ -5,39 +5,47 @@
 
 <p class="breadcrumb"><a href="{{ url_for('lista') }}">Notas</a> › Nota {{ r.numero or '(sem número)' }}</p>
 
-<div class="page-head" style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-  <h2 style="margin:0;">Nota {{ r.numero or '(sem número)' }}</h2>
+<div class="page-head row">
+  <h2>Nota {{ r.numero or '(sem número)' }}</h2>
   <span class="badge {{ item.tipo|lower }}">{{ item.tipo }}</span>
   {% if item.ja_exportada %}<span class="pill ja">já exportada</span>{% else %}<span class="pill nova">inédita</span>{% endif %}
 </div>
 
 {# ---------- resumo para lançamento ---------- #}
-<section class="card" style="margin-bottom:1.5rem;border-color:var(--line-strong);">
+<section class="card lead">
   <div class="card-h"><h3>Resumo para lançamento</h3></div>
   <div class="card-b">
-    <dl class="grid">
-      {% if item.tipo == 'NFE' %}
+    {% if item.tipo == 'NFE' %}
+      <dl class="grid">
         <dt>Emitente</dt><dd>{{ r.emit_nome or '—' }} <span class="muted mono">· {{ r.emit_cnpj | cnpj }}</span></dd>
         <dt>Optante pelo Simples</dt><dd>{{ r.emit_optante_simples | simnao }}</dd>
         <dt>Emissão</dt><dd class="num">{{ r.data_emissao | data }}</dd>
-        <dt>Valor total</dt><dd class="num">{{ r.valor_total | moeda }}</dd>
-      {% else %}
+        <dt>Valor total</dt><dd class="num{{ ' zero' if r.valor_total is ezero else '' }}">{{ r.valor_total | moeda }}</dd>
+      </dl>
+    {% else %}
+      <dl class="grid">
         <dt>Fornecedor</dt><dd>{{ r.prest_nome or '—' }} <span class="muted mono">· {{ r.prest_cnpj | cnpj }}</span></dd>
         <dt>Competência</dt><dd class="num">{{ r.competencia | competencia }}</dd>
         <dt>Município (ISS)</dt><dd>{{ r.municipio_nome or '—' }}</dd>
-        <dt>Valor bruto</dt><dd class="num">{{ r.valor_servicos | moeda }}</dd>
-        <dt>Retenções (destaque)</dt>
-        <dd class="num">IR {{ r.ir_destaque_emitente|moeda }} · PIS {{ r.pis_destaque_emitente|moeda }} · COFINS {{ r.cofins_destaque_emitente|moeda }} · CSLL {{ r.csll_destaque_emitente|moeda }} · INSS {{ r.inss_destaque_emitente|moeda }} · ISS {{ r.iss_valor_destaque_emitente|moeda }}</dd>
-        <dt>Valor líquido</dt><dd class="num">{{ r.valor_liquido | moeda }}</dd>
-      {% endif %}
-    </dl>
+        <dt>Valor bruto</dt><dd class="num{{ ' zero' if r.valor_servicos is ezero else '' }}">{{ r.valor_servicos | moeda }}</dd>
+        <dt>Valor líquido</dt><dd class="num{{ ' zero' if r.valor_liquido is ezero else '' }}">{{ r.valor_liquido | moeda }}</dd>
+      </dl>
+      <p class="overline mt-3">Retenções (destaque do emitente)</p>
+      <dl class="tax-grid mt-3">
+        {% for rot, val in [('IR', r.ir_destaque_emitente), ('PIS', r.pis_destaque_emitente),
+                            ('COFINS', r.cofins_destaque_emitente), ('CSLL', r.csll_destaque_emitente),
+                            ('INSS', r.inss_destaque_emitente), ('ISS', r.iss_valor_destaque_emitente)] %}
+          <div class="cell"><dt>{{ rot }}</dt><dd class="{{ 'zero' if val is ezero else '' }}">{{ val | moeda }}</dd></div>
+        {% endfor %}
+      </dl>
+    {% endif %}
   </div>
 </section>
 
 {# ---------- identificação ---------- #}
 <section class="card"><div class="card-h"><h3>Identificação</h3></div><div class="card-b">
   <dl class="grid">
-    <dt>Chave</dt><dd class="num" style="word-break:break-all;">{{ r.chave | chave }}</dd>
+    <dt>Chave</dt><dd class="num break-all">{{ r.chave | chave }}</dd>
     <dt>Número</dt><dd class="num">{{ r.numero or '—' }}</dd>
     {% if item.tipo == 'NFE' %}
       <dt>Série</dt><dd class="num">{{ r.serie or '—' }}</dd>
@@ -68,20 +76,21 @@
   </div></section>
   <section class="card"><div class="card-h"><h3>Valores</h3></div><div class="card-b">
     <dl class="grid">
-      <dt>Valor total</dt><dd class="num">{{ r.valor_total | moeda }}</dd>
-      <dt>Produtos</dt><dd class="num">{{ r.valor_produtos | moeda }}</dd>
-      <dt>Desconto</dt><dd class="num">{{ r.valor_desconto | moeda }}</dd>
-      <dt>Outras despesas</dt><dd class="num">{{ r.valor_outras_despesas | moeda }}</dd>
+      <dt>Valor total</dt><dd class="num{{ ' zero' if r.valor_total is ezero else '' }}">{{ r.valor_total | moeda }}</dd>
+      <dt>Produtos</dt><dd class="num{{ ' zero' if r.valor_produtos is ezero else '' }}">{{ r.valor_produtos | moeda }}</dd>
+      <dt>Desconto</dt><dd class="num{{ ' zero' if r.valor_desconto is ezero else '' }}">{{ r.valor_desconto | moeda }}</dd>
+      <dt>Outras despesas</dt><dd class="num{{ ' zero' if r.valor_outras_despesas is ezero else '' }}">{{ r.valor_outras_despesas | moeda }}</dd>
     </dl>
   </div></section>
-  <section class="card"><div class="card-h"><h3>Tributos — destaque do emitente</h3></div><div class="card-b">
-    <div class="destaque"><p class="note">Lido como destacado pelo emitente. Não é apuração (Fase 2).</p>
-      <dl class="grid">
-        <dt>ICMS</dt><dd class="num">{{ r.icms_destaque_emitente | moeda }}</dd>
-        <dt>IPI</dt><dd class="num">{{ r.ipi_destaque_emitente | moeda }}</dd>
-        <dt>PIS</dt><dd class="num">{{ r.pis_destaque_emitente | moeda }}</dd>
-        <dt>COFINS</dt><dd class="num">{{ r.cofins_destaque_emitente | moeda }}</dd>
-        <dt>Trib. aprox.</dt><dd class="num">{{ r.trib_aprox_destaque_emitente | moeda }}</dd>
+  <section class="card"><div class="card-h"><h3>Tributos</h3></div><div class="card-b">
+    <div class="declarado">
+      <p class="note"><span class="chip">destaque do emitente</span> Lido como destacado pelo emitente — não é apuração (Fase 2).</p>
+      <dl class="tax-grid">
+        {% for rot, val in [('ICMS', r.icms_destaque_emitente), ('IPI', r.ipi_destaque_emitente),
+                            ('PIS', r.pis_destaque_emitente), ('COFINS', r.cofins_destaque_emitente),
+                            ('Trib. aprox.', r.trib_aprox_destaque_emitente)] %}
+          <div class="cell"><dt>{{ rot }}</dt><dd class="{{ 'zero' if val is ezero else '' }}">{{ val | moeda }}</dd></div>
+        {% endfor %}
       </dl>
     </div>
   </div></section>
@@ -108,33 +117,37 @@
       <dt>Local da prestação</dt><dd class="num">{{ r.local_prestacao or '—' }}</dd>
       <dt>Local do prestador</dt><dd class="num">{{ r.local_prestador or '—' }}</dd>
     </dl>
-    <p class="muted" style="font-size:.8rem;margin:.75rem 0 .35rem;">Discriminação (texto livre do emitente):</p>
+    <p class="discr-label">Discriminação (texto livre do emitente):</p>
     <div class="discr">{{ r.discriminacao or '— (sem discriminação)' }}</div>
   </div></section>
-  <section class="card"><div class="card-h"><h3>Valores e retenções — destaque do emitente</h3></div><div class="card-b">
-    <div class="destaque"><p class="note">Lido como destacado pelo emitente. Não é apuração (Fase 2).</p>
+  <section class="card"><div class="card-h"><h3>Valores e retenções</h3></div><div class="card-b">
+    <div class="declarado">
+      <p class="note"><span class="chip">destaque do emitente</span> Lido como destacado pelo emitente — não é apuração (Fase 2).</p>
       <dl class="grid">
-        <dt>Valor dos serviços</dt><dd class="num">{{ r.valor_servicos | moeda }}</dd>
-        <dt>Deduções</dt><dd class="num">{{ r.deducoes | moeda }}</dd>
-        <dt>Base de cálculo</dt><dd class="num">{{ r.base_calculo | moeda }}</dd>
-        <dt>ISS (alíquota / valor)</dt><dd class="num">{{ r.iss_aliquota_destaque_emitente | percent }} · {{ r.iss_valor_destaque_emitente | moeda }}</dd>
+        <dt>Valor dos serviços</dt><dd class="num{{ ' zero' if r.valor_servicos is ezero else '' }}">{{ r.valor_servicos | moeda }}</dd>
+        <dt>Deduções</dt><dd class="num{{ ' zero' if r.deducoes is ezero else '' }}">{{ r.deducoes | moeda }}</dd>
+        <dt>Base de cálculo</dt><dd class="num{{ ' zero' if r.base_calculo is ezero else '' }}">{{ r.base_calculo | moeda }}</dd>
+        <dt>ISS (alíquota / valor)</dt><dd class="num">{{ r.iss_aliquota_destaque_emitente | percent }} · <span class="{{ 'zero' if r.iss_valor_destaque_emitente is ezero else '' }}">{{ r.iss_valor_destaque_emitente | moeda }}</span></dd>
         <dt>ISS retido (indicador)</dt><dd class="num">{{ r.iss_retido_destaque_emitente or '—' }}</dd>
-        <dt>IR</dt><dd class="num">{{ r.ir_destaque_emitente | moeda }}</dd>
-        <dt>PIS</dt><dd class="num">{{ r.pis_destaque_emitente | moeda }}</dd>
-        <dt>COFINS</dt><dd class="num">{{ r.cofins_destaque_emitente | moeda }}</dd>
-        <dt>CSLL</dt><dd class="num">{{ r.csll_destaque_emitente | moeda }}</dd>
-        <dt>INSS</dt><dd class="num">{{ r.inss_destaque_emitente | moeda }}</dd>
-        <dt>Valor líquido</dt><dd class="num">{{ r.valor_liquido | moeda }}</dd>
+        <dt>Valor líquido</dt><dd class="num{{ ' zero' if r.valor_liquido is ezero else '' }}">{{ r.valor_liquido | moeda }}</dd>
+      </dl>
+      <p class="overline mt-3">Retenções federais</p>
+      <dl class="tax-grid mt-3">
+        {% for rot, val in [('IR', r.ir_destaque_emitente), ('PIS', r.pis_destaque_emitente),
+                            ('COFINS', r.cofins_destaque_emitente), ('CSLL', r.csll_destaque_emitente),
+                            ('INSS', r.inss_destaque_emitente)] %}
+          <div class="cell"><dt>{{ rot }}</dt><dd class="{{ 'zero' if val is ezero else '' }}">{{ val | moeda }}</dd></div>
+        {% endfor %}
       </dl>
     </div>
   </div></section>
 
   <section class="card"><div class="card-h"><h3>Material aplicado — conferência humana</h3></div><div class="card-b">
-    <div class="destaque" style="margin-bottom:.75rem;"><p class="note" style="margin:0;">{{ r.material_aviso }}</p></div>
+    <div class="atencao mb-3"><p class="note">{{ r.material_aviso }}</p></div>
     {% if item.marcacao %}
-      <p class="muted" style="font-size:.85rem;">Marcação vigente: <strong>{{ item.marcacao.valor|upper }}</strong> — por {{ item.marcacao.autor }} em {{ item.marcacao.marcado_em | datahora }}.</p>
+      <p class="muted small">Marcação vigente: <strong>{{ item.marcacao.valor|upper }}</strong> — por {{ item.marcacao.autor }} em {{ item.marcacao.marcado_em | datahora }}.</p>
     {% else %}
-      <p class="muted" style="font-size:.85rem;">Ainda não conferido.</p>
+      <p class="muted small">Ainda não conferido.</p>
     {% endif %}
     <form method="post" action="{{ url_for('marcar', chave=r.chave) }}">
       <fieldset>
@@ -143,8 +156,9 @@
           <label class="opt"><input type="radio" name="material" value="sim"> Sim, houve material</label>
           <label class="opt"><input type="radio" name="material" value="nao"> Não houve material</label>
         </div>
-        <label class="opt" style="display:block;margin-bottom:.75rem;">
-          <input type="text" name="autor" placeholder="Seu nome (autoria da marcação)">
+        <label class="field" for="autor">
+          <span class="lbl">Autoria da marcação</span>
+          <input type="text" id="autor" name="autor" placeholder="Seu nome">
         </label>
         <button class="btn" type="submit">Registrar marcação</button>
       </fieldset>

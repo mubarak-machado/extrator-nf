@@ -36,6 +36,9 @@ for nome in ("moeda", "numero", "data", "datahora", "competencia",
              "cnpj", "percent", "chave", "simnao"):
     app.jinja_env.filters[nome] = getattr(formato, nome)
 
+# Teste Jinja: `{{ valor is ezero }}` atenua (não esconde) valores zerados.
+app.jinja_env.tests["ezero"] = formato.ezero
+
 
 def _soma(regs, attr):
     """Soma um atributo numérico (apresentação). NÃO é apuração: é só o

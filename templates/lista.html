@@ -15,10 +15,10 @@
   </div>
   <div class="kpi">
     <p class="label">Valor bruto inédito</p>
-    <div class="value small">{{ kpis.valor_inedito | moeda }}</div>
+    <div class="value small{{ ' zero' if kpis.valor_inedito is ezero else '' }}">{{ kpis.valor_inedito | moeda }}</div>
     <p class="sub">soma do que falta exportar</p>
   </div>
-  <div class="kpi">
+  <div class="kpi{{ ' attn' if kpis.atencao else '' }}">
     <p class="label">Precisam de atenção</p>
     <div class="value">{{ kpis.atencao }}</div>
     <p class="sub">campo faltante ou material não conferido</p>
@@ -34,15 +34,15 @@
 <section class="section" aria-label="Consolidações sugeridas">
   <h3>Consolidações sugeridas · serviço continuado</h3>
   {% for c in consolidacoes %}
-  <div class="card"><div class="card-b" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-    <div style="flex:1 1 260px;min-width:0;">
+  <div class="card"><div class="card-b consol-card">
+    <div class="who">
       <strong>{{ c.prest_nome }}</strong><br>
       <span class="muted mono">{{ c.prest_cnpj | cnpj }}</span>
       <span class="muted"> · competência {{ c.competencia | competencia }}</span>
     </div>
-    <div class="num" style="text-align:right;">
-      <div class="mono" style="font-size:1.15rem;font-weight:600;">{{ c.total | moeda }}</div>
-      <div class="muted" style="font-size:.78rem;">{{ c.n }} municípios · {{ c.novas }} inéditas</div>
+    <div class="amount">
+      <div class="total{{ ' zero' if c.total is ezero else '' }}">{{ c.total | moeda }}</div>
+      <div class="meta">{{ c.n }} municípios · {{ c.novas }} inéditas</div>
     </div>
     <a class="btn" href="{{ url_for('consolidado', prest_cnpj=c.prest_cnpj, competencia=c.competencia) }}">Ver consolidado →</a>
   </div></div>
@@ -85,7 +85,7 @@
             <td class="num">{{ r.numero or '—' }}</td>
             <td>{{ (r.emit_nome if it.tipo=='NFE' else r.prest_nome) or '—' }}<span class="sub mono">{{ it.origem }}</span></td>
             <td class="mono nowrap">{{ (r.emit_cnpj if it.tipo=='NFE' else r.prest_cnpj) | cnpj }}</td>
-            <td class="num">{{ it.valor | moeda }}</td>
+            <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
             <td>{% if it.ja_exportada %}<span class="pill ja">já exportada</span>{% else %}<span class="pill nova">inédita</span>{% endif %}</td>
             <td>
               {% if r.campos_faltantes %}<span class="attn">⚠ {{ r.campos_faltantes|join(', ') }}</span>{% endif %}

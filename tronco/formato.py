@@ -42,6 +42,19 @@ def numero(valor) -> str:
     return m.replace("R$ ", "") if m != TRACO else TRACO
 
 
+def ezero(valor) -> bool:
+    """True se o valor é zero, vazio ou ausente — para *atenuar* (não esconder)
+    a exibição. Continua sendo renderizado; só recebe menos ênfase visual, de
+    modo que os valores reais saltem (contraste relevante). Não altera o dado.
+    Registrado como *teste* Jinja em app.py: usar `{{ x is ezero }}`."""
+    if valor is None or valor == "":
+        return True
+    try:
+        return Decimal(str(valor)) == 0
+    except (InvalidOperation, ValueError):
+        return False
+
+
 def data(iso) -> str:
     """'2026-05-12T10:14:00-03:00' -> '12/05/2026'."""
     if not iso:
