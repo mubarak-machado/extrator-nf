@@ -1,0 +1,12 @@
+# ambiente
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# estado de runtime (não versionar)
+*.sqlite
+exportacoes/
+
+# SO
+.DS_Store

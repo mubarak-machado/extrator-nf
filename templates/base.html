@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-br" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Extrator NF{% endblock %}</title>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <a class="skip" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">NF</div>
+      <div>
+        <h1>Extrator NF</h1>
+        <p class="tag">Conferência fiscal · Fase 1 (extração fiel)</p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Tamanho da fonte">
+        <button type="button" data-set-fs="100" title="Fonte padrão">A</button>
+        <button type="button" data-set-fs="112" title="Fonte maior" style="font-size:.92rem">A</button>
+        <button type="button" data-set-fs="125" title="Fonte grande" style="font-size:1.02rem">A</button>
+        <button type="button" data-set-fs="140" title="Fonte muito grande" style="font-size:1.12rem">A</button>
+      </div>
+      <div class="seg" role="group" aria-label="Tema de cores">
+        <button type="button" data-set-theme="auto" title="Tema automático (segue o sistema)">Auto</button>
+        <button type="button" data-set-theme="light" title="Tema claro">Claro</button>
+        <button type="button" data-set-theme="dark" title="Tema escuro">Escuro</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="conteudo" class="reveal">
+    {% with mensagens = get_flashed_messages() %}
+      {% if mensagens %}
+        <div class="flash-area" role="status" aria-live="polite">
+          {% for m in mensagens %}<div class="flash">{{ m }}</div>{% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block conteudo %}{% endblock %}
+  </main>
+</body>
+</html>

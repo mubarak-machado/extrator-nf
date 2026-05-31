@@ -1,0 +1,5 @@
+# Espelho das dependências para consulta — NÃO é o caminho de instalação.
+# Fonte de verdade: pyproject.toml / uv.lock. Use:  uv run python -m tronco.app
+nfelib>=2.5
+flask>=3.0
+pytest>=8.0   # apenas desenvolvimento (grupo [dependency-groups].dev no pyproject)

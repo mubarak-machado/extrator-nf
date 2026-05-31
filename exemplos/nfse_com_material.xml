@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<NFSe versao="1.00" xmlns="http://www.sped.fazenda.gov.br/nfse">
+	<infNFSe Id="NFS31069050000000000000000000000000000000000123456">
+		<xLocEmi>Betim/MG</xLocEmi>
+		<xLocPrestacao>Betim/MG</xLocPrestacao>
+		<nNFSe>4521</nNFSe>
+		<cLocIncid>3106705</cLocIncid>
+		<xLocIncid>Betim/MG</xLocIncid>
+		<verAplic>1.00</verAplic>
+		<ambGer>2</ambGer>
+		<tpEmis>1</tpEmis>
+		<procEmi>1</procEmi>
+		<cStat>100</cStat>
+		<dhProc>2026-05-12T10:15:00-03:00</dhProc>
+		<nDFSe>4521</nDFSe>
+		<emit>
+			<CNPJ>11222333000181</CNPJ>
+			<IM>987654</IM>
+			<xNome>MANUTENCAO PREDIAL ALFA LTDA</xNome>
+			<enderNac>
+				<xLgr>Rua das Oficinas</xLgr>
+				<nro>1000</nro>
+				<xBairro>Centro</xBairro>
+				<cMun>3106705</cMun>
+				<UF>MG</UF>
+				<CEP>32600000</CEP>
+			</enderNac>
+		</emit>
+		<valores>
+			<vBC>5000.00</vBC>
+			<pAliqAplic>5.00</pAliqAplic>
+			<vISSQN>250.00</vISSQN>
+			<vTotalRet>458.50</vTotalRet>
+			<vLiq>4541.50</vLiq>
+		</valores>
+		<DPS>
+			<infDPS Id="DPS3106705112223330001810000000000000004521">
+				<tpAmb>1</tpAmb>
+				<dhEmi>2026-05-12T10:14:00-03:00</dhEmi>
+				<verAplic>1.00</verAplic>
+				<serie>00001</serie>
+				<nDPS>4521</nDPS>
+				<dCompet>2026-05-01</dCompet>
+				<tpEmit>1</tpEmit>
+				<cLocEmi>3106705</cLocEmi>
+				<prest>
+					<CNPJ>11222333000181</CNPJ>
+					<IM>987654</IM>
+					<xNome>MANUTENCAO PREDIAL ALFA LTDA</xNome>
+					<regTrib>
+						<opSimpNac>2</opSimpNac>
+						<regEspTrib>0</regEspTrib>
+					</regTrib>
+				</prest>
+				<toma>
+					<CNPJ>26989715000102</CNPJ>
+					<xNome>MINISTERIO PUBLICO FEDERAL - PR/MG</xNome>
+				</toma>
+				<serv>
+					<locPrest>
+						<cLocPrestacao>3106705</cLocPrestacao>
+					</locPrest>
+					<cServ>
+						<cTribNac>070201</cTribNac>
+						<xDescServ>Servico de manutencao predial com reparo hidraulico. Foram empregados materiais (tubos, conexoes e registros) no valor de R$ 1.200,00 alem da mao de obra.</xDescServ>
+						<cNBS>123456789</cNBS>
+					</cServ>
+				</serv>
+				<valores>
+					<vServPrest>
+						<vServ>5000.00</vServ>
+					</vServPrest>
+					<vDedRed><vDR>0.00</vDR></vDedRed>
+					<trib>
+						<tribMun>
+							<tribISSQN>1</tribISSQN>
+							<pAliq>5.00</pAliq>
+							<tpRetISSQN>1</tpRetISSQN>
+						</tribMun>
+						<tribFed>
+							<piscofins>
+								<CST>01</CST>
+								<vPis>32.50</vPis>
+								<vCofins>150.00</vCofins>
+								<tpRetPisCofins>1</tpRetPisCofins>
+							</piscofins>
+							<vRetCP>0.00</vRetCP>
+							<vRetIRRF>240.00</vRetIRRF>
+							<vRetCSLL>36.00</vRetCSLL>
+						</tribFed>
+						<totTrib>
+							<indTotTrib>0</indTotTrib>
+						</totTrib>
+					</trib>
+				</valores>
+			</infDPS>
+		</DPS>
+	</infNFSe>
+</NFSe>

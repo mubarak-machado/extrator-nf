@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<NFSe versao="1.00" xmlns="http://www.sped.fazenda.gov.br/nfse">
+	<infNFSe Id="NFS31702060000000000000000000000000000000000009003">
+		<xLocEmi>Uberlandia/MG</xLocEmi>
+		<xLocPrestacao>Uberlandia/MG</xLocPrestacao>
+		<nNFSe>9003</nNFSe>
+		<cLocIncid>3170206</cLocIncid>
+		<xLocIncid>Uberlandia/MG</xLocIncid>
+		<verAplic>1.00</verAplic>
+		<ambGer>2</ambGer><tpEmis>1</tpEmis><procEmi>1</procEmi><cStat>100</cStat>
+		<dhProc>2026-06-05T09:00:00-03:00</dhProc>
+		<nDFSe>9003</nDFSe>
+		<emit>
+			<CNPJ>55666777000188</CNPJ><IM>0001</IM><xNome>SEGURANCA CONTINUA NACIONAL LTDA</xNome>
+			<enderNac><xLgr>Rua Central</xLgr><nro>1</nro><xBairro>Centro</xBairro><cMun>3170206</cMun><UF>MG</UF><CEP>30000000</CEP></enderNac>
+		</emit>
+		<valores><vBC>15300.00</vBC><pAliqAplic>4.00</pAliqAplic><vISSQN>612.00</vISSQN><vTotalRet>2057.85</vTotalRet><vLiq>13242.15</vLiq></valores>
+		<DPS><infDPS Id="DPS317020655666777000188000000000009003">
+			<tpAmb>1</tpAmb><dhEmi>2026-06-04T09:00:00-03:00</dhEmi><verAplic>1.00</verAplic>
+			<serie>00010</serie><nDPS>9003</nDPS><dCompet>2026-06-01</dCompet><tpEmit>1</tpEmit><cLocEmi>3170206</cLocEmi>
+			<prest><CNPJ>55666777000188</CNPJ><IM>0001</IM><xNome>SEGURANCA CONTINUA NACIONAL LTDA</xNome><regTrib><opSimpNac>2</opSimpNac><regEspTrib>0</regEspTrib></regTrib></prest>
+			<toma><CNPJ>26989715000102</CNPJ><xNome>MINISTERIO PUBLICO FEDERAL - PR/MG</xNome></toma>
+			<serv><locPrest><cLocPrestacao>3170206</cLocPrestacao></locPrest>
+				<cServ><cTribNac>140601</cTribNac><xDescServ>Vigilancia e seguranca patrimonial - posto 12x36 - competencia 06/2026. Servico continuado sem emprego de material.</xDescServ><cNBS>140601</cNBS></cServ></serv>
+			<valores><vServPrest><vServ>15300.00</vServ></vServPrest><vDedRed><vDR>0.00</vDR></vDedRed>
+				<trib><tribMun><tribISSQN>1</tribISSQN><pAliq>4.00</pAliq><tpRetISSQN>1</tpRetISSQN></tribMun>
+				<tribFed><piscofins><CST>01</CST><vPis>99.45</vPis><vCofins>459.00</vCofins><tpRetPisCofins>1</tpRetPisCofins></piscofins><vRetCP>0.00</vRetCP><vRetIRRF>734.40</vRetIRRF><vRetCSLL>153.00</vRetCSLL></tribFed>
+				<totTrib><indTotTrib>0</indTotTrib></totTrib></trib></valores>
+		</infDPS></DPS>
+	</infNFSe>
+</NFSe>

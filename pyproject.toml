@@ -1,0 +1,28 @@
+[project]
+name = "extrator-nf"
+version = "0.1.0"
+description = "MVP (prova de conceito) de extrator de NF-e/NFS-e — Fase 1 (extração fiel)."
+requires-python = ">=3.10"
+dependencies = [
+    "nfelib>=2.5",
+    "flask>=3.0",
+]
+
+[dependency-groups]
+# Dependências só de desenvolvimento (instaladas por padrão com `uv run`/`uv sync`,
+# excluídas em produção com `uv sync --no-dev`).
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.uv]
+# Aplicação, não biblioteca: o uv não tenta "instalar" o próprio código como
+# pacote — apenas cria/gerencia o .venv com as dependências. Rodamos via
+# `uv run python -m tronco.app`, com a raiz do projeto no sys.path.
+package = false
+
+[tool.pytest.ini_options]
+# `uv run pytest` invoca o script pytest (não `python -m pytest`), então a raiz
+# não entra sozinha no sys.path. Isto garante que `tronco`/`galho_*` importem.
+pythonpath = ["."]
+testpaths = ["tests"]

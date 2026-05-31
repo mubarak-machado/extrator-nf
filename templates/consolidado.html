@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Consolidado {{ prest_nome }} · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<p class="breadcrumb"><a href="{{ url_for('lista') }}">Notas</a> › Consolidado</p>
+
+<div class="page-head">
+  <h2>{{ prest_nome }}</h2>
+  <p>
+    <span class="mono">{{ prest_cnpj | cnpj }}</span> ·
+    competência {{ competencia | competencia }} ·
+    {{ regs|length }} municípios · pagamento consolidado
+  </p>
+</div>
+
+<section class="kpis" aria-label="Totais da consolidação">
+  <div class="kpi">
+    <p class="label">Valor bruto (soma)</p>
+    <div class="value small">{{ totais.valor_servicos | moeda }}</div>
+    <p class="sub">{{ regs|length }} notas</p>
+  </div>
+  <div class="kpi">
+    <p class="label">Retenções federais (soma)</p>
+    <div class="value small">{{ (
+        (totais.ir_destaque_emitente|float if totais.ir_destaque_emitente else 0)
+      + (totais.pis_destaque_emitente|float if totais.pis_destaque_emitente else 0)
+      + (totais.cofins_destaque_emitente|float if totais.cofins_destaque_emitente else 0)
+      + (totais.csll_destaque_emitente|float if totais.csll_destaque_emitente else 0)
+      + (totais.inss_destaque_emitente|float if totais.inss_destaque_emitente else 0)
+    ) | moeda }}</div>
+    <p class="sub">IR + PIS + COFINS + CSLL + INSS</p>
+  </div>
+  <div class="kpi">
+    <p class="label">ISS (soma)</p>
+    <div class="value small">{{ totais.iss_valor_destaque_emitente | moeda }}</div>
+    <p class="sub">municipal — varia por município</p>
+  </div>
+  <div class="kpi">
+    <p class="label">Líquido (soma)</p>
+    <div class="value small">{{ totais.valor_liquido | moeda }}</div>
+    <p class="sub">{{ novas }} inéditas neste grupo</p>
+  </div>
+</section>
+
+<div class="destaque" style="margin-bottom:1.5rem;">
+  <p class="note" style="margin:0;">
+    Agrupamento <strong>sugerido</strong> por prestador + competência — o vínculo real é o contrato, que não consta no XML; confira.
+    Os totais são <strong>soma dos valores destacados pelo emitente</strong>, para conferência do lançamento — não são apuração de retenção (isso é Fase 2).
+  </p>
+</div>
+
+<div class="actions">
+  <form method="post" action="{{ url_for('exportar_grupo', prest_cnpj=prest_cnpj, competencia=competencia) }}">
+    <button class="btn" type="submit" {% if not novas %}disabled{% endif %}>Exportar esta consolidação ({{ novas }} inéditas)</button>
+  </form>
+</div>
+
+<div class="table-wrap dense">
+  <table>
+    <caption>Uma linha por nota/município. Valores conforme destaque do emitente. Toque no município para abrir a nota.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Município</th>
+        <th scope="col">Nº</th>
+        <th scope="col" class="num">Valor serviços</th>
+        <th scope="col" class="num">ISS (alíq.)</th>
+        <th scope="col" class="num">IR</th>
+        <th scope="col" class="num">PIS</th>
+        <th scope="col" class="num">COFINS</th>
+        <th scope="col" class="num">CSLL</th>
+        <th scope="col" class="num">INSS</th>
+        <th scope="col" class="num">Líquido</th>
+        <th scope="col" class="nowrap">Exp.</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in itens %}{% set r = it.reg %}
+      <tr>
+        <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.municipio_nome or '—' }}</a></td>
+        <td class="num">{{ r.numero or '—' }}</td>
+        <td class="num">{{ r.valor_servicos | moeda }}</td>
+        <td class="num">{{ r.iss_valor_destaque_emitente | moeda }}<span class="iss-aliq">{{ r.iss_aliquota_destaque_emitente | percent }}</span></td>
+        <td class="num">{{ r.ir_destaque_emitente | moeda }}</td>
+        <td class="num">{{ r.pis_destaque_emitente | moeda }}</td>
+        <td class="num">{{ r.cofins_destaque_emitente | moeda }}</td>
+        <td class="num">{{ r.csll_destaque_emitente | moeda }}</td>
+        <td class="num">{{ r.inss_destaque_emitente | moeda }}</td>
+        <td class="num">{{ r.valor_liquido | moeda }}</td>
+        <td class="nowrap" title="{% if it.ja_exportada %}já exportada{% else %}inédita{% endif %}">
+          <span class="dot {% if it.ja_exportada %}ja{% else %}nova{% endif %}" aria-hidden="true"></span>
+          <span class="sr-only">{% if it.ja_exportada %}já exportada{% else %}inédita{% endif %}</span>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>Total ({{ regs|length }})</td><td></td>
+        <td class="num">{{ totais.valor_servicos | moeda }}</td>
+        <td class="num">{{ totais.iss_valor_destaque_emitente | moeda }}</td>
+        <td class="num">{{ totais.ir_destaque_emitente | moeda }}</td>
+        <td class="num">{{ totais.pis_destaque_emitente | moeda }}</td>
+        <td class="num">{{ totais.cofins_destaque_emitente | moeda }}</td>
+        <td class="num">{{ totais.csll_destaque_emitente | moeda }}</td>
+        <td class="num">{{ totais.inss_destaque_emitente | moeda }}</td>
+        <td class="num">{{ totais.valor_liquido | moeda }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+<p class="note-foot">
+  ISS é tributo municipal: cada município pode ter alíquota própria, por isso a coluna ISS aparece por linha e o total de ISS é apenas informativo.
+  As retenções federais (IR, PIS, COFINS, CSLL, INSS) é que costumam consolidar no pagamento.
+</p>
+{% endblock %}

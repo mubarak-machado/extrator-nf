@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Notas para conferência · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head">
+  <h2>Notas para conferência</h2>
+  <p>Fase 1 — extração fiel. Os valores tributários exibidos são o que o emitente destacou, não uma apuração do sistema.</p>
+</div>
+
+<section class="kpis" aria-label="Resumo">
+  <div class="kpi">
+    <p class="label">Notas válidas</p>
+    <div class="value">{{ kpis.total }}</div>
+    <p class="sub">{{ kpis.ineditas }} inéditas · {{ kpis.ja }} já exportadas</p>
+  </div>
+  <div class="kpi">
+    <p class="label">Valor bruto inédito</p>
+    <div class="value small">{{ kpis.valor_inedito | moeda }}</div>
+    <p class="sub">soma do que falta exportar</p>
+  </div>
+  <div class="kpi">
+    <p class="label">Precisam de atenção</p>
+    <div class="value">{{ kpis.atencao }}</div>
+    <p class="sub">campo faltante ou material não conferido</p>
+  </div>
+  <div class="kpi">
+    <p class="label">Consolidações sugeridas</p>
+    <div class="value">{{ kpis.consolidacoes }}</div>
+    <p class="sub">mesmo prestador + competência</p>
+  </div>
+</section>
+
+{% if consolidacoes %}
+<section class="section" aria-label="Consolidações sugeridas">
+  <h3>Consolidações sugeridas · serviço continuado</h3>
+  {% for c in consolidacoes %}
+  <div class="card"><div class="card-b" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+    <div style="flex:1 1 260px;min-width:0;">
+      <strong>{{ c.prest_nome }}</strong><br>
+      <span class="muted mono">{{ c.prest_cnpj | cnpj }}</span>
+      <span class="muted"> · competência {{ c.competencia | competencia }}</span>
+    </div>
+    <div class="num" style="text-align:right;">
+      <div class="mono" style="font-size:1.15rem;font-weight:600;">{{ c.total | moeda }}</div>
+      <div class="muted" style="font-size:.78rem;">{{ c.n }} municípios · {{ c.novas }} inéditas</div>
+    </div>
+    <a class="btn" href="{{ url_for('consolidado', prest_cnpj=c.prest_cnpj, competencia=c.competencia) }}">Ver consolidado →</a>
+  </div></div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="section" aria-label="Todas as notas">
+  <h3>Todas as notas</h3>
+  <div class="actions">
+    <form method="post" action="{{ url_for('exportar') }}">
+      <button class="btn" type="submit">Exportar lote (só notas inéditas)</button>
+    </form>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <caption>Cada nota gera uma linha. “Já exportada” impede pagamento em duplicidade (idempotência por chave).</caption>
+      <thead>
+        <tr>
+          <th scope="col">Tipo</th>
+          <th scope="col">Número</th>
+          <th scope="col">Emitente / Prestador</th>
+          <th scope="col">CNPJ</th>
+          <th scope="col" class="num">Valor</th>
+          <th scope="col">Status</th>
+          <th scope="col">Atenção</th>
+          <th scope="col"></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for it in linhas %}
+        <tr>
+          <td>{% if it.tipo %}<span class="badge {{ it.tipo|lower }}">{{ it.tipo }}</span>{% else %}—{% endif %}</td>
+          {% if it.erro %}
+            <td colspan="5"><span class="pill erro">erro</span> <span class="muted">{{ it.erro }}</span> <span class="sub mono">{{ it.origem }}</span></td>
+            <td></td>
+          {% else %}
+            {% set r = it.reg %}
+            <td class="num">{{ r.numero or '—' }}</td>
+            <td>{{ (r.emit_nome if it.tipo=='NFE' else r.prest_nome) or '—' }}<span class="sub mono">{{ it.origem }}</span></td>
+            <td class="mono nowrap">{{ (r.emit_cnpj if it.tipo=='NFE' else r.prest_cnpj) | cnpj }}</td>
+            <td class="num">{{ it.valor | moeda }}</td>
+            <td>{% if it.ja_exportada %}<span class="pill ja">já exportada</span>{% else %}<span class="pill nova">inédita</span>{% endif %}</td>
+            <td>
+              {% if r.campos_faltantes %}<span class="attn">⚠ {{ r.campos_faltantes|join(', ') }}</span>{% endif %}
+              {% if it.tipo=='NFSE' %}
+                <span class="attn">⚠ material: {% if it.marcacao %}marcado “{{ it.marcacao.valor }}”{% else %}não conferido{% endif %}</span>
+              {% endif %}
+            </td>
+            <td><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">conferir →</a></td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note-foot">
+    A exportação cria um arquivo novo por lote em <code>exportacoes/</code> e nunca edita um arquivo já criado.
+  </p>
+</section>
+{% endblock %}
