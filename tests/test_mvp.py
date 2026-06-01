@@ -145,6 +145,58 @@ def test_marcacao_persistida_com_autor():
         store.fechar()
 
 
+def test_marcacao_guarda_valor_material_validado():
+    """O valor de material validado pelo operador é persistido — só quando houve
+    material ('sim'); marcado 'nao' não guarda valor."""
+    with tempfile.TemporaryDirectory() as d:
+        store = StoreMarcacoes(Path(d) / "m.sqlite")
+        store.marcar("a" * 50, "sim", "operador", "1200.00")
+        assert store.atual("a" * 50)["valor_material"] == "1200.00"
+        store.marcar("b" * 50, "nao", "operador", "1200.00")   # 'nao' ignora o valor
+        assert store.atual("b" * 50)["valor_material"] is None
+        store.fechar()
+
+
+# ---------- Material: sugestão a partir do texto livre (operador valida) ----------
+
+def test_sugestao_material_captura_valor_amarrado():
+    from galho_nfse.material import sugerir_material
+    s = sugerir_material("Foram empregados materiais (tubos) no valor de R$ 1.200,00 alem da mao de obra.")
+    assert s["presenca"] == "sim" and s["valor"] == "1200.00"
+
+
+def test_sugestao_material_negacao_e_sem_falso_positivo():
+    """Crítico (I-2): texto com valores que NÃO são material (bruto/líquido, como
+    nas notas reais) NÃO pode render sugestão de valor — senão erra a base de INSS."""
+    from galho_nfse.material import sugerir_material
+    assert sugerir_material("Servico continuado sem emprego de material.")["presenca"] == "nao"
+    real = sugerir_material("Prestacao de servicos de Recepcao - Valor RS 11597.60 "
+                            "VALOR LIQUIDO DA NOTA FISCAL RS 9109.92 VENCIMENTO 25/6/2026")
+    assert real["presenca"] is None and real["valor"] is None
+
+
+def test_export_consolidado_colunas_e_material():
+    """Padrão consolidado: uma linha por NFS-e, colunas do lançamento no SIAFI,
+    com o valor de material validado pelo operador injetado."""
+    from galho_nfse.modelo import RegistroNFSe
+    with tempfile.TemporaryDirectory() as d:
+        reg = _reg("nfse_com_material.xml")
+        item = reg.to_dict(); item["valor_material"] = "1200.00"
+        caminho = ExportadorCsvLocal(d).exportar_consolidado(
+            [item], RegistroNFSe.EXPORT_SPEC_CONSOLIDADO, "loteCons")
+        assert caminho.endswith("_NFSE_consolidado.csv")
+        bruto = Path(caminho).read_bytes()
+        assert bruto.startswith(b"\xef\xbb\xbf")                 # BOM
+        linhas = bruto.decode("utf-8-sig").splitlines()
+        cab, primeira = linhas[0], linhas[1]
+        assert "Valor bruto da NFS-e" in cab and "Valor líquido informado na nota" in cab
+        assert "Valor dos materiais (validado pelo operador)" in cab
+        assert "Inscrição municipal" not in cab                  # coluna do padrão individual, não do consolidado
+        assert any("(destaque do emitente)" in c for c in cab.split(";"))  # retenções individualizadas
+        assert "R$ 1.200,00" in primeira                         # material validado, formatado
+        assert len(linhas) == 2                                  # cabeçalho + 1 nota
+
+
 # ---------- Redefinição (reset de demonstração): backup antes de apagar ----------
 
 def test_redefinir_faz_backup_antes_de_apagar():

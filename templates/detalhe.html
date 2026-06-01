@@ -156,25 +156,38 @@
   <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-alerta"/></svg> Material aplicado — conferência humana</h3></div><div class="card-b">
     <div class="atencao mb-3"><p class="note">{{ r.material_aviso }}</p></div>
     {% if item.marcacao %}
-      <p class="muted small">Marcação vigente: <strong>{{ item.marcacao.valor|upper }}</strong> — por {{ item.marcacao.autor }} em {{ item.marcacao.marcado_em | datahora }}.</p>
+      <p class="muted small">Marcação vigente: <strong>{{ item.marcacao.valor|upper }}</strong>{% if item.marcacao.valor_material %} — material {{ item.marcacao.valor_material | moeda }}{% endif %} — por {{ item.marcacao.autor }} em {{ item.marcacao.marcado_em | datahora }}.</p>
     {% else %}
       <p class="muted small">Ainda não conferido.</p>
     {% endif %}
+
+    {% if sugestao and (sugestao.presenca or sugestao.valor) %}
+      <div class="sugestao" role="note">
+        <p class="sug-titulo"><svg class="icon"><use href="#i-alerta"/></svg> Sugestão da máquina (confira no texto acima — não é decisão)</p>
+        <p class="sug-corpo">
+          {% if sugestao.presenca == 'nao' %}O texto parece indicar <strong>sem material</strong>.{% endif %}
+          {% if sugestao.presenca == 'sim' %}O texto menciona <strong>material</strong>{% if sugestao.valor %}, possível valor <strong>{{ sugestao.valor | moeda }}</strong>{% endif %}.{% endif %}
+          {% if sugestao.trecho %}<br><span class="muted small">Trecho: “{{ sugestao.trecho }}”</span>{% endif %}
+        </p>
+      </div>
+    {% endif %}
+
     <form method="post" action="{{ url_for('marcar', chave=r.chave) }}">
       <fieldset>
         <legend>Houve emprego de material neste serviço?</legend>
         <div class="radio-row">
-          <label class="opt"><input type="radio" name="material" value="sim"> Sim, houve material</label>
-          <label class="opt"><input type="radio" name="material" value="nao"> Não houve material</label>
+          <label class="opt"><input type="radio" name="material" value="sim" data-mostra-material {{ 'checked' if sugestao and sugestao.presenca == 'sim' }}> Sim, houve material</label>
+          <label class="opt"><input type="radio" name="material" value="nao" data-mostra-material {{ 'checked' if sugestao and sugestao.presenca == 'nao' }}> Não houve material</label>
         </div>
-        <label class="field" for="autor">
-          <span class="lbl">Autoria da marcação</span>
-          <input type="text" id="autor" name="autor" placeholder="Seu nome">
+        <label class="field" id="campo-valor-material" for="valor_material">
+          <span class="lbl">Valor do material (R$) — confira no texto e ajuste</span>
+          <input type="text" id="valor_material" name="valor_material" inputmode="decimal"
+                 placeholder="0,00" value="{{ sugestao.valor | numero if sugestao and sugestao.valor else '' }}">
         </label>
         <button class="btn" type="submit"><svg class="icon"><use href="#i-check"/></svg> Registrar marcação</button>
       </fieldset>
     </form>
-    <p class="note-foot">A marcação é gravada com autoria e data (auditável). O sistema não decide nada sobre material: só registra a conferência humana. A apuração que usa esta marcação é a Fase 2, fora deste MVP.</p>
+    <p class="note-foot">A marcação é gravada com data (auditável). O valor do material é o que <strong>você</strong> valida lendo a descrição — a sugestão da máquina nunca é aplicada sozinha. A apuração que usa esta marcação é a Fase 2, fora deste MVP.</p>
   </div></section>
 
   <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-id"/></svg> Identificação</h3></div><div class="card-b">

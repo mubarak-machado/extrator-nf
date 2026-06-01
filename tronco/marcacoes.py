@@ -25,31 +25,40 @@ class StoreMarcacoes:
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS marcacoes_material (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                chave       TEXT NOT NULL,
-                valor       TEXT NOT NULL,     -- 'sim' ou 'nao'
-                autor       TEXT NOT NULL,
-                marcado_em  TEXT NOT NULL      -- ISO-8601 UTC
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                chave          TEXT NOT NULL,
+                valor          TEXT NOT NULL,     -- 'sim' ou 'nao'
+                valor_material TEXT,              -- valor validado pelo operador (só quando 'sim')
+                autor          TEXT NOT NULL,
+                marcado_em     TEXT NOT NULL      -- ISO-8601 UTC
             )
             """
         )
+        # Migração leve: bancos antigos não têm a coluna valor_material.
+        cols = {r["name"] for r in self._conn.execute("PRAGMA table_info(marcacoes_material)")}
+        if "valor_material" not in cols:
+            self._conn.execute("ALTER TABLE marcacoes_material ADD COLUMN valor_material TEXT")
         self._conn.commit()
 
-    def marcar(self, chave: str, valor: str, autor: str) -> None:
+    def marcar(self, chave: str, valor: str, autor: str,
+               valor_material: str | None = None) -> None:
+        """Grava a conferência humana. `valor_material` é o valor VALIDADO pelo
+        operador (string decimal), guardado só quando houve material ('sim'). É a
+        decisão humana (I-4) — nunca a sugestão crua da máquina."""
         if valor not in ("sim", "nao"):
             raise ValueError("valor de marcação deve ser 'sim' ou 'nao'")
         self._conn.execute(
-            "INSERT INTO marcacoes_material (chave, valor, autor, marcado_em) "
-            "VALUES (?, ?, ?, ?)",
-            (chave, valor, autor or "desconhecido",
-             datetime.now(timezone.utc).isoformat()),
+            "INSERT INTO marcacoes_material (chave, valor, valor_material, autor, marcado_em) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (chave, valor, valor_material if valor == "sim" else None,
+             autor or "desconhecido", datetime.now(timezone.utc).isoformat()),
         )
         self._conn.commit()
 
     def atual(self, chave: str) -> dict | None:
         """Última marcação vigente para a chave (ou None se nunca marcada)."""
         cur = self._conn.execute(
-            "SELECT valor, autor, marcado_em FROM marcacoes_material "
+            "SELECT valor, valor_material, autor, marcado_em FROM marcacoes_material "
             "WHERE chave = ? ORDER BY id DESC LIMIT 1",
             (chave,),
         )

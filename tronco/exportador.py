@@ -50,34 +50,45 @@ class ExportadorCsvLocal(Exportador):
         self.pasta_saida = Path(pasta_saida)
         self.pasta_saida.mkdir(parents=True, exist_ok=True)
 
+    def _escrever(self, destino: Path, spec, dicts) -> str:
+        """Escreve um CSV (cabeçalho + linhas) a partir de uma spec
+        (campo, cabeçalho, formato) e uma sequência de dicts. utf-8-sig grava o
+        BOM (Excel pt-BR abre com acentos certos) e ';' separa colunas (a vírgula
+        é decimal no Brasil). I-5: recusa sobrescrever artefato já criado."""
+        if destino.exists():
+            raise FileExistsError(
+                f"Artefato {destino.name} já existe — exportação é imutável por lote."
+            )
+        cabecalhos = [cab for _, cab, _ in spec]
+        with destino.open("w", newline="", encoding="utf-8-sig") as fh:
+            w = csv.writer(fh, delimiter=";")
+            w.writerow(cabecalhos)
+            for d in dicts:
+                w.writerow([formato.formatar(d.get(campo), fmt) for campo, _, fmt in spec])
+        return str(destino)
+
     def exportar(self, registros: list[TemSpec], lote_id: str) -> str:
+        """Padrão INDIVIDUAL: um arquivo por tipo, com a EXPORT_SPEC de cada galho."""
         if not registros:
             return ""
         por_tipo: dict[str, list[TemSpec]] = {}
         for r in registros:
             por_tipo.setdefault(r.tipo, []).append(r)
-
-        artefatos = []
-        for tipo, regs in por_tipo.items():
-            destino = self.pasta_saida / f"lote_{lote_id}_{tipo}.csv"
-            if destino.exists():
-                # I-5: nunca sobrescrever um artefato de lote já criado.
-                raise FileExistsError(
-                    f"Artefato {destino.name} já existe — exportação é imutável por lote."
-                )
-            spec = regs[0].EXPORT_SPEC
-            cabecalhos = [cab for _, cab, _ in spec]
-            # utf-8-sig grava o BOM (Excel pt-BR abre com acentos certos) e ';'
-            # separa colunas (a vírgula é decimal no Brasil).
-            with destino.open("w", newline="", encoding="utf-8-sig") as fh:
-                w = csv.writer(fh, delimiter=";")
-                w.writerow(cabecalhos)
-                for r in regs:
-                    d = r.to_dict()
-                    w.writerow([formato.formatar(d.get(campo), fmt)
-                                for campo, _, fmt in spec])
-            artefatos.append(str(destino))
+        artefatos = [
+            self._escrever(self.pasta_saida / f"lote_{lote_id}_{tipo}.csv",
+                           regs[0].EXPORT_SPEC, (r.to_dict() for r in regs))
+            for tipo, regs in por_tipo.items()
+        ]
         return " | ".join(artefatos)
+
+    def exportar_consolidado(self, itens: list[dict], spec, lote_id: str) -> str:
+        """Padrão CONSOLIDADO: um arquivo, uma linha por NFS-e do grupo, com a
+        `spec` consolidada (recebida do galho NFS-e). Os `itens` já vêm com o
+        valor de material validado pelo operador injetado."""
+        if not itens:
+            return ""
+        return self._escrever(
+            self.pasta_saida / f"lote_{lote_id}_NFSE_consolidado.csv", spec, itens)
 
 
 def novo_lote_id() -> str:

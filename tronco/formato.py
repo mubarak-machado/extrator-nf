@@ -42,6 +42,23 @@ def numero(valor) -> str:
     return m.replace("R$ ", "") if m != TRACO else TRACO
 
 
+def parse_valor(texto) -> str | None:
+    """Lê um valor monetário digitado por humano e devolve string decimal
+    canônica ('1.200,00' ou 'R$ 1.200,00' ou '1200.00' -> '1200.00'). Entrada
+    vazia/inválida -> None (não chuta — I-6). Inverso prático de `moeda`."""
+    if texto is None:
+        return None
+    s = "".join(c for c in str(texto) if c.isdigit() or c in ".,-").strip()
+    if not s or s in ("-", ".", ","):
+        return None
+    if "," in s:                       # vírgula é o decimal; ponto é milhar
+        s = s.replace(".", "").replace(",", ".")
+    try:
+        return f"{Decimal(s):.2f}"
+    except (InvalidOperation, ValueError):
+        return None
+
+
 def ezero(valor) -> bool:
     """True se o valor é zero, vazio ou ausente — para *atenuar* (não esconder)
     a exibição. Continua sendo renderizado; só recebe menos ênfase visual, de

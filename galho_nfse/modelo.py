@@ -111,3 +111,23 @@ class RegistroNFSe:
         ("material_marcado_em", "Marcado em", "datahora"),
         ("campos_faltantes", "Campos a conferir", "faltantes"),
     ]
+
+    # Padrão CONSOLIDADO — uma linha por NFS-e do grupo (contrato), com as colunas
+    # que o operador lança no SIAFI. `valor_material` NÃO é campo do registro: é o
+    # valor VALIDADO pelo operador (vem da marcação, I-4), injetado na exportação.
+    # Retenções individualizadas, rotuladas "(destaque do emitente)" (I-2).
+    EXPORT_SPEC_CONSOLIDADO = [
+        ("numero", "Número da NFS-e", "texto"),
+        ("data_emissao", "Data de emissão", "data"),
+        ("competencia", "Competência", "competencia"),
+        ("valor_servicos", "Valor bruto da NFS-e", "moeda"),
+        ("valor_material", "Valor dos materiais (validado pelo operador)", "moeda"),
+        ("municipio_nome", "Município", "texto"),
+        ("iss_valor_destaque_emitente", "ISS (destaque do emitente)", "moeda"),
+        ("ir_destaque_emitente", "IR (destaque do emitente)", "moeda"),
+        ("pis_destaque_emitente", "PIS (destaque do emitente)", "moeda"),
+        ("cofins_destaque_emitente", "COFINS (destaque do emitente)", "moeda"),
+        ("csll_destaque_emitente", "CSLL (destaque do emitente)", "moeda"),
+        ("inss_destaque_emitente", "INSS (destaque do emitente)", "moeda"),
+        ("valor_liquido", "Valor líquido informado na nota", "moeda"),
+    ]

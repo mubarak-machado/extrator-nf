@@ -127,6 +127,22 @@
   });
 })();
 
+/* Marcação de material: o campo de valor só faz sentido quando "Sim". Mostra/
+   oculta conforme o rádio (degrada bem: sem JS, o campo fica visível). */
+(function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    var campo = document.getElementById("campo-valor-material");
+    var radios = document.querySelectorAll("[data-mostra-material]");
+    if (!campo || !radios.length) return;
+    function sync() {
+      var sim = document.querySelector('input[name="material"]:checked');
+      campo.hidden = !(sim && sim.value === "sim");
+    }
+    radios.forEach(function (r) { r.addEventListener("change", sync); });
+    sync();
+  });
+})();
+
 /* Seletor de pasta (webkitdirectory): botão aciona o input oculto e mostra a
    pasta escolhida e a contagem de XML, antes de enviar. */
 (function () {

@@ -652,3 +652,13 @@ input[type="file"]::file-selector-button:hover { background: var(--surface); }
 .import-exemplos { margin-top: var(--sp-3); }
 .link-inline { background: none; border: none; padding: 0; font: inherit; font-size: .85rem; color: var(--ink-3); text-decoration: underline; cursor: pointer; }
 .link-inline:hover { color: var(--ink); }
+
+/* ---------- sugestão de material (máquina sugere, operador valida) ---------- */
+.sugestao {
+  background: var(--info-bg); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+  border-left: 3px solid var(--info); border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3);
+}
+.sugestao .sug-titulo { margin: 0 0 var(--sp-1); font-size: .82rem; font-weight: 600; color: var(--info-ink); display: flex; align-items: center; gap: var(--sp-2); }
+.sugestao .sug-titulo .icon { width: 1rem; height: 1rem; }
+.sugestao .sug-corpo { margin: 0; font-size: .9rem; color: var(--ink-2); line-height: 1.5; }

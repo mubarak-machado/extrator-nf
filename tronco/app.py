@@ -25,6 +25,8 @@ from tronco.marcacoes import StoreMarcacoes
 from tronco.notas import StoreNotas, reconstruir
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
 from tronco import formato, redefinicao
+from galho_nfse.modelo import RegistroNFSe
+from galho_nfse.material import sugerir_material
 
 RAIZ = Path(__file__).resolve().parent.parent
 PASTA_EXEMPLOS = RAIZ / "exemplos"
@@ -258,7 +260,11 @@ def consolidado(prest_cnpj, competencia):
 def detalhe(chave):
     for item in _carregar():
         if item["reg"] and item["reg"].chave == chave:
-            return render_template("detalhe.html", item=item)
+            # Sugestão de material a partir do texto livre — apenas SUGESTÃO, que
+            # o operador vê ao lado do texto original e valida/edita (I-2/I-3).
+            sugestao = (sugerir_material(item["reg"].discriminacao)
+                        if item["tipo"] == "NFSE" else None)
+            return render_template("detalhe.html", item=item, sugestao=sugestao)
     flash("Nota não encontrada.", "erro")
     return redirect(url_for("hub"))
 
@@ -266,17 +272,28 @@ def detalhe(chave):
 @app.route("/marcar/<chave>", methods=["POST"])
 def marcar(chave):
     valor = request.form.get("material")
-    autor = request.form.get("autor", "").strip() or "usuário do POC"
     if valor not in ("sim", "nao"):
         flash("Selecione 'sim' ou 'não' para material aplicado.", "erro")
         return redirect(url_for("detalhe", chave=chave))
-    marc = StoreMarcacoes(); marc.marcar(chave, valor, autor); marc.fechar()
-    flash(f"Marcação registrada: material aplicado = {valor.upper()} (por {autor}).", "ok")
+    # valor do material: só quando houve material; é o valor VALIDADO pelo
+    # operador (campo livre), normalizado. Vazio/invalez vira None (não chuta).
+    valor_material = None
+    if valor == "sim":
+        bruto = request.form.get("valor_material", "").strip()
+        valor_material = formato.parse_valor(bruto) if bruto else None
+    marc = StoreMarcacoes()
+    marc.marcar(chave, valor, "operador", valor_material)
+    marc.fechar()
+    extra = (f" Valor do material: {formato.moeda(valor_material)}."
+             if valor_material else "")
+    flash(f"Marcação registrada: material aplicado = {valor.upper()}.{extra}", "ok")
     return redirect(url_for("detalhe", chave=chave))
 
 
-def _exportar(candidatos):
-    """Exporta e devolve (mensagem, categoria) para a modal de feedback."""
+def _exportar(candidatos, escritor):
+    """Núcleo de exportação: idempotência (I-1) + grava o lote SÓ após sucesso.
+    `escritor(regs, lote_id) -> artefato` decide o FORMATO (individual ou
+    consolidado). Devolve (mensagem, categoria) para a modal de feedback."""
     if not candidatos:
         return "Nada a exportar: as notas selecionadas já foram exportadas.", "info"
     registro = RegistroDeExportacao()
@@ -287,7 +304,7 @@ def _exportar(candidatos):
         return "Nada a exportar: as notas selecionadas já foram exportadas.", "info"
     lote = novo_lote_id()
     try:
-        artefato = ExportadorCsvLocal(PASTA_SAIDA).exportar(candidatos, lote)
+        artefato = escritor(candidatos, lote)
     except Exception as exc:
         registro.fechar()
         return f"Exportação falhou ({type(exc).__name__}): {exc}. Nada foi registrado.", "erro"
@@ -298,23 +315,46 @@ def _exportar(candidatos):
 
 @app.route("/exportar", methods=["POST"])
 def exportar():
-    """Exporta as notas avulsas inéditas (não as de consolidação — cada contrato
-    é exportado pelo seu próprio botão, para nunca misturar contratos)."""
+    """Padrão INDIVIDUAL: notas avulsas inéditas (não as de consolidação — cada
+    contrato é exportado pelo seu próprio botão, para nunca misturar contratos)."""
     linhas = _carregar()
     cons_chaves = _chaves_consolidadas(linhas)
     cands = [it["reg"] for it in linhas
              if it["reg"] and not it["ja_exportada"] and not it["erro"]
              and it["reg"].chave not in cons_chaves]
-    flash(*_exportar(cands))
+    escritor = lambda regs, lote: ExportadorCsvLocal(PASTA_SAIDA).exportar(regs, lote)
+    flash(*_exportar(cands, escritor))
     return redirect(url_for("individuais"))
+
+
+def _linha_consolidada(reg, marc) -> dict:
+    """Dict de uma NFS-e para o CSV consolidado: campos do registro + o valor de
+    material VALIDADO pelo operador (da marcação, I-4). Sem marcação 'sim' com
+    valor, o campo fica vazio — nunca a sugestão crua da máquina."""
+    d = reg.to_dict()
+    m = marc.atual(reg.chave) or {}
+    d["valor_material"] = m.get("valor_material") if m.get("valor") == "sim" else None
+    return d
 
 
 @app.route("/exportar_grupo/<prest_cnpj>/<competencia>", methods=["POST"])
 def exportar_grupo(prest_cnpj, competencia):
+    """Padrão CONSOLIDADO: uma linha por NFS-e do contrato, colunas orientadas ao
+    lançamento no SIAFI (inclui material validado e retenções individualizadas)."""
     linhas = _carregar()
     itens = _grupos(linhas).get((prest_cnpj, competencia), [])
     cands = [it["reg"] for it in itens if not it["ja_exportada"] and not it["erro"]]
-    flash(*_exportar(cands))
+
+    def escritor(regs, lote):
+        marc = StoreMarcacoes()
+        try:
+            dicts = [_linha_consolidada(r, marc) for r in regs]
+        finally:
+            marc.fechar()
+        return ExportadorCsvLocal(PASTA_SAIDA).exportar_consolidado(
+            dicts, RegistroNFSe.EXPORT_SPEC_CONSOLIDADO, lote)
+
+    flash(*_exportar(cands, escritor))
     return redirect(url_for("consolidado", prest_cnpj=prest_cnpj, competencia=competencia))
 
 
