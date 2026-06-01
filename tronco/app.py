@@ -23,6 +23,8 @@ from tronco.ingestao import ingerir, ingerir_pasta
 from tronco.idempotencia import RegistroDeExportacao
 from tronco.marcacoes import StoreMarcacoes
 from tronco.notas import StoreNotas, reconstruir
+from tronco.contratos import (StoreContratos, Contrato,
+                              NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS)
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
 from tronco import formato, redefinicao
 from galho_nfse.modelo import RegistroNFSe
@@ -548,6 +550,100 @@ def redefinir_executar():
     else:
         flash("Não havia dados a redefinir — o banco já estava vazio.", "info")
     return redirect(url_for("hub"))
+
+
+# ---------- Configuração de contrato (entrada do especialista; não apura — I-3) ----------
+
+_VOCAB_CONTRATO = {"naturezas": NATUREZAS, "categorias": CATEGORIAS,
+                   "materiais": MATERIAL_PREVISAO, "bases": BASES_MINIMAS,
+                   "anexos": ["I", "II", "III", "IV", "V"]}
+
+
+def _contrato_do_form(form, id_=None) -> Contrato:
+    """Monta um Contrato a partir do formulário. Checkbox ausente = False; o
+    sistema só transcreve a configuração do especialista (não decide nada)."""
+    def s(campo):
+        v = (form.get(campo) or "").strip()
+        return v or None
+    return Contrato(
+        id=id_,
+        prest_identificacao=(form.get("prest_identificacao") or "").strip(),
+        prest_tipo_pessoa=form.get("prest_tipo_pessoa", "PJ"),
+        prest_documento=formato._digitos(form.get("prest_documento")),
+        prest_natureza=form.get("prest_natureza", "nao_optante"),
+        prest_simples_anexo=s("prest_simples_anexo"),
+        prest_endereco=s("prest_endereco"),
+        prest_municipio=s("prest_municipio"),
+        prest_uf=s("prest_uf"),
+        prest_im=s("prest_im"),
+        numero=(form.get("numero") or "").strip(),
+        ano=(form.get("ano") or "").strip(),
+        vigencia_inicio=s("vigencia_inicio"),
+        vigencia_fim=s("vigencia_fim"),
+        objeto=s("objeto"),
+        categoria_servico=form.get("categoria_servico", "geral"),
+        material_previsao=form.get("material_previsao", "nao"),
+        ret_federal_sujeito=form.get("ret_federal_sujeito") == "on",
+        ret_federal_codigo_receita=s("ret_federal_codigo_receita"),
+        inss_cessao_mao_obra=form.get("inss_cessao_mao_obra") == "on",
+        inss_aliquota=s("inss_aliquota"),
+        inss_base_minima_pct=s("inss_base_minima_pct"),
+        iss_retido_tomador=form.get("iss_retido_tomador") == "on",
+        iss_aliquota=s("iss_aliquota"),
+        observacoes=s("observacoes"),
+    )
+
+
+@app.route("/contratos")
+def contratos():
+    store = StoreContratos(); lista = store.listar(); store.fechar()
+    return render_template("contratos.html", contratos=lista, vocab=_VOCAB_CONTRATO)
+
+
+@app.route("/contratos/novo")
+def contrato_novo():
+    return render_template("contrato_form.html", contrato=Contrato(),
+                           vocab=_VOCAB_CONTRATO, novo=True)
+
+
+@app.route("/contratos/<int:id_>/editar")
+def contrato_editar(id_):
+    store = StoreContratos(); c = store.obter(id_); store.fechar()
+    if not c:
+        flash("Contrato não encontrado.", "erro")
+        return redirect(url_for("contratos"))
+    return render_template("contrato_form.html", contrato=c,
+                           vocab=_VOCAB_CONTRATO, novo=False)
+
+
+@app.route("/contratos", methods=["POST"])
+@app.route("/contratos/<int:id_>", methods=["POST"])
+def contrato_salvar(id_=None):
+    c = _contrato_do_form(request.form, id_)
+    if not c.prest_identificacao or not c.numero:
+        flash("Informe ao menos a identificação do prestador e o número do contrato. "
+              "Nada foi salvo.", "erro")
+        return render_template("contrato_form.html", contrato=c,
+                               vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+    store = StoreContratos()
+    try:
+        store.salvar(c)
+    except Exception as exc:
+        store.fechar()
+        flash(f"Não foi possível salvar: já existe contrato com este prestador, número "
+              f"e ano? ({type(exc).__name__}).", "erro")
+        return render_template("contrato_form.html", contrato=c,
+                               vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+    store.fechar()
+    flash(f"Contrato {c.numero}/{c.ano} de {c.prest_identificacao} salvo.", "ok")
+    return redirect(url_for("contratos"))
+
+
+@app.route("/contratos/<int:id_>/remover", methods=["POST"])
+def contrato_remover(id_):
+    store = StoreContratos(); store.remover(id_); store.fechar()
+    flash("Contrato removido.", "ok")
+    return redirect(url_for("contratos"))
 
 
 if __name__ == "__main__":

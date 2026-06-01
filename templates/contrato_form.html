@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Novo contrato' if novo else 'Editar contrato' }} · Extrator NF{% endblock %}
+{% block conteudo %}
+{% set c = contrato %}
+
+<p class="breadcrumb"><a href="{{ url_for('contratos') }}">Contratos</a> › {{ 'Novo contrato' if novo else (c.numero ~ '/' ~ c.ano) }}</p>
+
+<div class="page-head">
+  <h2>{{ 'Novo contrato' if novo else 'Editar contrato' }}</h2>
+  <p>O sistema guarda o que você configura — não decide retenção. A apuração que usa isto é a Fase 2.</p>
+</div>
+
+<form method="post" action="{{ url_for('contrato_salvar', id_=c.id) if not novo else url_for('contrato_salvar') }}" class="form-contrato">
+
+  <fieldset class="card card-b">
+    <legend>Prestador</legend>
+    <label class="field"><span class="lbl">Identificação (razão social / nome)</span>
+      <input type="text" name="prest_identificacao" value="{{ c.prest_identificacao }}" required></label>
+    <div class="grid-2">
+      <div class="field"><span class="lbl">Tipo</span>
+        <div class="radio-row">
+          <label class="opt"><input type="radio" name="prest_tipo_pessoa" value="PJ" {{ 'checked' if c.prest_tipo_pessoa != 'PF' }}> CNPJ (PJ)</label>
+          <label class="opt"><input type="radio" name="prest_tipo_pessoa" value="PF" {{ 'checked' if c.prest_tipo_pessoa == 'PF' }}> CPF (PF)</label>
+        </div>
+      </div>
+      <label class="field"><span class="lbl">Documento (CNPJ/CPF)</span>
+        <input type="text" name="prest_documento" value="{{ c.prest_documento }}" inputmode="numeric"></label>
+    </div>
+    <div class="field"><span class="lbl">Natureza jurídica (decide a dispensa de retenção)</span>
+      <div class="radio-row">
+        {% for chave, rotulo in vocab.naturezas.items() %}
+        <label class="opt"><input type="radio" name="prest_natureza" value="{{ chave }}" {{ 'checked' if c.prest_natureza == chave }}> {{ rotulo }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    <label class="field" data-mostra-se="prest_natureza=simples"><span class="lbl">Anexo do Simples (Anexo IV sofre retenção de INSS)</span>
+      <select name="prest_simples_anexo">
+        <option value="">—</option>
+        {% for a in vocab.anexos %}<option value="{{ a }}" {{ 'selected' if c.prest_simples_anexo == a }}>Anexo {{ a }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="grid-3">
+      <label class="field"><span class="lbl">Endereço</span><input type="text" name="prest_endereco" value="{{ c.prest_endereco or '' }}"></label>
+      <label class="field"><span class="lbl">Município</span><input type="text" name="prest_municipio" value="{{ c.prest_municipio or '' }}"></label>
+      <label class="field"><span class="lbl">UF</span><input type="text" name="prest_uf" maxlength="2" value="{{ c.prest_uf or '' }}"></label>
+    </div>
+    <label class="field"><span class="lbl">Inscrição municipal (opcional)</span><input type="text" name="prest_im" value="{{ c.prest_im or '' }}"></label>
+  </fieldset>
+
+  <fieldset class="card card-b">
+    <legend>Contrato</legend>
+    <div class="grid-3">
+      <label class="field"><span class="lbl">Número</span><input type="text" name="numero" value="{{ c.numero }}" required></label>
+      <label class="field"><span class="lbl">Ano</span><input type="text" name="ano" inputmode="numeric" value="{{ c.ano }}"></label>
+      <div class="field"><span class="lbl">Vigência</span>
+        <div class="radio-row">
+          <input type="text" name="vigencia_inicio" placeholder="mm/aaaa" style="width:7rem" value="{{ c.vigencia_inicio or '' }}">
+          <span aria-hidden="true">a</span>
+          <input type="text" name="vigencia_fim" placeholder="mm/aaaa" style="width:7rem" value="{{ c.vigencia_fim or '' }}">
+        </div>
+      </div>
+    </div>
+    <label class="field"><span class="lbl">Objeto</span><input type="text" name="objeto" value="{{ c.objeto or '' }}"></label>
+    <label class="field"><span class="lbl">Categoria do serviço (define base mínima de INSS)</span>
+      <select name="categoria_servico">
+        {% for chave, rotulo in vocab.categorias.items() %}<option value="{{ chave }}" {{ 'selected' if c.categoria_servico == chave }}>{{ rotulo }}</option>{% endfor %}
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset class="card card-b">
+    <legend>Materiais <span class="lbl" style="font-weight:400">(impacta IR e a base do INSS)</span></legend>
+    <div class="radio-row">
+      {% for chave, rotulo in vocab.materiais.items() %}
+      <label class="opt"><input type="radio" name="material_previsao" value="{{ chave }}" {{ 'checked' if c.material_previsao == chave }}> {{ rotulo }}</label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset class="card card-b">
+    <legend>Enquadramento de retenções <span class="lbl" style="font-weight:400">(declarado — base para a Fase 2)</span></legend>
+
+    <label class="opt block"><input type="checkbox" name="ret_federal_sujeito" {{ 'checked' if c.ret_federal_sujeito }}> <strong>IR/CSLL/COFINS/PIS</strong> — IN 1234/2012 (dispensado se Simples ou PF)</label>
+    <label class="field sub-field" data-mostra-se="ret_federal_sujeito"><span class="lbl">Código de receita / natureza (Anexo I)</span>
+      <input type="text" name="ret_federal_codigo_receita" placeholder="ex.: 6147" value="{{ c.ret_federal_codigo_receita or '' }}"></label>
+
+    <label class="opt block"><input type="checkbox" name="inss_cessao_mao_obra" {{ 'checked' if c.inss_cessao_mao_obra }}> <strong>INSS</strong> — cessão de mão de obra / empreitada (IN 2110/2022)</label>
+    <div class="sub-field" data-mostra-se="inss_cessao_mao_obra">
+      <div class="field"><span class="lbl">Alíquota</span>
+        <div class="radio-row">
+          <label class="opt"><input type="radio" name="inss_aliquota" value="11" {{ 'checked' if c.inss_aliquota != '3.5' }}> 11%</label>
+          <label class="opt"><input type="radio" name="inss_aliquota" value="3.5" {{ 'checked' if c.inss_aliquota == '3.5' }}> 3,5% (desoneração CPRB)</label>
+        </div>
+      </div>
+      <label class="field"><span class="lbl">Base mínima quando material não é discriminado</span>
+        <select name="inss_base_minima_pct">
+          <option value="">—</option>
+          {% for chave, rotulo in vocab.bases.items() %}<option value="{{ chave }}" {{ 'selected' if c.inss_base_minima_pct == chave }}>{{ rotulo }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <label class="opt block"><input type="checkbox" name="iss_retido_tomador" {{ 'checked' if c.iss_retido_tomador }}> <strong>ISS</strong> — retido pelo tomador (municipal)</label>
+    <label class="field sub-field" data-mostra-se="iss_retido_tomador"><span class="lbl">Alíquota de ISS (%)</span>
+      <input type="text" name="iss_aliquota" inputmode="decimal" style="width:8rem" value="{{ c.iss_aliquota or '' }}"></label>
+  </fieldset>
+
+  <fieldset class="card card-b">
+    <legend>Observações / fundamentação</legend>
+    <label class="field"><textarea name="observacoes" rows="3">{{ c.observacoes or '' }}</textarea></label>
+  </fieldset>
+
+  <div class="actions">
+    <button type="submit" class="btn"><svg class="icon"><use href="#i-check"/></svg> Salvar contrato</button>
+    <a class="btn ghost" href="{{ url_for('contratos') }}">Cancelar</a>
+    {% if not novo %}
+    <form method="post" action="{{ url_for('contrato_remover', id_=c.id) }}" onsubmit="return confirm('Remover este contrato?')" style="margin-left:auto">
+      <button type="submit" class="link-inline">Remover contrato</button>
+    </form>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

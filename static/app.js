@@ -143,6 +143,36 @@
   });
 })();
 
+/* Campos condicionais (form de contrato): elementos com data-mostra-se="nome"
+   (checkbox) ou data-mostra-se="nome=valor" (radio/select) só aparecem quando a
+   condição é satisfeita. Degrada bem: sem JS, ficam visíveis. */
+(function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("[data-mostra-se]").forEach(function (el) {
+      var cond = el.dataset.mostraSe;
+      var eq = cond.indexOf("=");
+      var name = eq >= 0 ? cond.slice(0, eq) : cond;
+      var want = eq >= 0 ? cond.slice(eq + 1) : null;
+      var inputs = document.querySelectorAll('[name="' + name + '"]');
+      function sync() {
+        var on;
+        if (want === null) {                       // checkbox
+          var cb = document.querySelector('[name="' + name + '"]');
+          on = !!(cb && cb.checked);
+        } else {                                   // radio ou select
+          var sel = document.querySelector('select[name="' + name + '"]');
+          var val = sel ? sel.value
+                        : (document.querySelector('[name="' + name + '"]:checked') || {}).value;
+          on = val === want;
+        }
+        el.hidden = !on;
+      }
+      inputs.forEach(function (i) { i.addEventListener("change", sync); });
+      sync();
+    });
+  });
+})();
+
 /* Seletor de pasta (webkitdirectory): botão aciona o input oculto e mostra a
    pasta escolhida e a contagem de XML, antes de enviar. */
 (function () {

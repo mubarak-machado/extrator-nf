@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Contratos · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head row">
+  <div>
+    <h2>Contratos</h2>
+    <p>Configuração por contrato — natureza do prestador, previsão de material e enquadramento das retenções. É o que o especialista dita; o sistema guarda para a análise das notas (não apura nada aqui).</p>
+  </div>
+  <a class="btn" href="{{ url_for('contrato_novo') }}" style="margin-left:auto"><svg class="icon"><use href="#i-doc"/></svg> Novo contrato</a>
+</div>
+
+{% if not contratos %}
+<div class="card empty-banner">
+  <svg class="icon" aria-hidden="true"><use href="#i-doc"/></svg>
+  <div>
+    <h3>Nenhum contrato configurado</h3>
+    <p>Cadastre os contratos para preparar a análise das notas e das retenções (Fase 2).</p>
+  </div>
+  <a class="btn" href="{{ url_for('contrato_novo') }}">Novo contrato</a>
+</div>
+{% else %}
+<section class="section" aria-label="Contratos configurados">
+  {% for c in contratos %}
+  <div class="card consol-card" style="margin-top:var(--sp-3)">
+    <div class="who">
+      <strong>{{ c.prest_identificacao }}</strong>
+      <span class="sub mono">{{ c.prest_documento | cnpj }}</span>
+      <span class="sub">
+        {{ vocab.categorias[c.categoria_servico] }} ·
+        {{ vocab.naturezas[c.prest_natureza] }}{% if c.prest_natureza == 'simples' and c.prest_simples_anexo %} (Anexo {{ c.prest_simples_anexo }}){% endif %} ·
+        material: {{ vocab.materiais[c.material_previsao] }}
+      </span>
+      <span class="sub">
+        Retém:
+        {% set marcados = [] %}
+        {% if c.ret_federal_sujeito %}{% set _ = marcados.append('IR/CSLL/COFINS/PIS' + (' (' ~ c.ret_federal_codigo_receita ~ ')' if c.ret_federal_codigo_receita else '')) %}{% endif %}
+        {% if c.inss_cessao_mao_obra %}{% set _ = marcados.append('INSS ' ~ (c.inss_aliquota or '') ~ '%') %}{% endif %}
+        {% if c.iss_retido_tomador %}{% set _ = marcados.append('ISS ' ~ (c.iss_aliquota or '') ~ '%') %}{% endif %}
+        {{ marcados | join(' · ') if marcados else '— (nenhuma marcada / dispensado)' }}
+      </span>
+    </div>
+    <div class="amount">
+      <div class="total">{{ c.numero }}/{{ c.ano }}</div>
+      <div class="meta"><a class="row-link" href="{{ url_for('contrato_editar', id_=c.id) }}">editar <svg class="icon"><use href="#i-seta"/></svg></a></div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

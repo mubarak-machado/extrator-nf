@@ -662,3 +662,16 @@ input[type="file"]::file-selector-button:hover { background: var(--surface); }
 .sugestao .sug-titulo { margin: 0 0 var(--sp-1); font-size: .82rem; font-weight: 600; color: var(--info-ink); display: flex; align-items: center; gap: var(--sp-2); }
 .sugestao .sug-titulo .icon { width: 1rem; height: 1rem; }
 .sugestao .sug-corpo { margin: 0; font-size: .9rem; color: var(--ink-2); line-height: 1.5; }
+
+/* ---------- formulário de contrato ---------- */
+.form-contrato fieldset.card { padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-4); }
+.form-contrato legend { font-size: .95rem; font-weight: 700; color: var(--ink); padding: 0 var(--sp-2); }
+.form-contrato .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3) var(--sp-4); }
+.form-contrato .grid-3 { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: var(--sp-3) var(--sp-4); }
+@media (max-width: 640px) { .form-contrato .grid-2, .form-contrato .grid-3 { grid-template-columns: 1fr; } }
+.form-contrato .field input[type="text"], .form-contrato .field select,
+.form-contrato textarea { width: 100%; }
+.form-contrato textarea { font: inherit; padding: .5rem .7rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
+.form-contrato select { font: inherit; padding: .5rem .7rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
+.opt.block { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-1); font-size: .95rem; }
+.sub-field { margin: 0 0 var(--sp-3) var(--sp-5); }

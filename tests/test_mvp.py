@@ -281,6 +281,41 @@ def test_redefinir_inclui_banco_de_notas():
         assert StoreNotas(bd_notas).contar() == 0       # recriado vazio
 
 
+def test_contrato_round_trip_e_edicao():
+    """Configuração de contrato persiste fielmente (incl. booleans), e editar
+    mantém criado_em e atualiza atualizado_em (auditável — I-4)."""
+    import sqlite3, pytest as _pytest
+    from tronco.contratos import StoreContratos, Contrato
+    with tempfile.TemporaryDirectory() as d:
+        store = StoreContratos(Path(d) / "c.sqlite")
+        c = Contrato(prest_identificacao="ORBENK LTDA", prest_documento="79283065000303",
+                     prest_natureza="nao_optante", numero="02", ano="2026",
+                     categoria_servico="limpeza_conservacao", material_previsao="sim_discriminado",
+                     ret_federal_sujeito=True, ret_federal_codigo_receita="6147",
+                     inss_cessao_mao_obra=True, inss_aliquota="11", iss_retido_tomador=True,
+                     iss_aliquota="5")
+        cid = store.salvar(c)
+        obtido = store.obter(cid)
+        assert obtido.prest_identificacao == "ORBENK LTDA"
+        assert obtido.ret_federal_sujeito is True and obtido.inss_cessao_mao_obra is True
+        assert obtido.ret_federal_codigo_receita == "6147" and obtido.iss_aliquota == "5"
+        assert obtido.criado_em and obtido.criado_em == obtido.atualizado_em
+
+        obtido.iss_aliquota = "3"               # edição
+        store.salvar(obtido)
+        reeditado = store.obter(cid)
+        assert reeditado.iss_aliquota == "3"
+        assert reeditado.criado_em == obtido.criado_em            # criação preservada
+        assert reeditado.atualizado_em >= reeditado.criado_em     # atualização mexeu
+
+        # unicidade por (documento, número, ano): segundo contrato igual estoura
+        with _pytest.raises(sqlite3.IntegrityError):
+            store.salvar(Contrato(prest_identificacao="X", prest_documento="79283065000303",
+                                  numero="02", ano="2026"))
+        assert len(store.listar()) == 1
+        store.fechar()
+
+
 def test_redefinir_arquiva_e_esvazia_pasta_de_exportacoes():
     """Os artefatos CSV são ARQUIVADOS no backup antes de a pasta ser esvaziada —
     I-5: nada é editado/reescrito, o lote é movido inteiro e fica recuperável."""
