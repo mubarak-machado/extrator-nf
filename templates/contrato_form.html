@@ -81,8 +81,25 @@
     <legend>Enquadramento de retenções <span class="lbl" style="font-weight:400">(declarado — base para a Fase 2)</span></legend>
 
     <label class="opt block"><input type="checkbox" name="ret_federal_sujeito" {{ 'checked' if c.ret_federal_sujeito }}> <strong>IR/CSLL/COFINS/PIS</strong> — IN 1234/2012 (dispensado se Simples ou PF)</label>
-    <label class="field sub-field" data-mostra-se="ret_federal_sujeito"><span class="lbl">Código de receita / natureza (Anexo I)</span>
-      <input type="text" name="ret_federal_codigo_receita" placeholder="ex.: 6147" value="{{ c.ret_federal_codigo_receita or '' }}"></label>
+    <div class="sub-field" data-mostra-se="ret_federal_sujeito">
+      <div class="grid-2">
+        <label class="field"><span class="lbl">Percentual de IR (natureza — Anexo I)</span>
+          <select name="ret_federal_ir_pct">
+            <option value="">—</option>
+            {% for chave, rotulo in vocab.ir_percentuais.items() %}<option value="{{ chave }}" {{ 'selected' if c.ret_federal_ir_pct == chave }}>{{ rotulo }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="field"><span class="lbl">Código de receita (DARF)</span>
+          <input type="text" name="ret_federal_codigo_receita" placeholder="ex.: 6147" value="{{ c.ret_federal_codigo_receita or '' }}"></label>
+      </div>
+      <div class="field"><span class="lbl">Contribuições que incidem (compõem os 4,65%)</span>
+        <div class="radio-row">
+          <label class="opt"><input type="checkbox" name="ret_federal_csll" {{ 'checked' if c.ret_federal_csll }}> CSLL 1%</label>
+          <label class="opt"><input type="checkbox" name="ret_federal_cofins" {{ 'checked' if c.ret_federal_cofins }}> COFINS 3%</label>
+          <label class="opt"><input type="checkbox" name="ret_federal_pis" {{ 'checked' if c.ret_federal_pis }}> PIS 0,65%</label>
+        </div>
+      </div>
+    </div>
 
     <label class="opt block"><input type="checkbox" name="inss_cessao_mao_obra" {{ 'checked' if c.inss_cessao_mao_obra }}> <strong>INSS</strong> — cessão de mão de obra / empreitada (IN 2110/2022)</label>
     <div class="sub-field" data-mostra-se="inss_cessao_mao_obra">
@@ -92,17 +109,38 @@
           <label class="opt"><input type="radio" name="inss_aliquota" value="3.5" {{ 'checked' if c.inss_aliquota == '3.5' }}> 3,5% (desoneração CPRB)</label>
         </div>
       </div>
-      <label class="field"><span class="lbl">Base mínima quando material não é discriminado</span>
-        <select name="inss_base_minima_pct">
-          <option value="">—</option>
-          {% for chave, rotulo in vocab.bases.items() %}<option value="{{ chave }}" {{ 'selected' if c.inss_base_minima_pct == chave }}>{{ rotulo }}</option>{% endfor %}
-        </select>
-      </label>
+      <div class="grid-2">
+        <label class="field"><span class="lbl">Base mínima quando material não é discriminado</span>
+          <select name="inss_base_minima_pct">
+            <option value="">—</option>
+            {% for chave, rotulo in vocab.bases.items() %}<option value="{{ chave }}" {{ 'selected' if c.inss_base_minima_pct == chave }}>{{ rotulo }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="field"><span class="lbl">Adicional de aposentadoria especial</span>
+          <select name="inss_adicional_pct">
+            {% for chave, rotulo in vocab.inss_adicional.items() %}<option value="{{ chave }}" {{ 'selected' if (c.inss_adicional_pct or '') == chave }}>{{ rotulo }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
     </div>
 
-    <label class="opt block"><input type="checkbox" name="iss_retido_tomador" {{ 'checked' if c.iss_retido_tomador }}> <strong>ISS</strong> — retido pelo tomador (municipal)</label>
-    <label class="field sub-field" data-mostra-se="iss_retido_tomador"><span class="lbl">Alíquota de ISS (%)</span>
-      <input type="text" name="iss_aliquota" inputmode="decimal" style="width:8rem" value="{{ c.iss_aliquota or '' }}"></label>
+    <label class="opt block"><input type="checkbox" name="iss_retido_tomador" {{ 'checked' if c.iss_retido_tomador }}> <strong>ISS</strong> — retido pelo tomador (LC 116/2003)</label>
+    <div class="sub-field" data-mostra-se="iss_retido_tomador">
+      <div class="grid-3">
+        <label class="field"><span class="lbl">Alíquota de ISS (2%–5%)</span>
+          <input type="text" name="iss_aliquota" inputmode="decimal" value="{{ c.iss_aliquota or '' }}"></label>
+        <label class="field"><span class="lbl">Subitem da lista (LC 116)</span>
+          <input type="text" name="iss_subitem_lista" placeholder="ex.: 7.02" value="{{ c.iss_subitem_lista or '' }}"></label>
+        <label class="field"><span class="lbl">Município competente</span>
+          <input type="text" name="iss_municipio" value="{{ c.iss_municipio or '' }}"></label>
+      </div>
+      <label class="field"><span class="lbl">Local de incidência (art. 3º)</span>
+        <select name="iss_local_incidencia">
+          {% for chave, rotulo in vocab.iss_local.items() %}<option value="{{ chave }}" {{ 'selected' if c.iss_local_incidencia == chave }}>{{ rotulo }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="opt block"><input type="checkbox" name="iss_deduz_material" {{ 'checked' if c.iss_deduz_material }}> Admite dedução de material da base (subitens 7.02/7.05)</label>
+    </div>
   </fieldset>
 
   <fieldset class="card card-b">

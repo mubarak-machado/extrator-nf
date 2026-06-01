@@ -328,3 +328,131 @@ def test_redefinir_arquiva_e_esvazia_pasta_de_exportacoes():
         assert resumo["artefatos_limpos"] == 1
         assert exp.is_dir() and list(exp.iterdir()) == []          # pasta vazia, mas existe
         assert (Path(resumo["backup"]) / "exportacoes" / "lote_X_NFE.csv").exists()
+
+
+# ---------- Contrato: campos novos de retenção + migração de schema ----------
+
+def test_contrato_campos_de_retencao_round_trip():
+    """Os campos estruturados de regra (IR %, contribuições, adicional INSS, ISS)
+    persistem fielmente, incluindo os novos booleans (I-4)."""
+    from tronco.contratos import StoreContratos, Contrato
+    with tempfile.TemporaryDirectory() as d:
+        store = StoreContratos(Path(d) / "c.sqlite")
+        c = Contrato(prest_identificacao="ACME", prest_documento="11222333000181",
+                     numero="07", ano="2026", ret_federal_sujeito=True,
+                     ret_federal_ir_pct="4.8", ret_federal_pis=False,
+                     inss_cessao_mao_obra=True, inss_aliquota="11", inss_adicional_pct="3",
+                     iss_retido_tomador=True, iss_aliquota="5", iss_subitem_lista="7.02",
+                     iss_local_incidencia="local_prestacao", iss_deduz_material=True)
+        cid = store.salvar(c)
+        o = store.obter(cid)
+        assert o.ret_federal_ir_pct == "4.8"
+        assert o.ret_federal_csll is True and o.ret_federal_pis is False   # boolean fiel
+        assert o.inss_adicional_pct == "3" and o.iss_subitem_lista == "7.02"
+        assert o.iss_local_incidencia == "local_prestacao" and o.iss_deduz_material is True
+        store.fechar()
+
+
+def test_contrato_migra_schema_antigo_sem_perder_dados():
+    """Abrir um banco com schema ANTIGO (sem as colunas novas) adiciona as colunas
+    sem perder o que já estava lá — I-6: campo novo não some silenciosamente."""
+    import sqlite3
+    from tronco.contratos import StoreContratos, Contrato, _CAMPOS
+    with tempfile.TemporaryDirectory() as d:
+        caminho = Path(d) / "c.sqlite"
+        # tabela "legada" com um subconjunto mínimo de colunas
+        conn = sqlite3.connect(str(caminho))
+        conn.execute("CREATE TABLE contratos (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                     "prest_identificacao TEXT, prest_documento TEXT, numero TEXT, ano TEXT, "
+                     "ret_federal_sujeito TEXT, UNIQUE (prest_documento, numero, ano))")
+        conn.execute("INSERT INTO contratos (prest_identificacao, prest_documento, numero, "
+                     "ano, ret_federal_sujeito) VALUES ('VELHO','11222333000181','01','2025','1')")
+        conn.commit(); conn.close()
+
+        store = StoreContratos(caminho)                 # roda a migração ao abrir
+        cols = {r["name"] for r in store._conn.execute("PRAGMA table_info(contratos)").fetchall()}
+        assert all(campo in cols for campo in _CAMPOS)  # todas as colunas novas existem
+        antigo = store.listar()[0]
+        assert antigo.prest_identificacao == "VELHO"    # dado preservado
+        assert antigo.ret_federal_sujeito is True
+        # contribuições federais migradas com DEFAULT '1' (mantém o trio 4,65%)
+        assert antigo.ret_federal_csll is True and antigo.ret_federal_cofins is True
+        store.fechar()
+
+
+# ---------- Conferência da nota contra o contrato (Fase 2 — sugestão, I-3) ----------
+
+def _reg_nfse(**kw):
+    """RegistroNFSe mínimo para conferência (demais campos default None)."""
+    from galho_nfse.modelo import RegistroNFSe
+    base = dict(chave="X", prest_cnpj="11222333000181", valor_servicos="1000.00")
+    base.update(kw)
+    return RegistroNFSe(**base)
+
+
+def _contrato(**kw):
+    from tronco.contratos import Contrato
+    base = dict(prest_identificacao="ACME", prest_documento="11222333000181",
+                numero="07", ano="2026", material_previsao="nao")
+    base.update(kw)
+    return Contrato(**base)
+
+
+def test_conferencia_iss_confere_e_diverge():
+    """ISS: esperado = valor_serviços × alíquota do contrato; bate -> confere,
+    não bate -> diverge. É sugestão, não decisão (I-3)."""
+    from galho_nfse import retencao
+    reg = _reg_nfse(iss_valor_destaque_emitente="50.00")
+    # contrato ISS 5% sobre 1000 = 50,00 -> confere
+    res = retencao.conferir_retencao(reg, _contrato(iss_retido_tomador=True, iss_aliquota="5"))
+    iss = [a for a in res.achados if a.tributo == "ISS"][0]
+    assert iss.esperado == "50.00" and iss.situacao == "confere"
+    # contrato ISS 2% sobre 1000 = 20,00, mas a nota destacou 50 -> diverge
+    res2 = retencao.conferir_retencao(reg, _contrato(iss_retido_tomador=True, iss_aliquota="2"))
+    iss2 = [a for a in res2.achados if a.tributo == "ISS"][0]
+    assert iss2.esperado == "20.00" and iss2.situacao == "diverge"
+
+
+def test_conferencia_ir_indefinido_sem_marcacao_de_material():
+    """Se o contrato prevê material e o operador ainda não marcou, o IR fica
+    INDEFINIDO (a alíquota depende do material) — I-6, não chuta."""
+    from galho_nfse import retencao
+    reg = _reg_nfse(ir_destaque_emitente="48.00")
+    contrato = _contrato(ret_federal_sujeito=True, ret_federal_ir_pct="4.8",
+                         material_previsao="sim_discriminado")
+    res = retencao.conferir_retencao(reg, contrato, material_marcado=None)
+    ir = [a for a in res.achados if a.tributo == "IR"][0]
+    assert ir.situacao == "indefinido" and ir.esperado is None
+    # marcado -> agora confere (4,8% de 1000 = 48,00)
+    res2 = retencao.conferir_retencao(reg, contrato, material_marcado="sim")
+    ir2 = [a for a in res2.achados if a.tributo == "IR"][0]
+    assert ir2.esperado == "48.00" and ir2.situacao == "confere"
+
+
+def test_conferencia_casa_por_cnpj_e_trata_ambiguidade():
+    """casar_contratos casa por CNPJ e devolve TODOS — 0, 1 ou vários. A escolha
+    entre vários é do humano (I-6), a função não decide."""
+    from galho_nfse import retencao
+    reg = _reg_nfse()
+    c1 = _contrato(numero="07")
+    c2 = _contrato(numero="08")
+    outro = _contrato(prest_documento="99999999000100", numero="09")
+    assert retencao.casar_contratos(reg, []) == []                 # nenhum
+    assert len(retencao.casar_contratos(reg, [c1, outro])) == 1    # um
+    assert len(retencao.casar_contratos(reg, [c1, c2, outro])) == 2  # vários (ambíguo)
+
+
+def test_conferencia_nao_grava_nada():
+    """Conferência é read-only: não persiste marcação nem registro (I-3/I-5).
+    Rodar não cria nenhum arquivo .sqlite no diretório de trabalho temporário."""
+    from galho_nfse import retencao
+    with tempfile.TemporaryDirectory() as d:
+        cwd = os.getcwd()
+        os.chdir(d)
+        try:
+            reg = _reg_nfse(inss_destaque_emitente="110.00")
+            retencao.conferir_retencao(reg, _contrato(inss_cessao_mao_obra=True,
+                                                      inss_aliquota="11"))
+            assert list(Path(d).glob("*.sqlite")) == []   # nada gravado
+        finally:
+            os.chdir(cwd)

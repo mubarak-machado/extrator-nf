@@ -317,6 +317,18 @@ dl.grid dd.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 }
 .atencao .note { font-size: .8rem; color: var(--warn-ink); margin: 0; }
 
+/* conferência da nota contra o contrato (Fase 2 — sugestão, nunca decisão) */
+.conf-tab { margin-top: var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+.conf-tab thead th { position: static; }
+.selo {
+  display: inline-flex; align-items: center; padding: .1rem .5rem; border-radius: 999px;
+  font-size: .72rem; font-weight: 700; letter-spacing: .02em; white-space: nowrap;
+  border: 1px solid currentColor;
+}
+.selo.confere { background: var(--ok-bg); color: var(--ok-ink); }
+.selo.diverge { background: var(--danger-bg); color: var(--danger-ink); }
+.selo.indef   { background: var(--warn-bg); color: var(--warn-ink); }
+
 .discr { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-4); font-size: .92rem; white-space: pre-wrap; }
 
 /* ---------- tabelas ---------- */

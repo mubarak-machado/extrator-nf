@@ -55,6 +55,16 @@ MATERIAL_PREVISAO = {
 # Base mínima de INSS (IN 2110/2022, art. 118) quando o material não é discriminado.
 BASES_MINIMAS = {"50": "50% — serviços em geral", "65": "65% — limpeza hospitalar",
                  "80": "80% — demais limpezas", "30": "30% — transporte de passageiros"}
+# Percentual de IR pela natureza do bem/serviço (IN 1234/2012, Anexo I, col. 06).
+IR_PERCENTUAIS = {"1.2": "1,2% — com material/empreitada", "4.8": "4,8% — serviço sem material",
+                  "9.45": "9,45% — profissionais/demais", "7.05": "7,05% — transporte de passageiros",
+                  "5.85": "5,85% — hospitalar", "1.5": "1,5% — mercadorias/bens"}
+# Adicional de retenção para aposentadoria especial (IN 2110/2022) — sobre a alíquota base.
+INSS_ADICIONAL = {"": "Sem adicional", "4": "+4% — exposição 15 anos",
+                  "3": "+3% — 20 anos", "2": "+2% — 25 anos"}
+# Local de incidência do ISS (LC 116/2003, art. 3º).
+ISS_LOCAL = {"estabelecimento_prestador": "Estab. do prestador (regra geral)",
+             "local_prestacao": "Local da prestação (exceção art. 3º)"}
 
 
 @dataclass
@@ -80,11 +90,20 @@ class Contrato:
     # --- Enquadramento de retenção (declarado pelo especialista — base p/ Fase 2) ---
     ret_federal_sujeito: bool = False        # IR/CSLL/COFINS/PIS (IN 1234/2012)
     ret_federal_codigo_receita: str | None = None
+    ret_federal_ir_pct: str | None = None    # ver IR_PERCENTUAIS
+    ret_federal_csll: bool = True            # CSLL 1% incide?
+    ret_federal_cofins: bool = True          # COFINS 3% incide?
+    ret_federal_pis: bool = True             # PIS 0,65% incide?
     inss_cessao_mao_obra: bool = False       # INSS (IN 2110/2022)
     inss_aliquota: str | None = None         # "11" | "3.5"
     inss_base_minima_pct: str | None = None  # ver BASES_MINIMAS
+    inss_adicional_pct: str | None = None    # ver INSS_ADICIONAL ("4"/"3"/"2")
     iss_retido_tomador: bool = False
-    iss_aliquota: str | None = None
+    iss_aliquota: str | None = None          # 2%–5% (LC 116/2003)
+    iss_subitem_lista: str | None = None     # subitem da lista LC 116 (ex. "7.02")
+    iss_local_incidencia: str = "estabelecimento_prestador"  # ver ISS_LOCAL
+    iss_municipio: str | None = None         # município competente p/ o ISS
+    iss_deduz_material: bool = False         # dedução de material (subitens 7.02/7.05)
     observacoes: str | None = None
     # --- Auditoria (I-4) ---
     criado_por: str = "operador"
@@ -98,7 +117,12 @@ class Contrato:
 
 
 _CAMPOS = [f.name for f in fields(Contrato) if f.name != "id"]
-_BOOLS = {"ret_federal_sujeito", "inss_cessao_mao_obra", "iss_retido_tomador"}
+_BOOLS = {"ret_federal_sujeito", "ret_federal_csll", "ret_federal_cofins",
+          "ret_federal_pis", "inss_cessao_mao_obra", "iss_retido_tomador",
+          "iss_deduz_material"}
+# Contribuições federais que, em contrato pré-existente, devem manter o trio 4,65%
+# ao migrar o schema (sem coluna = NULL = False quebraria o histórico).
+_BOOLS_DEFAULT_1 = {"ret_federal_csll", "ret_federal_cofins", "ret_federal_pis"}
 
 
 class StoreContratos:
@@ -115,12 +139,25 @@ class StoreContratos:
             )
             """
         )
+        self._migrar_colunas()
         self._conn.commit()
+
+    def _migrar_colunas(self) -> None:
+        """Adiciona colunas de `_CAMPOS` ausentes num banco já existente — o
+        CREATE TABLE IF NOT EXISTS não altera tabela criada por versão anterior.
+        Falha silenciosa aqui significaria campo novo não persistido (I-6)."""
+        existentes = {r["name"] for r in
+                      self._conn.execute("PRAGMA table_info(contratos)").fetchall()}
+        for c in _CAMPOS:
+            if c in existentes:
+                continue
+            default = " DEFAULT '1'" if c in _BOOLS_DEFAULT_1 else ""
+            self._conn.execute(f"ALTER TABLE contratos ADD COLUMN {c} TEXT{default}")
 
     def _do_row(self, row: sqlite3.Row) -> Contrato:
         d = {c: row[c] for c in _CAMPOS}
         for b in _BOOLS:
-            d[b] = bool(row[b])              # SQLite guarda 0/1
+            d[b] = _ler_bool(row[b])
         return Contrato(id=row["id"], **d)
 
     def salvar(self, c: Contrato) -> int:
@@ -169,3 +206,15 @@ def _sql(v):
     if isinstance(v, bool):
         return 1 if v else 0
     return v
+
+
+def _ler_bool(v) -> bool:
+    """Lê um boolean de volta. A coluna é TEXT: 0/1 viram '0'/'1', e bool('0') é
+    True — por isso interpretamos o numérico em vez de truncar para bool direto.
+    NULL/'' (coluna nunca preenchida, ex. após migração) = False."""
+    if v in (None, ""):
+        return False
+    try:
+        return bool(int(v))
+    except (TypeError, ValueError):
+        return bool(v)

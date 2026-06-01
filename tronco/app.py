@@ -24,11 +24,13 @@ from tronco.idempotencia import RegistroDeExportacao
 from tronco.marcacoes import StoreMarcacoes
 from tronco.notas import StoreNotas, reconstruir
 from tronco.contratos import (StoreContratos, Contrato,
-                              NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS)
+                              NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS,
+                              IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL)
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
 from tronco import formato, redefinicao
 from galho_nfse.modelo import RegistroNFSe
 from galho_nfse.material import sugerir_material
+from galho_nfse import retencao
 
 RAIZ = Path(__file__).resolve().parent.parent
 PASTA_EXEMPLOS = RAIZ / "exemplos"
@@ -266,9 +268,27 @@ def detalhe(chave):
             # o operador vê ao lado do texto original e valida/edita (I-2/I-3).
             sugestao = (sugerir_material(item["reg"].discriminacao)
                         if item["tipo"] == "NFSE" else None)
-            return render_template("detalhe.html", item=item, sugestao=sugestao)
+            conf = _conferencia(item) if item["tipo"] == "NFSE" else None
+            return render_template("detalhe.html", item=item, sugestao=sugestao, conf=conf)
     flash("Nota não encontrada.", "erro")
     return redirect(url_for("hub"))
+
+
+def _conferencia(item):
+    """Confere a NFS-e contra a regra do contrato casado por CNPJ (Fase 2 — sugestão,
+    nunca decisão; I-3). Devolve o estado para a tela tratar 0/1/vários contratos
+    (I-6). Read-only: não grava nada."""
+    store = StoreContratos()
+    casados = retencao.casar_contratos(item["reg"], store.listar())
+    store.fechar()
+    if not casados:
+        return {"estado": "sem_contrato"}
+    if len(casados) > 1:
+        return {"estado": "varios",
+                "rotulos": [retencao.rotulo_contrato(c) for c in casados]}
+    marcado = item["marcacao"].valor if item["marcacao"] else None
+    resultado = retencao.conferir_retencao(item["reg"], casados[0], marcado)
+    return {"estado": "ok", "resultado": resultado}
 
 
 @app.route("/marcar/<chave>", methods=["POST"])
@@ -556,7 +576,8 @@ def redefinir_executar():
 
 _VOCAB_CONTRATO = {"naturezas": NATUREZAS, "categorias": CATEGORIAS,
                    "materiais": MATERIAL_PREVISAO, "bases": BASES_MINIMAS,
-                   "anexos": ["I", "II", "III", "IV", "V"]}
+                   "ir_percentuais": IR_PERCENTUAIS, "inss_adicional": INSS_ADICIONAL,
+                   "iss_local": ISS_LOCAL, "anexos": ["I", "II", "III", "IV", "V"]}
 
 
 def _contrato_do_form(form, id_=None) -> Contrato:
@@ -585,11 +606,20 @@ def _contrato_do_form(form, id_=None) -> Contrato:
         material_previsao=form.get("material_previsao", "nao"),
         ret_federal_sujeito=form.get("ret_federal_sujeito") == "on",
         ret_federal_codigo_receita=s("ret_federal_codigo_receita"),
+        ret_federal_ir_pct=s("ret_federal_ir_pct"),
+        ret_federal_csll=form.get("ret_federal_csll") == "on",
+        ret_federal_cofins=form.get("ret_federal_cofins") == "on",
+        ret_federal_pis=form.get("ret_federal_pis") == "on",
         inss_cessao_mao_obra=form.get("inss_cessao_mao_obra") == "on",
         inss_aliquota=s("inss_aliquota"),
         inss_base_minima_pct=s("inss_base_minima_pct"),
+        inss_adicional_pct=s("inss_adicional_pct"),
         iss_retido_tomador=form.get("iss_retido_tomador") == "on",
         iss_aliquota=s("iss_aliquota"),
+        iss_subitem_lista=s("iss_subitem_lista"),
+        iss_local_incidencia=form.get("iss_local_incidencia", "estabelecimento_prestador"),
+        iss_municipio=s("iss_municipio"),
+        iss_deduz_material=form.get("iss_deduz_material") == "on",
         observacoes=s("observacoes"),
     )
 

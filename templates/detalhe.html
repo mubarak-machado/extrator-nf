@@ -153,6 +153,37 @@
     </div>
   </div></section>
 
+  {# ---------- Conferência contra o contrato (Fase 2 — sugestão, não decide) ---------- #}
+  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-check"/></svg> Conferência contra o contrato</h3></div><div class="card-b">
+    {% if not conf or conf.estado == 'sem_contrato' %}
+      <p class="muted small">Sem contrato cadastrado para este prestador (CNPJ {{ r.prest_cnpj | cnpj }}). Cadastre em <a href="{{ url_for('contratos') }}">Contratos</a> para conferir as retenções.</p>
+    {% elif conf.estado == 'varios' %}
+      <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> Há <strong>{{ conf.rotulos|length }} contratos</strong> cadastrados para este prestador ({{ conf.rotulos|join(', ') }}). O sistema não escolhe sozinho qual se aplica — defina o contrato para conferir.</p></div>
+    {% else %}
+      {% set res = conf.resultado %}
+      <p class="note"><span class="chip">contrato {{ res.contrato_rotulo }}</span> Comparação da regra declarada com o destaque do emitente. É <strong>sugestão para conferência</strong> — nada é aplicado (Fase 2).</p>
+      <table class="conf-tab">
+        <thead><tr><th>Tributo</th><th>Regra do contrato</th><th class="num">Destaque emitente</th><th class="num">Esperado (sugestão)</th><th>Situação</th></tr></thead>
+        <tbody>
+          {% for a in res.achados %}
+          <tr>
+            <td><strong>{{ a.tributo }}</strong></td>
+            <td class="small">{{ a.regra }}{% if a.nota %}<br><span class="muted">{{ a.nota }}</span>{% endif %}</td>
+            <td class="num {{ 'zero' if a.destaque_emitente is ezero else '' }}">{{ a.destaque_emitente | moeda }}</td>
+            <td class="num {{ 'zero' if a.esperado is ezero else '' }}">{% if a.esperado is not none %}{{ a.esperado | moeda }}{% else %}—{% endif %}</td>
+            <td>
+              {% if a.situacao == 'confere' %}<span class="selo confere">confere</span>
+              {% elif a.situacao == 'diverge' %}<span class="selo diverge">diverge — confira</span>
+              {% else %}<span class="selo indef">indefinido</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="note-foot">O “esperado” deriva da regra que o especialista cadastrou no contrato e da sua marcação de material — é um apoio à conferência, <strong>nunca uma retenção aplicada</strong>. A apuração definitiva é da Fase 2.</p>
+    {% endif %}
+  </div></section>
+
   <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-alerta"/></svg> Material aplicado — conferência humana</h3></div><div class="card-b">
     <div class="atencao mb-3"><p class="note">{{ r.material_aviso }}</p></div>
     {% if item.marcacao %}
