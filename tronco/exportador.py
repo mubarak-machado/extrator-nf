@@ -22,17 +22,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
+from tronco import formato
 
-class TemLinha(Protocol):
+
+class TemSpec(Protocol):
     tipo: str
     chave: str
-    COLUNAS: list[str]
-    def linha_export(self) -> list: ...
+    EXPORT_SPEC: list[tuple[str, str, str]]   # (campo, cabeçalho, formato)
+    def to_dict(self) -> dict: ...
 
 
 class Exportador(ABC):
     @abstractmethod
-    def exportar(self, registros: list[TemLinha], lote_id: str) -> str:
+    def exportar(self, registros: list[TemSpec], lote_id: str) -> str:
         """Cria um artefato NOVO com os registros e devolve seu identificador."""
         ...
 
@@ -48,10 +50,10 @@ class ExportadorCsvLocal(Exportador):
         self.pasta_saida = Path(pasta_saida)
         self.pasta_saida.mkdir(parents=True, exist_ok=True)
 
-    def exportar(self, registros: list[TemLinha], lote_id: str) -> str:
+    def exportar(self, registros: list[TemSpec], lote_id: str) -> str:
         if not registros:
             return ""
-        por_tipo: dict[str, list[TemLinha]] = {}
+        por_tipo: dict[str, list[TemSpec]] = {}
         for r in registros:
             por_tipo.setdefault(r.tipo, []).append(r)
 
@@ -63,12 +65,17 @@ class ExportadorCsvLocal(Exportador):
                 raise FileExistsError(
                     f"Artefato {destino.name} já existe — exportação é imutável por lote."
                 )
-            colunas = regs[0].COLUNAS
-            with destino.open("w", newline="", encoding="utf-8") as fh:
-                w = csv.writer(fh)
-                w.writerow(colunas)
+            spec = regs[0].EXPORT_SPEC
+            cabecalhos = [cab for _, cab, _ in spec]
+            # utf-8-sig grava o BOM (Excel pt-BR abre com acentos certos) e ';'
+            # separa colunas (a vírgula é decimal no Brasil).
+            with destino.open("w", newline="", encoding="utf-8-sig") as fh:
+                w = csv.writer(fh, delimiter=";")
+                w.writerow(cabecalhos)
                 for r in regs:
-                    w.writerow(r.linha_export())
+                    d = r.to_dict()
+                    w.writerow([formato.formatar(d.get(campo), fmt)
+                                for campo, _, fmt in spec])
             artefatos.append(str(destino))
         return " | ".join(artefatos)
 

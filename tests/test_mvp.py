@@ -101,6 +101,36 @@ def test_exportador_cria_artefato_e_recusa_sobrescrever():
             exp.exportar([r], "loteX")
 
 
+def test_export_csv_formatado_e_orientado_ao_siafi():
+    """O CSV sai legível para o operador: cabeçalhos em português, pt-BR nos
+    valores, chave crua, retenção rotulada (destaque do emitente), ; + BOM."""
+    with tempfile.TemporaryDirectory() as d:
+        caminho = ExportadorCsvLocal(d).exportar([_reg("nfe_exemplo.xml")], "loteFmt")
+        bruto = Path(caminho).read_bytes()
+        assert bruto.startswith(b"\xef\xbb\xbf")          # BOM (Excel pt-BR)
+        texto = bruto.decode("utf-8-sig")
+        cabecalho, primeira = texto.splitlines()[0], texto.splitlines()[1]
+        assert ";" in cabecalho                           # separador ';'
+        # cabeçalho humano, não snake_case
+        assert "Valor total da nota" in cabecalho and "valor_total" not in cabecalho
+        assert any("(destaque do emitente)" in c for c in cabecalho.split(";"))  # I-2
+        # valores formatados pt-BR e chave crua
+        assert "R$ 95.700,68" in primeira                 # vNF do exemplo
+        assert "75.277.525/0001-78" in primeira           # CNPJ pontuado
+        assert "42210775277525000178550030000266631762885493" in primeira  # chave sem espaços
+
+
+def test_formato_formatar_dispatch():
+    from tronco import formato
+    assert formato.formatar("95700.68", "moeda") == "R$ 95.700,68"
+    assert formato.formatar("75277525000178", "cnpj") == "75.277.525/0001-78"
+    assert formato.formatar(None, "texto") == "—"
+    assert formato.formatar(["falta A", "falta B"], "faltantes") == "falta A; falta B"
+    assert formato.formatar("4242", "cru") == "4242"
+    with pytest.raises(ValueError):
+        formato.formatar("x", "inexistente")
+
+
 # ---------- I-4: marcação persistida com autoria ----------
 
 def test_marcacao_persistida_com_autor():

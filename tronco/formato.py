@@ -118,3 +118,22 @@ def simnao(valor) -> str:
     if valor is False:
         return "Não"
     return TRACO
+
+
+# Dispatcher usado na EXPORTAÇÃO (CSV). Reusa as funções acima — formatar é
+# apresentação, não interpretação (I-2). "texto" passa o valor cru; "faltantes"
+# junta a lista de campos a conferir (I-6); "cru" é para a chave (identificador
+# de busca/colagem — sem agrupar em blocos como na tela).
+def formatar(valor, fmt: str) -> str:
+    if fmt == "texto":
+        return str(valor) if valor not in (None, "") else TRACO
+    if fmt == "faltantes":
+        return "; ".join(valor) if valor else TRACO
+    if fmt == "cru":
+        return str(valor) if valor not in (None, "") else ""
+    fn = {"moeda": moeda, "data": data, "datahora": datahora,
+          "competencia": competencia, "cnpj": cnpj, "percent": percent,
+          "simnao": simnao}.get(fmt)
+    if fn is None:
+        raise ValueError(f"formato de exportação desconhecido: {fmt!r}")
+    return fn(valor)
