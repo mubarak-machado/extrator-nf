@@ -599,3 +599,56 @@ th.sortable .arr { color: var(--ink-3); font-size: .9em; }
 .import-form .field { margin-bottom: var(--sp-4); }
 .import-form input[type="text"] { font-family: var(--font-mono); font-size: .85rem; }
 .import-form .actions { margin-bottom: 0; }
+
+/* duas opções de importação lado a lado */
+.import-grid { align-items: stretch; }
+.import-card { display: flex; flex-direction: column; }
+.import-top { display: flex; gap: var(--sp-3); align-items: flex-start; margin-bottom: var(--sp-4); }
+.import-top h3 { margin: 0 0 .1rem; font-size: 1.05rem; }
+.import-card .import-form { margin-top: auto; }
+.import-card input[type="text"] { width: 100%; font-family: var(--font-mono); font-size: .82rem; }
+input[type="file"] {
+  font: inherit; font-size: .88rem; width: 100%;
+  padding: .5rem; border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink);
+}
+input[type="file"]::file-selector-button {
+  font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer; margin-right: var(--sp-3);
+  background: var(--surface-3); color: var(--ink); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: .35rem .7rem;
+}
+input[type="file"]::file-selector-button:hover { background: var(--surface); }
+
+/* ---------- modal de feedback (flash → diálogo estilizado) ---------- */
+.modal {
+  border: none; padding: 0; width: min(460px, calc(100vw - 2rem));
+  border-radius: var(--radius-lg); background: var(--surface); color: var(--ink);
+  box-shadow: 0 18px 50px rgba(16, 24, 32, .28); overflow: hidden;
+}
+.modal::backdrop { background: rgba(16, 24, 32, .45); }
+.modal[open] { animation: modal-in .16s ease-out; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+/* faixa de cor no topo conforme a categoria */
+.modal { border-top: 4px solid var(--info); }
+.modal-ok { border-top-color: var(--ok); }
+.modal-erro { border-top-color: var(--danger); }
+.modal-info { border-top-color: var(--info); }
+.modal-head { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-5) var(--sp-5) 0; }
+.modal-head h2 { margin: 0; font-size: 1.15rem; font-family: var(--font-display); letter-spacing: -.01em; }
+.modal-icon { display: inline-flex; flex: none; width: 2.1rem; height: 2.1rem; align-items: center; justify-content: center; border-radius: 50%; }
+.modal-icon .icon { width: 1.2rem; height: 1.2rem; }
+.modal-ok .modal-icon { background: var(--ok-bg); color: var(--ok-ink); }
+.modal-erro .modal-icon { background: var(--danger-bg); color: var(--danger-ink); }
+.modal-info .modal-icon { background: var(--info-bg); color: var(--info-ink); }
+.modal-body { padding: var(--sp-3) var(--sp-5) var(--sp-4); }
+.modal-msg { margin: 0; color: var(--ink-2); font-size: .94rem; line-height: 1.55; }
+.modal-msg + .modal-msg { margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--line); }
+.modal-msg-erro { color: var(--danger-ink); }
+.modal-actions { display: flex; justify-content: flex-end; gap: var(--sp-3); padding: 0 var(--sp-5) var(--sp-5); }
+
+/* ---------- seletor de pasta (webkitdirectory) ---------- */
+.seletor-pasta-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.seletor-pasta-info { font-size: .85rem; color: var(--ink-3); font-family: var(--font-mono); }
+.import-exemplos { margin-top: var(--sp-3); }
+.link-inline { background: none; border: none; padding: 0; font: inherit; font-size: .85rem; color: var(--ink-3); text-decoration: underline; cursor: pointer; }
+.link-inline:hover { color: var(--ink); }

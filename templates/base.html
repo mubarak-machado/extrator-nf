@@ -84,16 +84,33 @@
   </header>
 
   <main id="conteudo" class="reveal">
-    {% with mensagens = get_flashed_messages() %}
-      {% if mensagens %}
-        <div class="flash-area" role="status" aria-live="polite">
-          {% for m in mensagens %}<div class="flash">{{ m }}</div>{% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-
     {% block conteudo %}{% endblock %}
   </main>
+
+  {# Feedback do sistema em modal estilizada. As mensagens vêm do flash do Flask,
+     com categoria (ok | erro | info); a modal abre sozinha quando há mensagem. #}
+  {% with mensagens = get_flashed_messages(with_categories=True) %}
+    {% if mensagens %}
+      {% set tem_erro = mensagens | selectattr('0', 'equalto', 'erro') | list | length > 0 %}
+      {% set cat = 'erro' if tem_erro else (mensagens[0][0] or 'info') %}
+      {% set titulos = {'ok': 'Tudo certo', 'erro': 'Atenção', 'info': 'Aviso'} %}
+      {% set icones = {'ok': '#i-check', 'erro': '#i-alerta', 'info': '#i-alerta'} %}
+      <dialog id="modal-msg" class="modal modal-{{ cat }}" aria-labelledby="modal-titulo">
+        <div class="modal-head">
+          <span class="modal-icon"><svg class="icon"><use href="{{ icones[cat] }}"/></svg></span>
+          <h2 id="modal-titulo">{{ titulos[cat] }}</h2>
+        </div>
+        <div class="modal-body">
+          {% for c, m in mensagens %}
+            <p class="modal-msg modal-msg-{{ c or 'info' }}">{{ m }}</p>
+          {% endfor %}
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn" data-fechar-modal autofocus>Entendi</button>
+        </div>
+      </dialog>
+    {% endif %}
+  {% endwith %}
 
   <footer class="rodape">
     <span class="tag">POC de demonstração</span>

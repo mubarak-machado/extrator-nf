@@ -11,13 +11,15 @@ Rodar:  uv run python -m tronco.app
 """
 from __future__ import annotations
 
+import tempfile
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from flask import Flask, render_template, request, redirect, url_for, flash
+from werkzeug.utils import secure_filename
 
-from tronco.ingestao import ingerir_pasta
+from tronco.ingestao import ingerir, ingerir_pasta
 from tronco.idempotencia import RegistroDeExportacao
 from tronco.marcacoes import StoreMarcacoes
 from tronco.notas import StoreNotas, reconstruir
@@ -238,7 +240,7 @@ def consolidado(prest_cnpj, competencia):
     linhas = _carregar()
     itens = _grupos(linhas).get((prest_cnpj, competencia), [])
     if not itens:
-        flash("Consolidação não encontrada.")
+        flash("Consolidação não encontrada.", "erro")
         return redirect(url_for("consolidados"))
     regs = [it["reg"] for it in itens]
     totais = {a: _soma(regs, a) for a in (
@@ -257,7 +259,7 @@ def detalhe(chave):
     for item in _carregar():
         if item["reg"] and item["reg"].chave == chave:
             return render_template("detalhe.html", item=item)
-    flash("Nota não encontrada.")
+    flash("Nota não encontrada.", "erro")
     return redirect(url_for("hub"))
 
 
@@ -266,31 +268,32 @@ def marcar(chave):
     valor = request.form.get("material")
     autor = request.form.get("autor", "").strip() or "usuário do POC"
     if valor not in ("sim", "nao"):
-        flash("Selecione 'sim' ou 'não' para material aplicado.")
+        flash("Selecione 'sim' ou 'não' para material aplicado.", "erro")
         return redirect(url_for("detalhe", chave=chave))
     marc = StoreMarcacoes(); marc.marcar(chave, valor, autor); marc.fechar()
-    flash(f"Marcacao registrada: material aplicado = {valor.upper()} (por {autor}).")
+    flash(f"Marcação registrada: material aplicado = {valor.upper()} (por {autor}).", "ok")
     return redirect(url_for("detalhe", chave=chave))
 
 
 def _exportar(candidatos):
+    """Exporta e devolve (mensagem, categoria) para a modal de feedback."""
     if not candidatos:
-        return "Nada a exportar: as notas selecionadas ja foram exportadas."
+        return "Nada a exportar: as notas selecionadas já foram exportadas.", "info"
     registro = RegistroDeExportacao()
     novas, _ = registro.filtrar_novas([r.chave for r in candidatos])
     candidatos = [r for r in candidatos if r.chave in set(novas)]
     if not candidatos:
         registro.fechar()
-        return "Nada a exportar: as notas selecionadas ja foram exportadas."
+        return "Nada a exportar: as notas selecionadas já foram exportadas.", "info"
     lote = novo_lote_id()
     try:
         artefato = ExportadorCsvLocal(PASTA_SAIDA).exportar(candidatos, lote)
     except Exception as exc:
         registro.fechar()
-        return f"Exportacao falhou ({type(exc).__name__}): {exc}. Nada foi registrado."
+        return f"Exportação falhou ({type(exc).__name__}): {exc}. Nada foi registrado.", "erro"
     registro.registrar_lote([(r.chave, r.tipo) for r in candidatos], lote)
     registro.fechar()
-    return f"Lote {lote} exportado: {len(candidatos)} nota(s). Artefato: {artefato}"
+    return f"Lote {lote} exportado: {len(candidatos)} nota(s). Artefato: {artefato}", "ok"
 
 
 @app.route("/exportar", methods=["POST"])
@@ -302,7 +305,7 @@ def exportar():
     cands = [it["reg"] for it in linhas
              if it["reg"] and not it["ja_exportada"] and not it["erro"]
              and it["reg"].chave not in cons_chaves]
-    flash(_exportar(cands))
+    flash(*_exportar(cands))
     return redirect(url_for("individuais"))
 
 
@@ -311,33 +314,14 @@ def exportar_grupo(prest_cnpj, competencia):
     linhas = _carregar()
     itens = _grupos(linhas).get((prest_cnpj, competencia), [])
     cands = [it["reg"] for it in itens if not it["ja_exportada"] and not it["erro"]]
-    flash(_exportar(cands))
+    flash(*_exportar(cands))
     return redirect(url_for("consolidado", prest_cnpj=prest_cnpj, competencia=competencia))
 
 
-@app.route("/importar", methods=["GET"])
-def importar():
-    """Tela de importação manual. O app nunca importa sozinho de pasta nenhuma —
-    a leitura de XML só acontece quando o usuário aciona aqui."""
-    notas = StoreNotas(); n = notas.contar(); notas.fechar()
-    return render_template("importar.html", n_notas=n,
-                           pasta_padrao=str(PASTA_EXEMPLOS))
-
-
-@app.route("/importar", methods=["POST"])
-def importar_executar():
-    """Lê os XML da pasta informada (uma única leitura) e grava as notas no banco.
-    Arquivos não reconhecidos são reportados, não engolidos (I-6). Reimportar não
-    duplica: a chave é PRIMARY KEY (alinhado a I-1)."""
-    pasta_txt = request.form.get("pasta", "").strip() or str(PASTA_EXEMPLOS)
-    pasta = Path(pasta_txt).expanduser()
-    if not pasta.is_dir():
-        flash(f"Pasta não encontrada: {pasta}. Nada foi importado.")
-        return redirect(url_for("importar"))
-    resultados = ingerir_pasta(pasta)
-    if not resultados:
-        flash(f"Nenhum arquivo .xml em {pasta}. Nada foi importado.")
-        return redirect(url_for("importar"))
+def _persistir(resultados):
+    """Grava no banco os resultados de ingestão que viraram registro com chave.
+    Devolve (importadas, [origens com erro]). Não decide nada: só transcreve o
+    que a ingestão extraiu (I-2). Reimportar não duplica — chave é PK (I-1)."""
     notas = StoreNotas()
     importadas, erros = 0, []
     for r in resultados:
@@ -347,11 +331,88 @@ def importar_executar():
         else:
             erros.append(r.origem or "(sem nome)")
     notas.fechar()
+    return importadas, erros
+
+
+def _ingerir_uploads(arquivos):
+    """Ingere uma lista de arquivos enviados pelo navegador (upload individual ou
+    pasta inteira via seletor). Cada XML é salvo em área temporária e lido uma vez;
+    não-XML são ignorados. Não persiste nada no disco do servidor."""
+    resultados = []
+    with tempfile.TemporaryDirectory() as d:
+        for fs in arquivos:
+            nome = secure_filename(Path(fs.filename or "").name)
+            if not nome.lower().endswith(".xml"):
+                continue
+            caminho = Path(d) / nome
+            fs.save(str(caminho))
+            resultados.append(ingerir(caminho))
+    return resultados
+
+
+@app.route("/importar", methods=["GET"])
+def importar():
+    """Tela de importação manual, com duas opções: uma nota (upload de um XML) ou
+    uma pasta inteira. O app nunca importa sozinho — a leitura de XML só acontece
+    quando o usuário aciona aqui."""
+    notas = StoreNotas(); n = notas.contar(); notas.fechar()
+    return render_template("importar.html", n_notas=n,
+                           pasta_padrao=str(PASTA_EXEMPLOS))
+
+
+@app.route("/importar/arquivo", methods=["POST"])
+def importar_arquivo():
+    """Importação individual: recebe um XML enviado pelo usuário, lê uma vez e
+    grava. Falha de reconhecimento é exibida com a mensagem da ingestão (I-6)."""
+    arquivo = request.files.get("arquivo")
+    if not arquivo or not arquivo.filename:
+        flash("Selecione um arquivo XML para importar. Nada foi importado.", "erro")
+        return redirect(url_for("importar"))
+    nome = secure_filename(Path(arquivo.filename).name) or "nota.xml"
+    if not nome.lower().endswith(".xml"):
+        flash(f"'{arquivo.filename}' não é um arquivo .xml. Nada foi importado.", "erro")
+        return redirect(url_for("importar"))
+    with tempfile.TemporaryDirectory() as d:
+        caminho = Path(d) / nome
+        arquivo.save(str(caminho))
+        resultado = ingerir(caminho)          # leitura única, como na pasta
+    importadas, _ = _persistir([resultado])
+    if importadas:
+        flash(f"Nota '{nome}' importada e gravada no banco.", "ok")
+    else:
+        flash(f"'{nome}' não foi importada: {resultado.erro or 'não reconhecida'}.", "erro")
+    return redirect(url_for("hub"))
+
+
+@app.route("/importar/pasta", methods=["POST"])
+def importar_pasta():
+    """Importação em lote: recebe os arquivos da pasta escolhida no seletor do
+    navegador, lê cada XML uma vez e grava. Não-XML e arquivos não reconhecidos
+    são reportados, não engolidos (I-6)."""
+    arquivos = [f for f in request.files.getlist("arquivos") if f and f.filename]
+    if not arquivos:
+        flash("Selecione uma pasta com arquivos XML. Nada foi importado.", "erro")
+        return redirect(url_for("importar"))
+    resultados = _ingerir_uploads(arquivos)
+    if not resultados:
+        flash("A pasta selecionada não tem arquivos .xml. Nada foi importado.", "erro")
+        return redirect(url_for("importar"))
+    importadas, erros = _persistir(resultados)
     msg = f"Importação concluída: {importadas} nota(s) gravada(s) no banco."
     if erros:
         msg += (f" {len(erros)} arquivo(s) não reconhecido(s), ignorado(s): "
-                f"{', '.join(erros)} (I-6).")
-    flash(msg)
+                f"{', '.join(erros)}.")
+    flash(msg, "ok" if importadas else "erro")
+    return redirect(url_for("hub"))
+
+
+@app.route("/importar/exemplos", methods=["POST"])
+def importar_exemplos():
+    """Atalho de demonstração: importa a pasta de exemplos que acompanha o
+    projeto (caminho conhecido no servidor), sem o usuário ter de localizá-la."""
+    importadas, erros = _persistir(ingerir_pasta(PASTA_EXEMPLOS))
+    flash(f"Exemplos do projeto importados: {importadas} nota(s) gravada(s).",
+          "ok" if importadas else "erro")
     return redirect(url_for("hub"))
 
 
@@ -382,7 +443,7 @@ def redefinir_executar():
     confirmacao = request.form.get("confirmacao", "").strip()
     if confirmacao != redefinicao.FRASE_CONFIRMACAO:
         flash(f'Redefinição cancelada: digite exatamente "{redefinicao.FRASE_CONFIRMACAO}" '
-              "para confirmar. Nada foi apagado.")
+              "para confirmar. Nada foi apagado.", "erro")
         return redirect(url_for("redefinir"))
     resumo = redefinicao.redefinir_dados()
     if resumo["apagados"] or resumo["artefatos_limpos"]:
@@ -390,9 +451,9 @@ def redefinir_executar():
                  if resumo["artefatos_limpos"] else "")
         flash("Dados redefinidos: notas, memória de exportação e marcações apagadas "
               f"({', '.join(resumo['apagados'])}).{artef} Backup salvo em {resumo['backup']}. "
-              "A lista está vazia — use Importar para carregar as notas de novo.")
+              "A lista está vazia — use Importar para carregar as notas de novo.", "ok")
     else:
-        flash("Não havia dados a redefinir — o banco já estava vazio.")
+        flash("Não havia dados a redefinir — o banco já estava vazio.", "info")
     return redirect(url_for("hub"))
 
 

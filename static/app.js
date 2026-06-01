@@ -109,3 +109,42 @@
     escolherAba(c.atencao > 0 ? "atencao" : (c.pronta > 0 ? "pronta" : "todas"));
   });
 })();
+
+/* Modal de feedback do sistema: abre sozinha quando há mensagem (flash) e fecha
+   no botão, no Esc (nativo do <dialog>) ou clicando fora. */
+(function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    var m = document.getElementById("modal-msg");
+    if (!m) return;
+    if (typeof m.showModal === "function") { m.showModal(); }
+    else { m.setAttribute("open", ""); }            // fallback navegadores antigos
+    m.querySelectorAll("[data-fechar-modal]").forEach(function (b) {
+      b.addEventListener("click", function () { m.close(); });
+    });
+    m.addEventListener("click", function (e) {       // clique no backdrop fecha
+      if (e.target === m) m.close();
+    });
+  });
+})();
+
+/* Seletor de pasta (webkitdirectory): botão aciona o input oculto e mostra a
+   pasta escolhida e a contagem de XML, antes de enviar. */
+(function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("[data-abrir-seletor]").forEach(function (botao) {
+      var input = document.getElementById(botao.dataset.abrirSeletor);
+      if (!input) return;
+      botao.addEventListener("click", function () { input.click(); });
+      var info = document.querySelector('[data-info-seletor="' + input.id + '"]');
+      input.addEventListener("change", function () {
+        var arquivos = Array.prototype.slice.call(input.files || []);
+        var xmls = arquivos.filter(function (f) { return /\.xml$/i.test(f.name); });
+        if (!info) return;
+        if (!arquivos.length) { info.textContent = "Nenhuma pasta selecionada"; return; }
+        var rel = arquivos[0].webkitRelativePath || "";
+        var pasta = rel ? rel.split("/")[0] : "pasta";
+        info.textContent = pasta + " · " + xmls.length + " XML";
+      });
+    });
+  });
+})();
