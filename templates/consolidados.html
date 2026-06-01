@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Pagamentos consolidados · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head">
+  <h2>Pagamentos consolidados</h2>
+  <p>Conjuntos de notas de um mesmo contrato, pagos de forma agregada. O vínculo de contrato não consta no XML — o agrupamento abaixo é <strong>sugerido</strong> por prestador + competência; confira antes de pagar.</p>
+</div>
+
+{% if consolidacoes %}
+<section class="hero" aria-label="Resumo dos consolidados">
+  <div class="hero-main">
+    <p class="label"><svg class="icon"><use href="#i-servico"/></svg> Valor inédito em consolidados</p>
+    <p class="figure{{ ' zero' if total_pendente is ezero else '' }}">{{ total_pendente | moeda }}</p>
+    <p class="figure-meta"><svg class="icon"><use href="#i-seta"/></svg> {{ consolidacoes|length }} contrato(s) sugerido(s) com notas inéditas</p>
+  </div>
+</section>
+
+<section class="section" aria-label="Contratos">
+  {% for c in consolidacoes %}
+  <div class="card"><div class="card-b consol-card">
+    <div class="who">
+      <strong><svg class="icon" style="color:var(--nfse-ink)"><use href="#i-servico"/></svg> {{ c.prest_nome }}</strong><br>
+      <span class="muted mono">{{ c.prest_cnpj | cnpj }}</span>
+      <span class="muted"> · competência {{ c.competencia | competencia }}</span>
+    </div>
+    <div class="amount">
+      <div class="total{{ ' zero' if c.total is ezero else '' }}">{{ c.total | moeda }}</div>
+      <div class="meta">{{ c.n }} municípios · {{ c.novas }} inéditas</div>
+    </div>
+    <a class="btn ghost" href="{{ url_for('consolidado', prest_cnpj=c.prest_cnpj, competencia=c.competencia) }}">Abrir <svg class="icon"><use href="#i-seta"/></svg></a>
+  </div></div>
+  {% endfor %}
+</section>
+{% else %}
+<p class="empty-msg">Nenhum pagamento consolidado pendente. Conjuntos já exportados ficam no <a href="{{ url_for('historico') }}">Histórico</a>.</p>
+{% endif %}
+{% endblock %}

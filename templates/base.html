@@ -52,13 +52,20 @@
   </svg>
 
   <header class="topbar">
-    <div class="brand">
+    <a class="brand" href="{{ url_for('hub') }}">
       <div class="logo" aria-hidden="true">NF</div>
       <div>
         <h1>Extrator NF</h1>
         <p class="tag">Conferência fiscal · Fase 1 (extração fiel)</p>
       </div>
-    </div>
+    </a>
+
+    <nav class="nav" aria-label="Módulos">
+      <a href="{{ url_for('hub') }}"{{ ' class=on' if request.endpoint == 'hub' }}>Início</a>
+      <a href="{{ url_for('individuais') }}"{{ ' class=on' if request.endpoint == 'individuais' }}>Individuais</a>
+      <a href="{{ url_for('consolidados') }}"{{ ' class=on' if request.endpoint in ['consolidados', 'consolidado'] }}>Consolidadas</a>
+      <a href="{{ url_for('historico') }}"{{ ' class=on' if request.endpoint == 'historico' }}>Histórico</a>
+    </nav>
 
     <div class="controls">
       <div class="seg" role="group" aria-label="Tamanho da fonte">

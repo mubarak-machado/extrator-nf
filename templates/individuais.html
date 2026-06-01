@@ -1,77 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Notas para conferência · Extrator NF{% endblock %}
+{% block title %}Notas individuais · Extrator NF{% endblock %}
 {% block conteudo %}
 
-{# Classificação por linha (template-side, sem tocar nas rotas):
-   erro/atenção → exigem ação;  ja → já exportada;  pronta → inédita conferida.
-   ns.* alimenta o painel-herói; o data-status alimenta as abas no JS. #}
-{% set ns = namespace(prontas=0, atencao=0, ja=0, erros=0) %}
-{% for it in linhas %}
-  {% if it.erro %}{% set ns.erros = ns.erros + 1 %}
-  {% elif it.ja_exportada %}{% set ns.ja = ns.ja + 1 %}
-  {% elif it.reg.campos_faltantes or (it.tipo == 'NFSE' and not it.marcacao) %}{% set ns.atencao = ns.atencao + 1 %}
-  {% else %}{% set ns.prontas = ns.prontas + 1 %}
-  {% endif %}
-{% endfor %}
-{% set pendentes = ns.atencao + ns.erros %}
-{% set pct = (ns.prontas * 100 // kpis.ineditas) if kpis.ineditas else 100 %}
+{% set pct = (kpis.prontas * 100 // kpis.ineditas) if kpis.ineditas else 100 %}
 
 <div class="page-head">
-  <h2>Notas para conferência</h2>
-  <p>Fase 1 — extração fiel. Os valores tributários exibidos são o que o emitente destacou, não uma apuração do sistema.</p>
+  <h2>Notas individuais</h2>
+  <p>Notas avulsas pendentes (NF-e e NFS-e fora de consolidação). Os valores tributários são o que o emitente destacou, não uma apuração do sistema.</p>
 </div>
 
-{# ---------- painel-herói: prontidão do lote ---------- #}
-<section class="hero" aria-label="Prontidão do lote">
+<section class="hero" aria-label="Prontidão das avulsas">
   <div class="hero-main">
-    <p class="label"><svg class="icon"><use href="#i-exportar"/></svg> Lote pronto para exportar</p>
+    <p class="label"><svg class="icon"><use href="#i-exportar"/></svg> Avulsas inéditas a exportar</p>
     <p class="figure{{ ' zero' if kpis.valor_inedito is ezero else '' }}">{{ kpis.valor_inedito | moeda }}</p>
-    <p class="figure-meta"><svg class="icon"><use href="#i-seta"/></svg> {{ kpis.ineditas }} nota(s) inédita(s) · valor bruto a exportar</p>
+    <p class="figure-meta"><svg class="icon"><use href="#i-seta"/></svg> {{ kpis.ineditas }} nota(s) avulsa(s) · valor bruto a exportar</p>
+    {% if kpis.atencao %}
     <div class="hero-stats">
-      <span class="stat"><svg class="icon"><use href="#i-check"/></svg> <b>{{ ns.ja }}</b> já exportada(s)</span>
-      <span class="stat"><svg class="icon"><use href="#i-servico"/></svg> <b>{{ kpis.consolidacoes }}</b> consolidação(ões) sugerida(s)</span>
-      {% if pendentes %}<span class="stat warn"><svg class="icon"><use href="#i-alerta"/></svg> <b>{{ pendentes }}</b> precisam de atenção</span>{% endif %}
+      <span class="stat warn"><svg class="icon"><use href="#i-alerta"/></svg> <b>{{ kpis.atencao }}</b> precisam de atenção antes de exportar</span>
     </div>
+    {% endif %}
   </div>
   <div class="hero-aside">
     <div class="progress-wrap">
-      <div class="progress-top"><span>Conferidas para o lote</span><span><b>{{ ns.prontas }}</b> de {{ kpis.ineditas }}</span></div>
-      <div class="progress" role="progressbar" aria-valuenow="{{ ns.prontas }}" aria-valuemin="0" aria-valuemax="{{ kpis.ineditas }}" aria-label="Notas conferidas para o lote">
+      <div class="progress-top"><span>Conferidas</span><span><b>{{ kpis.prontas }}</b> de {{ kpis.ineditas }}</span></div>
+      <div class="progress" role="progressbar" aria-valuenow="{{ kpis.prontas }}" aria-valuemin="0" aria-valuemax="{{ kpis.ineditas }}" aria-label="Notas conferidas">
         <i style="width: {{ pct }}%"></i>
       </div>
     </div>
     <form method="post" action="{{ url_for('exportar') }}">
       <button class="btn" type="submit" {% if not kpis.ineditas %}disabled{% endif %}>
-        <svg class="icon"><use href="#i-exportar"/></svg> Exportar lote ({{ kpis.ineditas }} inéditas)
+        <svg class="icon"><use href="#i-exportar"/></svg> Exportar avulsas ({{ kpis.ineditas }})
       </button>
     </form>
   </div>
 </section>
 
-{% if consolidacoes %}
-<section class="section" aria-label="Consolidações sugeridas">
-  <h3>Consolidações sugeridas · serviço continuado</h3>
-  {% for c in consolidacoes %}
-  <div class="card"><div class="card-b consol-card">
-    <div class="who">
-      <strong><svg class="icon" style="color:var(--nfse-ink)"><use href="#i-servico"/></svg> {{ c.prest_nome }}</strong><br>
-      <span class="muted mono">{{ c.prest_cnpj | cnpj }}</span>
-      <span class="muted"> · competência {{ c.competencia | competencia }}</span>
-    </div>
-    <div class="amount">
-      <div class="total{{ ' zero' if c.total is ezero else '' }}">{{ c.total | moeda }}</div>
-      <div class="meta">{{ c.n }} municípios · {{ c.novas }} inéditas</div>
-    </div>
-    <a class="btn ghost" href="{{ url_for('consolidado', prest_cnpj=c.prest_cnpj, competencia=c.competencia) }}">Ver consolidado <svg class="icon"><use href="#i-seta"/></svg></a>
-  </div></div>
-  {% endfor %}
-  <p class="note-foot">Agrupamento <strong>sugerido</strong> por prestador + competência. O vínculo real é o contrato, que não consta no XML — confira antes de pagar.</p>
-</section>
-{% endif %}
-
-<section class="section" aria-label="Todas as notas">
-  <h3>Triagem de notas</h3>
-
+<section class="section" aria-label="Triagem de avulsas">
+  {% if not linhas %}
+  <p class="empty-msg">Nenhuma nota avulsa pendente. Tudo que foi exportado está no <a href="{{ url_for('historico') }}">Histórico</a>.</p>
+  {% else %}
   <div class="toolbar">
     <div class="tabs" role="tablist" aria-label="Filtrar por situação">
       <button class="tab attn" role="tab" data-filtro="atencao" aria-selected="false">
@@ -79,9 +46,6 @@
       </button>
       <button class="tab" role="tab" data-filtro="pronta" aria-selected="false">
         <svg class="icon"><use href="#i-check"/></svg> Prontas <span class="n"></span>
-      </button>
-      <button class="tab" role="tab" data-filtro="ja" aria-selected="false">
-        Já exportadas <span class="n"></span>
       </button>
       <button class="tab" role="tab" data-filtro="todas" aria-selected="true">
         Todas <span class="n"></span>
@@ -95,7 +59,7 @@
 
   <div class="table-wrap">
     <table id="tabela-notas">
-      <caption>Cada nota gera uma linha. “Já exportada” impede pagamento em duplicidade (idempotência por chave).</caption>
+      <caption>Cada nota avulsa gera uma linha e um lançamento. As já exportadas ficam no Histórico.</caption>
       <thead>
         <tr>
           <th scope="col">Tipo</th>
@@ -119,9 +83,7 @@
         {% set r = it.reg %}
         {% set nome = (r.emit_nome if it.tipo=='NFE' else r.prest_nome) or '—' %}
         {% set doc = (r.emit_cnpj if it.tipo=='NFE' else r.prest_cnpj) %}
-        {% if it.ja_exportada %}{% set status = 'ja' %}
-        {% elif r.campos_faltantes or (it.tipo=='NFSE' and not it.marcacao) %}{% set status = 'atencao' %}
-        {% else %}{% set status = 'pronta' %}{% endif %}
+        {% if r.campos_faltantes or (it.tipo=='NFSE' and not it.marcacao) %}{% set status = 'atencao' %}{% else %}{% set status = 'pronta' %}{% endif %}
         <tr data-status="{{ status }}" data-numero="{{ r.numero or 0 }}" data-valor="{{ it.valor or 0 }}"
             data-busca="{{ nome | lower }} {{ r.numero or '' }} {{ doc or '' }}">
           <td><span class="badge {{ it.tipo|lower }}">{{ it.tipo }}</span></td>
@@ -129,9 +91,7 @@
           <td>{{ nome }}<span class="sub mono">{{ doc | cnpj }}</span></td>
           <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
           <td>
-            {% if it.ja_exportada %}<span class="pill ja">já exportada</span>
-            {% elif status == 'pronta' %}<span class="pill nova">inédita</span>
-            {% else %}<span class="pill nova">inédita</span>{% endif %}
+            <span class="pill nova">inédita</span>
             {% if r.campos_faltantes %}<span class="attn"><svg class="icon"><use href="#i-alerta"/></svg> {{ r.campos_faltantes|join(', ') }}</span>{% endif %}
             {% if it.tipo=='NFSE' %}
               {% if it.marcacao %}<span class="sub">material: {{ it.marcacao.valor }}</span>
@@ -146,6 +106,7 @@
     </table>
     <p class="empty-msg" id="vazio" hidden>Nenhuma nota nesta visão.</p>
   </div>
+  {% endif %}
 
   <p class="note-foot">
     A exportação cria um arquivo novo por lote em <code>exportacoes/</code> e nunca edita um arquivo já criado.

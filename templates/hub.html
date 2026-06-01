@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Início · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head">
+  <h2>O que você vai lançar?</h2>
+  <p>Escolha um módulo. Notas avulsas e pagamentos consolidados não se misturam — cada um tem seu fluxo. O que já foi exportado fica no Histórico.</p>
+</div>
+
+<section class="modules" aria-label="Módulos">
+  <a class="module-card" href="{{ url_for('individuais') }}">
+    <div class="mod-top">
+      <span class="mod-icon"><svg class="icon"><use href="#i-doc"/></svg></span>
+      <div>
+        <h3>Notas individuais</h3>
+        <p class="mod-desc">NF-e e NFS-e avulsas, lançadas uma a uma.</p>
+      </div>
+    </div>
+    <div class="mod-figs">
+      <span class="mod-big{{ ' zero' if cards.ind_valor is ezero else '' }}">{{ cards.ind_valor | moeda }}</span>
+      <span class="mod-sub">{{ cards.ind_pend }} a conferir{% if cards.ind_atencao %} · <span class="mod-warn"><svg class="icon"><use href="#i-alerta"/></svg> {{ cards.ind_atencao }} com atenção</span>{% endif %}</span>
+    </div>
+    <span class="mod-go">Abrir módulo <svg class="icon"><use href="#i-seta"/></svg></span>
+  </a>
+
+  <a class="module-card" href="{{ url_for('consolidados') }}">
+    <div class="mod-top">
+      <span class="mod-icon"><svg class="icon"><use href="#i-servico"/></svg></span>
+      <div>
+        <h3>Pagamentos consolidados</h3>
+        <p class="mod-desc">Conjuntos do mesmo contrato (sugeridos por prestador + competência).</p>
+      </div>
+    </div>
+    <div class="mod-figs">
+      <span class="mod-big{{ ' zero' if cards.cons_valor is ezero else '' }}">{{ cards.cons_valor | moeda }}</span>
+      <span class="mod-sub">{{ cards.cons_contratos }} contrato(s) · {{ cards.cons_novas }} inéditas</span>
+    </div>
+    <span class="mod-go">Abrir módulo <svg class="icon"><use href="#i-seta"/></svg></span>
+  </a>
+
+  <a class="module-card span-all" href="{{ url_for('historico') }}">
+    <div class="mod-top">
+      <span class="mod-icon"><svg class="icon"><use href="#i-check"/></svg></span>
+      <div>
+        <h3>Histórico</h3>
+        <p class="mod-desc">Notas já exportadas, por lote. Consulta — impede pagamento em duplicidade.</p>
+      </div>
+    </div>
+    <div class="mod-figs">
+      <span class="mod-big">{{ cards.hist_total }}</span>
+      <span class="mod-sub">nota(s) exportada(s)</span>
+      <span class="mod-go" style="margin-left:auto">Ver histórico <svg class="icon"><use href="#i-seta"/></svg></span>
+    </div>
+  </a>
+</section>
+{% endblock %}

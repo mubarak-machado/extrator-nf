@@ -56,6 +56,16 @@ class RegistroDeExportacao:
             (repetidas if self.ja_exportada(chave) else novas).append(chave)
         return novas, repetidas
 
+    def listar(self) -> list[dict]:
+        """Lista as exportações já registradas (mais recentes primeiro). Leitura
+        do registro de idempotência — alimenta a tela de Histórico (I-1). Não é
+        apuração nem altera nada: só devolve o que já foi exportado."""
+        cur = self._conn.execute(
+            "SELECT chave, tipo, lote_id, exportado_em FROM exportacoes "
+            "ORDER BY exportado_em DESC, lote_id DESC"
+        )
+        return [dict(r) for r in cur.fetchall()]
+
     def registrar_lote(self, chaves_tipos: list[tuple[str, str]], lote_id: str) -> None:
         """
         Grava as chaves de um lote APÓS exportação bem-sucedida.

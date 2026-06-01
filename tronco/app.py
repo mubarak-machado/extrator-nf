@@ -101,35 +101,131 @@ def _grupos(linhas):
     return g
 
 
-@app.route("/")
-def lista():
-    linhas = _carregar()
-    grupos = _grupos(linhas)
-    consolidacoes = [
-        {"prest_cnpj": k[0], "competencia": k[1],
-         "prest_nome": its[0]["reg"].prest_nome, "n": len(its),
-         "novas": sum(1 for i in its if not i["ja_exportada"]),
-         "total": _soma([i["reg"] for i in its], "valor_servicos")}
-        for k, its in grupos.items() if len(its) > 1
-    ]
-    validos = [it for it in linhas if it["reg"]]
-    ineditas = [it for it in validos if not it["ja_exportada"]]
-    bruto = Decimal("0")
-    for it in ineditas:
+def _chaves_consolidadas(linhas):
+    """Chaves das notas que caem num grupo de consolidação (>1 nota). Tudo que
+    não está aqui é tratado como nota individual/avulsa. Nunca misturamos
+    contratos diferentes: cada grupo é um pagamento; as avulsas são lançadas
+    uma a uma."""
+    chaves = set()
+    for its in _grupos(linhas).values():
+        if len(its) > 1:
+            chaves.update(it["reg"].chave for it in its)
+    return chaves
+
+
+def _bruto(itens):
+    total = Decimal("0")
+    for it in itens:
         try:
-            bruto += Decimal(str(it["valor"])) if it["valor"] else Decimal("0")
+            total += Decimal(str(it["valor"])) if it["valor"] else Decimal("0")
         except (InvalidOperation, ValueError):
             pass
-    kpis = {
-        "total": len(validos),
-        "ineditas": len(ineditas),
-        "ja": sum(1 for it in validos if it["ja_exportada"]),
-        "atencao": sum(1 for it in linhas if _com_atencao(it)),
-        "valor_inedito": f"{bruto:.2f}",
-        "consolidacoes": len(consolidacoes),
+    return f"{total:.2f}"
+
+
+def _resumo_consolidacoes(linhas, so_pendentes=True):
+    """Cartões de consolidação (1 por contrato sugerido). Por padrão lista só os
+    grupos que ainda têm nota inédita — o que já foi exportado vive no Histórico."""
+    out = []
+    for (cnpj, comp), its in _grupos(linhas).items():
+        if len(its) <= 1:
+            continue
+        novas = sum(1 for i in its if not i["ja_exportada"])
+        if so_pendentes and not novas:
+            continue
+        out.append({"prest_cnpj": cnpj, "competencia": comp,
+                    "prest_nome": its[0]["reg"].prest_nome, "n": len(its),
+                    "novas": novas,
+                    "total": _soma([i["reg"] for i in its], "valor_servicos")})
+    out.sort(key=lambda c: (c["prest_nome"] or "", c["competencia"] or ""))
+    return out
+
+
+@app.route("/")
+def hub():
+    """Entrada: hub com os três módulos. Não despeja a lista de notas —
+    mostra contagem e valor pendente de cada módulo, e o usuário entra no que
+    for trabalhar (avulsa ou consolidado) ou consulta o histórico."""
+    linhas = _carregar()
+    cons_chaves = _chaves_consolidadas(linhas)
+    individuais = [it for it in linhas
+                   if it["erro"] or (it["reg"] and it["reg"].chave not in cons_chaves)]
+    ind_pend = [it for it in individuais if it["reg"] and not it["ja_exportada"]]
+    consolidacoes = _resumo_consolidacoes(linhas)
+    registro = RegistroDeExportacao()
+    exportadas = registro.listar()
+    registro.fechar()
+    cards = {
+        "ind_pend": len(ind_pend),
+        "ind_atencao": sum(1 for it in individuais if _com_atencao(it)),
+        "ind_valor": _bruto(ind_pend),
+        "cons_contratos": len(consolidacoes),
+        "cons_novas": sum(c["novas"] for c in consolidacoes),
+        "cons_valor": _soma([i["reg"] for c in consolidacoes
+                             for i in _grupos(linhas)[(c["prest_cnpj"], c["competencia"])]
+                             if not i["ja_exportada"]], "valor_servicos"),
+        "hist_total": len(exportadas),
     }
-    return render_template("lista.html", linhas=linhas, kpis=kpis,
-                           consolidacoes=consolidacoes)
+    return render_template("hub.html", cards=cards)
+
+
+@app.route("/individuais")
+def individuais():
+    """Notas avulsas pendentes (NF-e + NFS-e fora de consolidação). Triagem por
+    atenção, busca e ordenação. As já exportadas saem daqui e vão ao Histórico."""
+    linhas = _carregar()
+    cons_chaves = _chaves_consolidadas(linhas)
+    itens = [it for it in linhas
+             if it["erro"] or (it["reg"] and it["reg"].chave not in cons_chaves
+                               and not it["ja_exportada"])]
+    pendentes = [it for it in itens if it["reg"]]
+    kpis = {
+        "ineditas": len(pendentes),
+        "prontas": sum(1 for it in pendentes if not _com_atencao(it)),
+        "atencao": sum(1 for it in itens if _com_atencao(it)),
+        "valor_inedito": _bruto(pendentes),
+    }
+    return render_template("individuais.html", linhas=itens, kpis=kpis)
+
+
+@app.route("/consolidados")
+def consolidados():
+    """Lista de pagamentos consolidados pendentes (1 cartão por contrato sugerido)."""
+    linhas = _carregar()
+    consolidacoes = _resumo_consolidacoes(linhas)
+    total = _soma([i["reg"] for c in consolidacoes
+                   for i in _grupos(linhas)[(c["prest_cnpj"], c["competencia"])]
+                   if not i["ja_exportada"]], "valor_servicos")
+    return render_template("consolidados.html", consolidacoes=consolidacoes,
+                           total_pendente=total)
+
+
+@app.route("/historico")
+def historico():
+    """Notas já exportadas (registro de idempotência), agrupadas por lote. É o
+    'feito': consulta, não some, e impede pagamento em duplicidade (I-1)."""
+    linhas = _carregar()
+    por_chave = {it["reg"].chave: it for it in linhas if it["reg"]}
+    registro = RegistroDeExportacao()
+    exportadas = registro.listar()
+    registro.fechar()
+    lotes = defaultdict(list)
+    for e in exportadas:
+        it = por_chave.get(e["chave"])
+        r = it["reg"] if it else None
+        lotes[e["lote_id"]].append({
+            "chave": e["chave"], "tipo": e["tipo"], "exportado_em": e["exportado_em"],
+            "numero": getattr(r, "numero", None),
+            "nome": (getattr(r, "emit_nome", None) if e["tipo"] == "NFE"
+                     else getattr(r, "prest_nome", None)) if r else None,
+            "valor": (getattr(r, "valor_total", None) if e["tipo"] == "NFE"
+                      else getattr(r, "valor_servicos", None)) if r else None,
+            "disponivel": it is not None,
+        })
+    blocos = [{"lote_id": lid, "exportado_em": its[0]["exportado_em"],
+               "n": len(its), "itens": its} for lid, its in lotes.items()]
+    blocos.sort(key=lambda b: b["exportado_em"], reverse=True)
+    return render_template("historico.html", blocos=blocos, total=len(exportadas))
 
 
 @app.route("/consolidado/<prest_cnpj>/<competencia>")
@@ -138,7 +234,7 @@ def consolidado(prest_cnpj, competencia):
     itens = _grupos(linhas).get((prest_cnpj, competencia), [])
     if not itens:
         flash("Consolidação não encontrada.")
-        return redirect(url_for("lista"))
+        return redirect(url_for("consolidados"))
     regs = [it["reg"] for it in itens]
     totais = {a: _soma(regs, a) for a in (
         "valor_servicos", "iss_valor_destaque_emitente", "ir_destaque_emitente",
@@ -148,6 +244,7 @@ def consolidado(prest_cnpj, competencia):
     return render_template("consolidado.html", itens=itens, regs=regs,
                            prest_cnpj=prest_cnpj, competencia=competencia,
                            prest_nome=regs[0].prest_nome, totais=totais, novas=novas)
+    # nota: a navegação "voltar" deste detalhe é o módulo Consolidados.
 
 
 @app.route("/nota/<chave>")
@@ -156,7 +253,7 @@ def detalhe(chave):
         if item["reg"] and item["reg"].chave == chave:
             return render_template("detalhe.html", item=item)
     flash("Nota não encontrada.")
-    return redirect(url_for("lista"))
+    return redirect(url_for("hub"))
 
 
 @app.route("/marcar/<chave>", methods=["POST"])
@@ -193,10 +290,15 @@ def _exportar(candidatos):
 
 @app.route("/exportar", methods=["POST"])
 def exportar():
+    """Exporta as notas avulsas inéditas (não as de consolidação — cada contrato
+    é exportado pelo seu próprio botão, para nunca misturar contratos)."""
     linhas = _carregar()
-    cands = [it["reg"] for it in linhas if it["reg"] and not it["ja_exportada"] and not it["erro"]]
+    cons_chaves = _chaves_consolidadas(linhas)
+    cands = [it["reg"] for it in linhas
+             if it["reg"] and not it["ja_exportada"] and not it["erro"]
+             and it["reg"].chave not in cons_chaves]
     flash(_exportar(cands))
-    return redirect(url_for("lista"))
+    return redirect(url_for("individuais"))
 
 
 @app.route("/exportar_grupo/<prest_cnpj>/<competencia>", methods=["POST"])
