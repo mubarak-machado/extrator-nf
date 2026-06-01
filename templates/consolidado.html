@@ -6,40 +6,50 @@
 
 <div class="page-head">
   <h2>{{ prest_nome }}</h2>
-  <p>
-    <span class="mono">{{ prest_cnpj | cnpj }}</span> ·
-    competência {{ competencia | competencia }} ·
-    {{ regs|length }} municípios · pagamento consolidado
-  </p>
+  <p><span class="mono">{{ prest_cnpj | cnpj }}</span> · pagamento consolidado</p>
 </div>
 
-<section class="kpis" aria-label="Totais da consolidação">
-  {% set ret_fed = (
-        (totais.ir_destaque_emitente|float if totais.ir_destaque_emitente else 0)
-      + (totais.pis_destaque_emitente|float if totais.pis_destaque_emitente else 0)
-      + (totais.cofins_destaque_emitente|float if totais.cofins_destaque_emitente else 0)
-      + (totais.csll_destaque_emitente|float if totais.csll_destaque_emitente else 0)
-      + (totais.inss_destaque_emitente|float if totais.inss_destaque_emitente else 0)
-  ) %}
-  <div class="kpi">
-    <p class="label">Valor bruto (soma)</p>
-    <div class="value small{{ ' zero' if totais.valor_servicos is ezero else '' }}">{{ totais.valor_servicos | moeda }}</div>
-    <p class="sub">{{ regs|length }} notas</p>
+{% set ret_fed = (
+      (totais.ir_destaque_emitente|float if totais.ir_destaque_emitente else 0)
+    + (totais.pis_destaque_emitente|float if totais.pis_destaque_emitente else 0)
+    + (totais.cofins_destaque_emitente|float if totais.cofins_destaque_emitente else 0)
+    + (totais.csll_destaque_emitente|float if totais.csll_destaque_emitente else 0)
+    + (totais.inss_destaque_emitente|float if totais.inss_destaque_emitente else 0)
+) %}
+
+{# colunas de tributo: só aparecem se houver valor em algum município do grupo
+   (omitir coluna 100% zerada é declutter de ausência, não de valor — I-6). #}
+{% set cols = [('iss','ISS (alíq.)','iss_valor_destaque_emitente'),
+               ('ir','IR','ir_destaque_emitente'),
+               ('pis','PIS','pis_destaque_emitente'),
+               ('cofins','COFINS','cofins_destaque_emitente'),
+               ('csll','CSLL','csll_destaque_emitente'),
+               ('inss','INSS','inss_destaque_emitente')] %}
+{% set vis = [] %}{% set omit = [] %}
+{% for key, label, attr in cols %}
+  {% if totais[attr] is ezero %}{% set _ = omit.append(label.split(' ')[0]) %}{% else %}{% set _ = vis.append((key, label, attr)) %}{% endif %}
+{% endfor %}
+
+<section class="hero" aria-label="Totais da consolidação">
+  <div class="hero-main">
+    <p class="label"><svg class="icon"><use href="#i-servico"/></svg> Valor bruto (soma)</p>
+    <p class="figure{{ ' zero' if totais.valor_servicos is ezero else '' }}">{{ totais.valor_servicos | moeda }}</p>
+    <p class="figure-meta"><svg class="icon"><use href="#i-seta"/></svg> {{ regs|length }} municípios · competência {{ competencia | competencia }}</p>
+    <div class="hero-stats">
+      <span class="stat">Retenções federais <b>{{ ret_fed | moeda }}</b></span>
+      <span class="stat">ISS <b>{{ totais.iss_valor_destaque_emitente | moeda }}</b></span>
+      <span class="stat">{{ novas }} inéditas no grupo</span>
+    </div>
   </div>
-  <div class="kpi">
-    <p class="label">Retenções federais (soma)</p>
-    <div class="value small{{ ' zero' if ret_fed is ezero else '' }}">{{ ret_fed | moeda }}</div>
-    <p class="sub">IR + PIS + COFINS + CSLL + INSS</p>
-  </div>
-  <div class="kpi">
-    <p class="label">ISS (soma)</p>
-    <div class="value small{{ ' zero' if totais.iss_valor_destaque_emitente is ezero else '' }}">{{ totais.iss_valor_destaque_emitente | moeda }}</div>
-    <p class="sub">municipal — varia por município</p>
-  </div>
-  <div class="kpi">
-    <p class="label">Líquido (soma)</p>
-    <div class="value small{{ ' zero' if totais.valor_liquido is ezero else '' }}">{{ totais.valor_liquido | moeda }}</div>
-    <p class="sub">{{ novas }} inéditas neste grupo</p>
+  <div class="hero-aside">
+    <div class="progress-wrap">
+      <div class="progress-top"><span>Líquido (soma)</span><span><b>{{ totais.valor_liquido | moeda }}</b></span></div>
+    </div>
+    <form method="post" action="{{ url_for('exportar_grupo', prest_cnpj=prest_cnpj, competencia=competencia) }}">
+      <button class="btn" type="submit" {% if not novas %}disabled{% endif %}>
+        <svg class="icon"><use href="#i-exportar"/></svg> Exportar consolidação ({{ novas }} inéditas)
+      </button>
+    </form>
   </div>
 </section>
 
@@ -51,13 +61,7 @@
   </p>
 </div>
 
-<div class="actions">
-  <form method="post" action="{{ url_for('exportar_grupo', prest_cnpj=prest_cnpj, competencia=competencia) }}">
-    <button class="btn" type="submit" {% if not novas %}disabled{% endif %}>Exportar esta consolidação ({{ novas }} inéditas)</button>
-  </form>
-</div>
-
-<div class="table-wrap dense">
+<div class="table-wrap dense stick">
   <table>
     <caption>Uma linha por nota/município. Valores conforme destaque do emitente. Toque no município para abrir a nota.</caption>
     <thead>
@@ -65,12 +69,7 @@
         <th scope="col">Município</th>
         <th scope="col">Nº</th>
         <th scope="col" class="num sep-l">Valor serviços</th>
-        <th scope="col" class="num">ISS (alíq.)</th>
-        <th scope="col" class="num">IR</th>
-        <th scope="col" class="num">PIS</th>
-        <th scope="col" class="num">COFINS</th>
-        <th scope="col" class="num">CSLL</th>
-        <th scope="col" class="num">INSS</th>
+        {% for key, label, attr in vis %}<th scope="col" class="num">{{ label }}</th>{% endfor %}
         <th scope="col" class="num">Líquido</th>
         <th scope="col" class="nowrap">Exp.</th>
       </tr>
@@ -81,12 +80,13 @@
         <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.municipio_nome or '—' }}</a></td>
         <td class="num">{{ r.numero or '—' }}</td>
         <td class="num sep-l{{ ' zero' if r.valor_servicos is ezero else '' }}">{{ r.valor_servicos | moeda }}</td>
-        <td class="num{{ ' zero' if r.iss_valor_destaque_emitente is ezero else '' }}">{{ r.iss_valor_destaque_emitente | moeda }}<span class="iss-aliq">{{ r.iss_aliquota_destaque_emitente | percent }}</span></td>
-        <td class="num{{ ' zero' if r.ir_destaque_emitente is ezero else '' }}">{{ r.ir_destaque_emitente | moeda }}</td>
-        <td class="num{{ ' zero' if r.pis_destaque_emitente is ezero else '' }}">{{ r.pis_destaque_emitente | moeda }}</td>
-        <td class="num{{ ' zero' if r.cofins_destaque_emitente is ezero else '' }}">{{ r.cofins_destaque_emitente | moeda }}</td>
-        <td class="num{{ ' zero' if r.csll_destaque_emitente is ezero else '' }}">{{ r.csll_destaque_emitente | moeda }}</td>
-        <td class="num{{ ' zero' if r.inss_destaque_emitente is ezero else '' }}">{{ r.inss_destaque_emitente | moeda }}</td>
+        {% for key, label, attr in vis %}
+          {% if key == 'iss' %}
+          <td class="num{{ ' zero' if r.iss_valor_destaque_emitente is ezero else '' }}">{{ r.iss_valor_destaque_emitente | moeda }}<span class="iss-aliq">{{ r.iss_aliquota_destaque_emitente | percent }}</span></td>
+          {% else %}
+          <td class="num{{ ' zero' if r[attr] is ezero else '' }}">{{ r[attr] | moeda }}</td>
+          {% endif %}
+        {% endfor %}
         <td class="num{{ ' zero' if r.valor_liquido is ezero else '' }}">{{ r.valor_liquido | moeda }}</td>
         <td class="nowrap" title="{% if it.ja_exportada %}já exportada{% else %}inédita{% endif %}">
           <span class="dot {% if it.ja_exportada %}ja{% else %}nova{% endif %}" aria-hidden="true"></span>
@@ -99,12 +99,7 @@
       <tr>
         <td>Total ({{ regs|length }})</td><td></td>
         <td class="num sep-l">{{ totais.valor_servicos | moeda }}</td>
-        <td class="num">{{ totais.iss_valor_destaque_emitente | moeda }}</td>
-        <td class="num">{{ totais.ir_destaque_emitente | moeda }}</td>
-        <td class="num">{{ totais.pis_destaque_emitente | moeda }}</td>
-        <td class="num">{{ totais.cofins_destaque_emitente | moeda }}</td>
-        <td class="num">{{ totais.csll_destaque_emitente | moeda }}</td>
-        <td class="num">{{ totais.inss_destaque_emitente | moeda }}</td>
+        {% for key, label, attr in vis %}<td class="num">{{ totais[attr] | moeda }}</td>{% endfor %}
         <td class="num">{{ totais.valor_liquido | moeda }}</td>
         <td></td>
       </tr>
@@ -113,6 +108,7 @@
 </div>
 
 <p class="note-foot">
+  {% if omit %}Colunas sem valor em todo o grupo foram omitidas ({{ omit|join(', ') }}).{% endif %}
   ISS é tributo municipal: cada município pode ter alíquota própria, por isso a coluna ISS aparece por linha e o total de ISS é apenas informativo.
   As retenções federais (IR, PIS, COFINS, CSLL, INSS) é que costumam consolidar no pagamento.
 </p>

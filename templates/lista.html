@@ -2,31 +2,49 @@
 {% block title %}Notas para conferência · Extrator NF{% endblock %}
 {% block conteudo %}
 
+{# Classificação por linha (template-side, sem tocar nas rotas):
+   erro/atenção → exigem ação;  ja → já exportada;  pronta → inédita conferida.
+   ns.* alimenta o painel-herói; o data-status alimenta as abas no JS. #}
+{% set ns = namespace(prontas=0, atencao=0, ja=0, erros=0) %}
+{% for it in linhas %}
+  {% if it.erro %}{% set ns.erros = ns.erros + 1 %}
+  {% elif it.ja_exportada %}{% set ns.ja = ns.ja + 1 %}
+  {% elif it.reg.campos_faltantes or (it.tipo == 'NFSE' and not it.marcacao) %}{% set ns.atencao = ns.atencao + 1 %}
+  {% else %}{% set ns.prontas = ns.prontas + 1 %}
+  {% endif %}
+{% endfor %}
+{% set pendentes = ns.atencao + ns.erros %}
+{% set pct = (ns.prontas * 100 // kpis.ineditas) if kpis.ineditas else 100 %}
+
 <div class="page-head">
   <h2>Notas para conferência</h2>
   <p>Fase 1 — extração fiel. Os valores tributários exibidos são o que o emitente destacou, não uma apuração do sistema.</p>
 </div>
 
-<section class="kpis" aria-label="Resumo">
-  <div class="kpi">
-    <p class="label">Notas válidas</p>
-    <div class="value">{{ kpis.total }}</div>
-    <p class="sub">{{ kpis.ineditas }} inéditas · {{ kpis.ja }} já exportadas</p>
+{# ---------- painel-herói: prontidão do lote ---------- #}
+<section class="hero" aria-label="Prontidão do lote">
+  <div class="hero-main">
+    <p class="label"><svg class="icon"><use href="#i-exportar"/></svg> Lote pronto para exportar</p>
+    <p class="figure{{ ' zero' if kpis.valor_inedito is ezero else '' }}">{{ kpis.valor_inedito | moeda }}</p>
+    <p class="figure-meta"><svg class="icon"><use href="#i-seta"/></svg> {{ kpis.ineditas }} nota(s) inédita(s) · valor bruto a exportar</p>
+    <div class="hero-stats">
+      <span class="stat"><svg class="icon"><use href="#i-check"/></svg> <b>{{ ns.ja }}</b> já exportada(s)</span>
+      <span class="stat"><svg class="icon"><use href="#i-servico"/></svg> <b>{{ kpis.consolidacoes }}</b> consolidação(ões) sugerida(s)</span>
+      {% if pendentes %}<span class="stat warn"><svg class="icon"><use href="#i-alerta"/></svg> <b>{{ pendentes }}</b> precisam de atenção</span>{% endif %}
+    </div>
   </div>
-  <div class="kpi">
-    <p class="label">Valor bruto inédito</p>
-    <div class="value small{{ ' zero' if kpis.valor_inedito is ezero else '' }}">{{ kpis.valor_inedito | moeda }}</div>
-    <p class="sub">soma do que falta exportar</p>
-  </div>
-  <div class="kpi{{ ' attn' if kpis.atencao else '' }}">
-    <p class="label">Precisam de atenção</p>
-    <div class="value">{{ kpis.atencao }}</div>
-    <p class="sub">campo faltante ou material não conferido</p>
-  </div>
-  <div class="kpi">
-    <p class="label">Consolidações sugeridas</p>
-    <div class="value">{{ kpis.consolidacoes }}</div>
-    <p class="sub">mesmo prestador + competência</p>
+  <div class="hero-aside">
+    <div class="progress-wrap">
+      <div class="progress-top"><span>Conferidas para o lote</span><span><b>{{ ns.prontas }}</b> de {{ kpis.ineditas }}</span></div>
+      <div class="progress" role="progressbar" aria-valuenow="{{ ns.prontas }}" aria-valuemin="0" aria-valuemax="{{ kpis.ineditas }}" aria-label="Notas conferidas para o lote">
+        <i style="width: {{ pct }}%"></i>
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('exportar') }}">
+      <button class="btn" type="submit" {% if not kpis.ineditas %}disabled{% endif %}>
+        <svg class="icon"><use href="#i-exportar"/></svg> Exportar lote ({{ kpis.ineditas }} inéditas)
+      </button>
+    </form>
   </div>
 </section>
 
@@ -36,7 +54,7 @@
   {% for c in consolidacoes %}
   <div class="card"><div class="card-b consol-card">
     <div class="who">
-      <strong>{{ c.prest_nome }}</strong><br>
+      <strong><svg class="icon" style="color:var(--nfse-ink)"><use href="#i-servico"/></svg> {{ c.prest_nome }}</strong><br>
       <span class="muted mono">{{ c.prest_cnpj | cnpj }}</span>
       <span class="muted"> · competência {{ c.competencia | competencia }}</span>
     </div>
@@ -44,61 +62,89 @@
       <div class="total{{ ' zero' if c.total is ezero else '' }}">{{ c.total | moeda }}</div>
       <div class="meta">{{ c.n }} municípios · {{ c.novas }} inéditas</div>
     </div>
-    <a class="btn" href="{{ url_for('consolidado', prest_cnpj=c.prest_cnpj, competencia=c.competencia) }}">Ver consolidado →</a>
+    <a class="btn ghost" href="{{ url_for('consolidado', prest_cnpj=c.prest_cnpj, competencia=c.competencia) }}">Ver consolidado <svg class="icon"><use href="#i-seta"/></svg></a>
   </div></div>
   {% endfor %}
+  <p class="note-foot">Agrupamento <strong>sugerido</strong> por prestador + competência. O vínculo real é o contrato, que não consta no XML — confira antes de pagar.</p>
 </section>
 {% endif %}
 
 <section class="section" aria-label="Todas as notas">
-  <h3>Todas as notas</h3>
-  <div class="actions">
-    <form method="post" action="{{ url_for('exportar') }}">
-      <button class="btn" type="submit">Exportar lote (só notas inéditas)</button>
-    </form>
+  <h3>Triagem de notas</h3>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="Filtrar por situação">
+      <button class="tab attn" role="tab" data-filtro="atencao" aria-selected="false">
+        <svg class="icon"><use href="#i-alerta"/></svg> Precisam de atenção <span class="n"></span>
+      </button>
+      <button class="tab" role="tab" data-filtro="pronta" aria-selected="false">
+        <svg class="icon"><use href="#i-check"/></svg> Prontas <span class="n"></span>
+      </button>
+      <button class="tab" role="tab" data-filtro="ja" aria-selected="false">
+        Já exportadas <span class="n"></span>
+      </button>
+      <button class="tab" role="tab" data-filtro="todas" aria-selected="true">
+        Todas <span class="n"></span>
+      </button>
+    </div>
+    <label class="search">
+      <svg class="icon"><use href="#i-busca"/></svg>
+      <input type="search" id="busca" placeholder="Buscar fornecedor ou número…" aria-label="Buscar por fornecedor ou número">
+    </label>
   </div>
 
   <div class="table-wrap">
-    <table>
+    <table id="tabela-notas">
       <caption>Cada nota gera uma linha. “Já exportada” impede pagamento em duplicidade (idempotência por chave).</caption>
       <thead>
         <tr>
           <th scope="col">Tipo</th>
-          <th scope="col">Número</th>
-          <th scope="col">Emitente / Prestador</th>
-          <th scope="col">CNPJ</th>
-          <th scope="col" class="num">Valor</th>
-          <th scope="col">Status</th>
-          <th scope="col">Atenção</th>
+          <th scope="col" class="num sortable" data-sort="numero" aria-sort="none">Número <span class="arr"></span></th>
+          <th scope="col">Fornecedor</th>
+          <th scope="col" class="num sortable" data-sort="valor" aria-sort="none">Valor <span class="arr"></span></th>
+          <th scope="col">Situação</th>
           <th scope="col"></th>
         </tr>
       </thead>
       <tbody>
       {% for it in linhas %}
-        <tr>
+        {% if it.erro %}
+        <tr data-status="atencao" data-numero="0" data-valor="0" data-busca="{{ it.origem | lower }} erro">
           <td>{% if it.tipo %}<span class="badge {{ it.tipo|lower }}">{{ it.tipo }}</span>{% else %}—{% endif %}</td>
-          {% if it.erro %}
-            <td colspan="5"><span class="pill erro">erro</span> <span class="muted">{{ it.erro }}</span> <span class="sub mono">{{ it.origem }}</span></td>
-            <td></td>
-          {% else %}
-            {% set r = it.reg %}
-            <td class="num">{{ r.numero or '—' }}</td>
-            <td>{{ (r.emit_nome if it.tipo=='NFE' else r.prest_nome) or '—' }}<span class="sub mono">{{ it.origem }}</span></td>
-            <td class="mono nowrap">{{ (r.emit_cnpj if it.tipo=='NFE' else r.prest_cnpj) | cnpj }}</td>
-            <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
-            <td>{% if it.ja_exportada %}<span class="pill ja">já exportada</span>{% else %}<span class="pill nova">inédita</span>{% endif %}</td>
-            <td>
-              {% if r.campos_faltantes %}<span class="attn">⚠ {{ r.campos_faltantes|join(', ') }}</span>{% endif %}
-              {% if it.tipo=='NFSE' %}
-                <span class="attn">⚠ material: {% if it.marcacao %}marcado “{{ it.marcacao.valor }}”{% else %}não conferido{% endif %}</span>
-              {% endif %}
-            </td>
-            <td><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">conferir →</a></td>
-          {% endif %}
+          <td colspan="3"><span class="pill erro">erro</span> <span class="muted">{{ it.erro }}</span> <span class="sub mono">{{ it.origem }}</span></td>
+          <td><span class="attn"><svg class="icon"><use href="#i-alerta"/></svg> leitura falhou</span></td>
+          <td></td>
         </tr>
+        {% else %}
+        {% set r = it.reg %}
+        {% set nome = (r.emit_nome if it.tipo=='NFE' else r.prest_nome) or '—' %}
+        {% set doc = (r.emit_cnpj if it.tipo=='NFE' else r.prest_cnpj) %}
+        {% if it.ja_exportada %}{% set status = 'ja' %}
+        {% elif r.campos_faltantes or (it.tipo=='NFSE' and not it.marcacao) %}{% set status = 'atencao' %}
+        {% else %}{% set status = 'pronta' %}{% endif %}
+        <tr data-status="{{ status }}" data-numero="{{ r.numero or 0 }}" data-valor="{{ it.valor or 0 }}"
+            data-busca="{{ nome | lower }} {{ r.numero or '' }} {{ doc or '' }}">
+          <td><span class="badge {{ it.tipo|lower }}">{{ it.tipo }}</span></td>
+          <td class="num">{{ r.numero or '—' }}</td>
+          <td>{{ nome }}<span class="sub mono">{{ doc | cnpj }}</span></td>
+          <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
+          <td>
+            {% if it.ja_exportada %}<span class="pill ja">já exportada</span>
+            {% elif status == 'pronta' %}<span class="pill nova">inédita</span>
+            {% else %}<span class="pill nova">inédita</span>{% endif %}
+            {% if r.campos_faltantes %}<span class="attn"><svg class="icon"><use href="#i-alerta"/></svg> {{ r.campos_faltantes|join(', ') }}</span>{% endif %}
+            {% if it.tipo=='NFSE' %}
+              {% if it.marcacao %}<span class="sub">material: {{ it.marcacao.valor }}</span>
+              {% else %}<span class="attn"><svg class="icon"><use href="#i-alerta"/></svg> material não conferido</span>{% endif %}
+            {% endif %}
+          </td>
+          <td><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">conferir <svg class="icon"><use href="#i-seta"/></svg></a></td>
+        </tr>
+        {% endif %}
       {% endfor %}
       </tbody>
     </table>
+    <p class="empty-msg" id="vazio" hidden>Nenhuma nota nesta visão.</p>
   </div>
 
   <p class="note-foot">

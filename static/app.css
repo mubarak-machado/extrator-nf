@@ -164,6 +164,10 @@ body {
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 }
 
+/* ícone SVG inline — alinhado ao texto, herda a cor (currentColor) */
+.icon { width: 1em; height: 1em; flex: none; vertical-align: -.125em; }
+.icon.lg { width: 1.35em; height: 1.35em; }
+
 /* números tabulares em todo dado mono */
 .mono, td.num, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
@@ -375,6 +379,103 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 
 .note-foot { color: var(--ink-3); font-size: .8rem; line-height: 1.6; margin-top: var(--sp-4); }
 .note-foot code { font-family: var(--font-mono); font-size: .92em; }
+
+/* ---------- painel-herói (número como protagonista) ----------
+   Usado na lista (prontidão do lote) e no consolidado (totais do pagamento).
+   "Moderno" = hierarquia forte + profundidade, não cor nova: o gradiente reusa
+   a linguagem teal do logo, bem sutil, para não competir com o dado. */
+.hero {
+  display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--sp-5) var(--sp-6);
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--primary) 7%, var(--surface)),
+      var(--surface) 62%);
+  border: 1px solid var(--line); border-left: 4px solid var(--primary);
+  border-radius: var(--radius-lg); padding: var(--sp-5) var(--sp-6);
+  box-shadow: var(--shadow); margin-bottom: var(--sp-5);
+}
+.hero .hero-main { flex: 1 1 320px; min-width: 0; }
+.hero .hero-aside {
+  flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column;
+  gap: var(--sp-3); justify-content: center;
+  padding-left: var(--sp-6); border-left: 1px solid var(--line);
+}
+.hero .label {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: .76rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-2); font-weight: 600; margin: 0 0 var(--sp-2);
+}
+.hero .figure {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: 2.6rem; font-weight: 600; line-height: 1; letter-spacing: -.03em;
+  color: var(--ink); margin: 0;
+}
+.hero .figure.zero { color: var(--ink-3); font-weight: 400; }
+.hero .figure.small { font-size: 1.9rem; }
+.hero .figure-meta { display: flex; align-items: center; gap: var(--sp-2); color: var(--ink-2); font-size: .95rem; margin-top: var(--sp-2); }
+.hero .hero-stats { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-4); }
+.hero .stat { display: inline-flex; align-items: baseline; gap: var(--sp-2); font-size: .85rem; color: var(--ink-2); }
+.hero .stat b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+.hero .stat.warn { color: var(--warn-ink); }
+.hero .hero-aside .btn { width: 100%; justify-content: center; }
+@media (max-width: 720px) {
+  .hero .hero-aside { padding-left: 0; border-left: none; border-top: 1px solid var(--line); padding-top: var(--sp-4); }
+}
+
+/* barra de progresso "conferidas X de Y" */
+.progress-wrap { font-size: .8rem; color: var(--ink-2); }
+.progress-wrap .progress-top { display: flex; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.progress-wrap .progress-top b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.progress { height: 10px; border-radius: 999px; background: var(--surface-3); overflow: hidden; border: 1px solid var(--line); }
+.progress > i { display: block; height: 100%; border-radius: 999px; background: var(--ok); transition: width .4s ease; }
+@media (prefers-reduced-motion: reduce) { .progress > i { transition: none; } }
+
+/* ---------- triagem: abas + busca ---------- */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.tabs { display: inline-flex; flex-wrap: wrap; gap: var(--sp-2); }
+.tab {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
+  font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
+  padding: .4rem .8rem; border-radius: 999px; line-height: 1;
+}
+.tab:hover { color: var(--ink); border-color: var(--line-strong); }
+.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); border-color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
+.tab .n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .78rem; color: var(--ink-3); }
+.tab[aria-selected="true"] .n { color: var(--primary); }
+.tab.attn[aria-selected="true"] { border-color: var(--warn); box-shadow: inset 0 -2px 0 var(--warn); }
+.tab.attn[aria-selected="true"] .n { color: var(--warn-ink); }
+
+.search { position: relative; margin-left: auto; display: inline-flex; align-items: center; }
+.search .icon { position: absolute; left: .65rem; color: var(--ink-3); pointer-events: none; }
+.search input {
+  font: inherit; font-size: .88rem; padding: .45rem .7rem .45rem 2.1rem;
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--surface); color: var(--ink); width: min(280px, 60vw);
+}
+.search input::placeholder { color: var(--ink-3); }
+
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable .arr { color: var(--ink-3); font-size: .9em; }
+.empty-msg { padding: var(--sp-5) var(--sp-4); text-align: center; color: var(--ink-3); font-size: .9rem; }
+
+/* primeira coluna fixa na rolagem horizontal (consolidado) */
+.dense.stick td:first-child, .dense.stick th:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--surface-2);
+  border-right: 1px solid var(--line);
+}
+.dense.stick thead th:first-child { z-index: 2; }
+.dense.stick tbody tr:hover td:first-child { background: var(--primary-soft); }
+.dense.stick tfoot td:first-child { background: var(--surface-2); }
+
+/* dois sub-cards lado a lado (ex.: Emitente + Destinatário no detalhe) */
+.cards-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-3); }
+.cards-2 .card + .card { margin-top: 0; }
+
+/* badge de flag no card-herói (ex.: Optante pelo Simples) */
+.flagline { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.flag { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: .78rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
+.flag .icon { color: var(--primary); }
 
 /* ---------- utilitários ---------- */
 .muted { color: var(--ink-3); }

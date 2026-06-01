@@ -2,6 +2,7 @@
 {% block title %}Nota {{ item.reg.numero }} · Extrator NF{% endblock %}
 {% block conteudo %}
 {% set r = item.reg %}
+{% set nfe = item.tipo == 'NFE' %}
 
 <p class="breadcrumb"><a href="{{ url_for('lista') }}">Notas</a> › Nota {{ r.numero or '(sem número)' }}</p>
 
@@ -11,79 +12,71 @@
   {% if item.ja_exportada %}<span class="pill ja">já exportada</span>{% else %}<span class="pill nova">inédita</span>{% endif %}
 </div>
 
-{# ---------- resumo para lançamento ---------- #}
-<section class="card lead">
-  <div class="card-h"><h3>Resumo para lançamento</h3></div>
-  <div class="card-b">
-    {% if item.tipo == 'NFE' %}
-      <dl class="grid">
-        <dt>Emitente</dt><dd>{{ r.emit_nome or '—' }} <span class="muted mono">· {{ r.emit_cnpj | cnpj }}</span></dd>
-        <dt>Optante pelo Simples</dt><dd>{{ r.emit_optante_simples | simnao }}</dd>
-        <dt>Emissão</dt><dd class="num">{{ r.data_emissao | data }}</dd>
-        <dt>Valor total</dt><dd class="num{{ ' zero' if r.valor_total is ezero else '' }}">{{ r.valor_total | moeda }}</dd>
-      </dl>
-    {% else %}
-      <dl class="grid">
-        <dt>Fornecedor</dt><dd>{{ r.prest_nome or '—' }} <span class="muted mono">· {{ r.prest_cnpj | cnpj }}</span></dd>
-        <dt>Competência</dt><dd class="num">{{ r.competencia | competencia }}</dd>
-        <dt>Município (ISS)</dt><dd>{{ r.municipio_nome or '—' }}</dd>
-        <dt>Valor bruto</dt><dd class="num{{ ' zero' if r.valor_servicos is ezero else '' }}">{{ r.valor_servicos | moeda }}</dd>
-        <dt>Valor líquido</dt><dd class="num{{ ' zero' if r.valor_liquido is ezero else '' }}">{{ r.valor_liquido | moeda }}</dd>
-      </dl>
-      <p class="overline mt-3">Retenções (destaque do emitente)</p>
-      <dl class="tax-grid mt-3">
-        {% for rot, val in [('IR', r.ir_destaque_emitente), ('PIS', r.pis_destaque_emitente),
-                            ('COFINS', r.cofins_destaque_emitente), ('CSLL', r.csll_destaque_emitente),
-                            ('INSS', r.inss_destaque_emitente), ('ISS', r.iss_valor_destaque_emitente)] %}
-          <div class="cell"><dt>{{ rot }}</dt><dd class="{{ 'zero' if val is ezero else '' }}">{{ val | moeda }}</dd></div>
-        {% endfor %}
-      </dl>
+{# ---------- herói: tudo para a decisão de lançamento ---------- #}
+<section class="hero" aria-label="Resumo para lançamento">
+  <div class="hero-main">
+    <p class="label"><svg class="icon"><use href="#i-cifrao"/></svg> {{ 'Valor total da nota' if nfe else 'Valor dos serviços' }}</p>
+    <p class="figure{{ ' zero' if (r.valor_total if nfe else r.valor_servicos) is ezero else '' }}">{{ (r.valor_total if nfe else r.valor_servicos) | moeda }}</p>
+    <p class="figure-meta"><svg class="icon"><use href="#i-pessoas"/></svg> {{ (r.emit_nome if nfe else r.prest_nome) or '—' }}</p>
+    <div class="flagline">
+      <span class="flag"><svg class="icon"><use href="#i-check"/></svg> Optante Simples: {{ (r.emit_optante_simples if nfe else r.prest_optante_simples) | simnao }}</span>
+      <span class="flag"><svg class="icon"><use href="#i-id"/></svg> Emissão {{ r.data_emissao | data }}</span>
+      {% if not nfe %}
+      <span class="flag"><svg class="icon"><use href="#i-servico"/></svg> Competência {{ r.competencia | competencia }}</span>
+        {% if item.marcacao %}
+          <span class="flag"><svg class="icon"><use href="#i-check"/></svg> Material: {{ item.marcacao.valor|upper }}</span>
+        {% else %}
+          <span class="flag" style="color:var(--warn-ink);border-color:color-mix(in srgb,var(--warn) 35%,transparent)"><svg class="icon" style="color:var(--warn)"><use href="#i-alerta"/></svg> Material não conferido</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  <div class="hero-aside">
+    <div class="progress-wrap">
+      <div class="progress-top"><span>{{ 'Destinatário (órgão)' if nfe else 'Tomador (órgão)' }}</span></div>
+      <p class="figure small" style="font-size:1.05rem;font-family:var(--font-ui);font-weight:600;letter-spacing:0">{{ (r.dest_nome if nfe else r.toma_nome) or '—' }}</p>
+      <p class="mono muted small">
+        {% set odoc = r.dest_cnpj if nfe else r.toma_cnpj %}
+        {% if odoc %}{{ odoc | cnpj }}{% else %}<span class="falta">— (confira o CNPJ)</span>{% endif %}
+      </p>
+    </div>
+    {% if not nfe %}
+    <div class="progress-wrap">
+      <div class="progress-top"><span>Valor líquido</span><span><b>{{ r.valor_liquido | moeda }}</b></span></div>
+    </div>
     {% endif %}
   </div>
 </section>
 
-{# ---------- identificação ---------- #}
-<section class="card"><div class="card-h"><h3>Identificação</h3></div><div class="card-b">
-  <dl class="grid">
-    <dt>Chave</dt><dd class="num break-all">{{ r.chave | chave }}</dd>
-    <dt>Número</dt><dd class="num">{{ r.numero or '—' }}</dd>
-    {% if item.tipo == 'NFE' %}
-      <dt>Série</dt><dd class="num">{{ r.serie or '—' }}</dd>
-      <dt>Modelo</dt><dd class="num">{{ r.modelo or '—' }}</dd>
-      <dt>Natureza da operação</dt><dd>{{ r.natureza_operacao or '—' }}</dd>
-    {% else %}
-      <dt>Cód. verificação</dt><dd class="num">{{ r.codigo_verificacao or '—' }}</dd>
-      <dt>Competência</dt><dd class="num">{{ r.competencia | competencia }}</dd>
-    {% endif %}
-    <dt>Data de emissão</dt><dd class="num">{{ r.data_emissao | datahora }}</dd>
-  </dl>
-</div></section>
+{% if nfe %}
+  {# ---------- NF-e ---------- #}
+  <section class="section"><h3>Partes</h3>
+    <div class="cards-2">
+      <div class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-doc"/></svg> Emitente</h3></div><div class="card-b">
+        <dl class="grid">
+          <dt>CNPJ</dt><dd class="num">{{ r.emit_cnpj | cnpj }}</dd>
+          <dt>Nome</dt><dd>{{ r.emit_nome or '—' }}</dd>
+          <dt>Optante pelo Simples</dt><dd>{{ r.emit_optante_simples | simnao }} <span class="muted">(CRT {{ r.emit_crt or '—' }})</span></dd>
+          <dt>UF / Município</dt><dd>{{ r.emit_uf or '—' }} · {{ r.emit_municipio or '—' }}</dd>
+        </dl>
+      </div></div>
+      <div class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-pessoas"/></svg> Destinatário (órgão)</h3></div><div class="card-b">
+        <dl class="grid">
+          <dt>CNPJ</dt><dd class="num">{% if r.dest_cnpj %}{{ r.dest_cnpj | cnpj }}{% else %}<span class="falta">— (confira)</span>{% endif %}</dd>
+          <dt>Nome</dt><dd>{{ r.dest_nome or '—' }}</dd>
+        </dl>
+      </div></div>
+    </div>
+  </section>
 
-{% if item.tipo == 'NFE' %}
-  <section class="card"><div class="card-h"><h3>Emitente</h3></div><div class="card-b">
-    <dl class="grid">
-      <dt>CNPJ</dt><dd class="num">{{ r.emit_cnpj | cnpj }}</dd>
-      <dt>Nome</dt><dd>{{ r.emit_nome or '—' }}</dd>
-      <dt>Optante pelo Simples</dt><dd>{{ r.emit_optante_simples | simnao }} <span class="muted">(CRT {{ r.emit_crt or '—' }})</span></dd>
-      <dt>UF / Município</dt><dd>{{ r.emit_uf or '—' }} · {{ r.emit_municipio or '—' }}</dd>
-    </dl>
-  </div></section>
-  <section class="card"><div class="card-h"><h3>Destinatário (órgão)</h3></div><div class="card-b">
-    <dl class="grid">
-      <dt>CNPJ</dt><dd class="num">{% if r.dest_cnpj %}{{ r.dest_cnpj | cnpj }}{% else %}<span class="falta">— (confira)</span>{% endif %}</dd>
-      <dt>Nome</dt><dd>{{ r.dest_nome or '—' }}</dd>
-    </dl>
-  </div></section>
-  <section class="card"><div class="card-h"><h3>Valores</h3></div><div class="card-b">
+  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-cifrao"/></svg> Valores e tributos</h3></div><div class="card-b">
     <dl class="grid">
       <dt>Valor total</dt><dd class="num{{ ' zero' if r.valor_total is ezero else '' }}">{{ r.valor_total | moeda }}</dd>
       <dt>Produtos</dt><dd class="num{{ ' zero' if r.valor_produtos is ezero else '' }}">{{ r.valor_produtos | moeda }}</dd>
       <dt>Desconto</dt><dd class="num{{ ' zero' if r.valor_desconto is ezero else '' }}">{{ r.valor_desconto | moeda }}</dd>
       <dt>Outras despesas</dt><dd class="num{{ ' zero' if r.valor_outras_despesas is ezero else '' }}">{{ r.valor_outras_despesas | moeda }}</dd>
     </dl>
-  </div></section>
-  <section class="card"><div class="card-h"><h3>Tributos</h3></div><div class="card-b">
-    <div class="declarado">
+    <div class="declarado mt-3">
       <p class="note"><span class="chip">destaque do emitente</span> Lido como destacado pelo emitente — não é apuração (Fase 2).</p>
       <dl class="tax-grid">
         {% for rot, val in [('ICMS', r.icms_destaque_emitente), ('IPI', r.ipi_destaque_emitente),
@@ -95,23 +88,40 @@
     </div>
   </div></section>
 
+  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-id"/></svg> Identificação</h3></div><div class="card-b">
+    <dl class="grid">
+      <dt>Chave</dt><dd class="num break-all">{{ r.chave | chave }}</dd>
+      <dt>Número</dt><dd class="num">{{ r.numero or '—' }}</dd>
+      <dt>Série</dt><dd class="num">{{ r.serie or '—' }}</dd>
+      <dt>Modelo</dt><dd class="num">{{ r.modelo or '—' }}</dd>
+      <dt>Natureza da operação</dt><dd>{{ r.natureza_operacao or '—' }}</dd>
+      <dt>Data de emissão</dt><dd class="num">{{ r.data_emissao | datahora }}</dd>
+    </dl>
+  </div></section>
+
 {% else %}
-  <section class="card"><div class="card-h"><h3>Prestador</h3></div><div class="card-b">
-    <dl class="grid">
-      <dt>CNPJ</dt><dd class="num">{{ r.prest_cnpj | cnpj }}</dd>
-      <dt>Nome</dt><dd>{{ r.prest_nome or '—' }}</dd>
-      <dt>Inscr. municipal</dt><dd class="num">{{ r.prest_im or '—' }}</dd>
-      <dt>Optante pelo Simples</dt><dd>{{ r.prest_optante_simples | simnao }}</dd>
-      <dt>Município</dt><dd>{{ r.municipio_nome or r.prest_municipio or '—' }}</dd>
-    </dl>
-  </div></section>
-  <section class="card"><div class="card-h"><h3>Tomador (órgão)</h3></div><div class="card-b">
-    <dl class="grid">
-      <dt>CNPJ</dt><dd class="num">{{ r.toma_cnpj | cnpj }}</dd>
-      <dt>Nome</dt><dd>{{ r.toma_nome or '—' }}</dd>
-    </dl>
-  </div></section>
-  <section class="card"><div class="card-h"><h3>Serviço</h3></div><div class="card-b">
+  {# ---------- NFS-e ---------- #}
+  <section class="section"><h3>Partes</h3>
+    <div class="cards-2">
+      <div class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-servico"/></svg> Prestador</h3></div><div class="card-b">
+        <dl class="grid">
+          <dt>CNPJ</dt><dd class="num">{{ r.prest_cnpj | cnpj }}</dd>
+          <dt>Nome</dt><dd>{{ r.prest_nome or '—' }}</dd>
+          <dt>Inscr. municipal</dt><dd class="num">{{ r.prest_im or '—' }}</dd>
+          <dt>Optante pelo Simples</dt><dd>{{ r.prest_optante_simples | simnao }}</dd>
+          <dt>Município</dt><dd>{{ r.municipio_nome or r.prest_municipio or '—' }}</dd>
+        </dl>
+      </div></div>
+      <div class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-pessoas"/></svg> Tomador (órgão)</h3></div><div class="card-b">
+        <dl class="grid">
+          <dt>CNPJ</dt><dd class="num">{{ r.toma_cnpj | cnpj }}</dd>
+          <dt>Nome</dt><dd>{{ r.toma_nome or '—' }}</dd>
+        </dl>
+      </div></div>
+    </div>
+  </section>
+
+  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-doc"/></svg> Serviço</h3></div><div class="card-b">
     <dl class="grid">
       <dt>Código (LC 116)</dt><dd class="num">{{ r.codigo_servico or '—' }}</dd>
       <dt>Local da prestação</dt><dd class="num">{{ r.local_prestacao or '—' }}</dd>
@@ -120,7 +130,8 @@
     <p class="discr-label">Discriminação (texto livre do emitente):</p>
     <div class="discr">{{ r.discriminacao or '— (sem discriminação)' }}</div>
   </div></section>
-  <section class="card"><div class="card-h"><h3>Valores e retenções</h3></div><div class="card-b">
+
+  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-cifrao"/></svg> Valores e tributos</h3></div><div class="card-b">
     <div class="declarado">
       <p class="note"><span class="chip">destaque do emitente</span> Lido como destacado pelo emitente — não é apuração (Fase 2).</p>
       <dl class="grid">
@@ -142,7 +153,7 @@
     </div>
   </div></section>
 
-  <section class="card"><div class="card-h"><h3>Material aplicado — conferência humana</h3></div><div class="card-b">
+  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-alerta"/></svg> Material aplicado — conferência humana</h3></div><div class="card-b">
     <div class="atencao mb-3"><p class="note">{{ r.material_aviso }}</p></div>
     {% if item.marcacao %}
       <p class="muted small">Marcação vigente: <strong>{{ item.marcacao.valor|upper }}</strong> — por {{ item.marcacao.autor }} em {{ item.marcacao.marcado_em | datahora }}.</p>
@@ -160,10 +171,20 @@
           <span class="lbl">Autoria da marcação</span>
           <input type="text" id="autor" name="autor" placeholder="Seu nome">
         </label>
-        <button class="btn" type="submit">Registrar marcação</button>
+        <button class="btn" type="submit"><svg class="icon"><use href="#i-check"/></svg> Registrar marcação</button>
       </fieldset>
     </form>
     <p class="note-foot">A marcação é gravada com autoria e data (auditável). O sistema não decide nada sobre material: só registra a conferência humana. A apuração que usa esta marcação é a Fase 2, fora deste MVP.</p>
+  </div></section>
+
+  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-id"/></svg> Identificação</h3></div><div class="card-b">
+    <dl class="grid">
+      <dt>Chave</dt><dd class="num break-all">{{ r.chave | chave }}</dd>
+      <dt>Número</dt><dd class="num">{{ r.numero or '—' }}</dd>
+      <dt>Cód. verificação</dt><dd class="num">{{ r.codigo_verificacao or '—' }}</dd>
+      <dt>Competência</dt><dd class="num">{{ r.competencia | competencia }}</dd>
+      <dt>Data de emissão</dt><dd class="num">{{ r.data_emissao | datahora }}</dd>
+    </dl>
   </div></section>
 {% endif %}
 {% endblock %}
