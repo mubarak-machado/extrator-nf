@@ -72,62 +72,22 @@ class RegistroNFSe:
     def to_dict(self) -> dict:
         return asdict(self)
 
-    # Especificação de exportação (append-only, I-5), orientada ao lançamento no
-    # SIAFI: (campo, cabeçalho humano, formato). Reusa tronco.formato (I-2).
-    # Retenções federais e ISS rotuladas "(destaque do emitente)"; iss_retido é
-    # indicador CRU do emitente, exportado como texto (converter para Sim/Não
-    # seria interpretar — I-2). A marcação de material (I-4) vai com autor e data.
-    EXPORT_SPEC = [
-        ("chave", "Chave/ID da NFS-e", "cru"),
-        ("numero", "Número", "texto"),
-        ("codigo_verificacao", "Cód. verificação", "texto"),
-        ("data_emissao", "Emissão", "data"),
-        ("competencia", "Competência", "competencia"),
-        ("prest_cnpj", "CNPJ do prestador", "cnpj"),
-        ("prest_nome", "Prestador (fornecedor)", "texto"),
-        ("prest_im", "Inscrição municipal", "texto"),
-        ("prest_optante_simples", "Optante Simples", "simnao"),
-        ("toma_cnpj", "CNPJ do tomador (órgão)", "cnpj"),
-        ("toma_nome", "Tomador (órgão)", "texto"),
-        ("codigo_servico", "Código do serviço (LC 116)", "texto"),
-        ("municipio_nome", "Local da prestação", "texto"),
-        ("local_prestacao", "Cód. munic. da prestação", "texto"),
-        ("local_prestador", "Cód. munic. do prestador", "texto"),
-        ("discriminacao", "Discriminação do serviço", "texto"),
-        ("valor_servicos", "Valor dos serviços", "moeda"),
-        ("deducoes", "Deduções", "moeda"),
-        ("base_calculo", "Base de cálculo", "moeda"),
-        ("iss_aliquota_destaque_emitente", "ISS alíquota (destaque do emitente)", "percent"),
-        ("iss_valor_destaque_emitente", "ISS (destaque do emitente)", "moeda"),
-        ("iss_retido_destaque_emitente", "ISS retido (indicador do emitente)", "texto"),
-        ("ir_destaque_emitente", "IR (destaque do emitente)", "moeda"),
-        ("pis_destaque_emitente", "PIS (destaque do emitente)", "moeda"),
-        ("cofins_destaque_emitente", "COFINS (destaque do emitente)", "moeda"),
-        ("csll_destaque_emitente", "CSLL (destaque do emitente)", "moeda"),
-        ("inss_destaque_emitente", "INSS (destaque do emitente)", "moeda"),
-        ("valor_liquido", "Valor líquido", "moeda"),
-        ("material_marcado", "Material aplicado (marcação)", "texto"),
-        ("material_marcado_por", "Marcado por", "texto"),
-        ("material_marcado_em", "Marcado em", "datahora"),
-        ("campos_faltantes", "Campos a conferir", "faltantes"),
-    ]
-
-    # Padrão CONSOLIDADO — uma linha por NFS-e do grupo (contrato), com as colunas
-    # que o operador lança no SIAFI. `valor_material` NÃO é campo do registro: é o
-    # valor VALIDADO pelo operador (vem da marcação, I-4), injetado na exportação.
+    # Padrão CONSOLIDADO de exportação — ESPELHA a tabela da tela (consolidado.html):
+    # uma linha por NFS-e/município, mesmas colunas e ordem da tela, MAIS o "Valor
+    # dos materiais" (validado pelo operador, que não aparece na tela). Append-only
+    # (I-5); reusa tronco.formato (I-2). `valor_material` NÃO é campo do registro:
+    # é o valor VALIDADO pelo operador (vem da marcação, I-4), injetado na exportação.
     # Retenções individualizadas, rotuladas "(destaque do emitente)" (I-2).
     EXPORT_SPEC_CONSOLIDADO = [
-        ("numero", "Número da NFS-e", "texto"),
-        ("data_emissao", "Data de emissão", "data"),
-        ("competencia", "Competência", "competencia"),
-        ("valor_servicos", "Valor bruto da NFS-e", "moeda"),
-        ("valor_material", "Valor dos materiais (validado pelo operador)", "moeda"),
         ("municipio_nome", "Município", "texto"),
+        ("numero", "Nº", "texto"),
+        ("valor_servicos", "Valor serviços", "moeda"),
+        ("valor_material", "Valor dos materiais (validado pelo operador)", "moeda"),
         ("iss_valor_destaque_emitente", "ISS (destaque do emitente)", "moeda"),
         ("ir_destaque_emitente", "IR (destaque do emitente)", "moeda"),
         ("pis_destaque_emitente", "PIS (destaque do emitente)", "moeda"),
         ("cofins_destaque_emitente", "COFINS (destaque do emitente)", "moeda"),
         ("csll_destaque_emitente", "CSLL (destaque do emitente)", "moeda"),
         ("inss_destaque_emitente", "INSS (destaque do emitente)", "moeda"),
-        ("valor_liquido", "Valor líquido informado na nota", "moeda"),
+        ("valor_liquido", "Líquido", "moeda"),
     ]

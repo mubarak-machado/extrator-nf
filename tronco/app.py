@@ -313,6 +313,79 @@ def _exportar(candidatos, escritor):
     return f"Lote {lote} exportado: {len(candidatos)} nota(s). Artefato: {artefato}", "ok"
 
 
+# Padrão INDIVIDUAL de exportação — ESPELHA a tabela da tela (individuais.html):
+# arquivo único com NF-e e NFS-e juntas, mesmas colunas/ordem da tela (Tipo,
+# Número, Fornecedor, CNPJ, Valor, Situação), MAIS retenções, líquido e o "Valor
+# dos materiais" validado (o que o usuário pediu e não aparece na tela). NF-e usa
+# ICMS/IPI; NFS-e usa ISS/IR/CSLL/INSS; colunas sem valor saem "—". Retenções
+# rotuladas "(destaque do emitente)" (I-2).
+SPEC_INDIVIDUAL = [
+    ("tipo", "Tipo", "texto"),
+    ("numero", "Número", "texto"),
+    ("fornecedor", "Fornecedor", "texto"),
+    ("cnpj", "CNPJ", "cnpj"),
+    ("valor", "Valor", "moeda"),
+    ("situacao", "Situação", "texto"),
+    ("valor_material", "Valor dos materiais (validado pelo operador)", "moeda"),
+    ("icms_destaque_emitente", "ICMS (destaque do emitente)", "moeda"),
+    ("ipi_destaque_emitente", "IPI (destaque do emitente)", "moeda"),
+    ("iss_valor_destaque_emitente", "ISS (destaque do emitente)", "moeda"),
+    ("ir_destaque_emitente", "IR (destaque do emitente)", "moeda"),
+    ("pis_destaque_emitente", "PIS (destaque do emitente)", "moeda"),
+    ("cofins_destaque_emitente", "COFINS (destaque do emitente)", "moeda"),
+    ("csll_destaque_emitente", "CSLL (destaque do emitente)", "moeda"),
+    ("inss_destaque_emitente", "INSS (destaque do emitente)", "moeda"),
+    ("valor_liquido", "Líquido", "moeda"),
+]
+
+
+def _material_validado(reg, marc):
+    """Valor de material VALIDADO pelo operador (da marcação, I-4) — só quando
+    houve material ('sim'). Nunca a sugestão crua da máquina."""
+    if reg.tipo != "NFSE":
+        return None, None
+    m = marc.atual(reg.chave) or {}
+    return m, (m.get("valor_material") if m.get("valor") == "sim" else None)
+
+
+def _linha_individual(reg, marc) -> dict:
+    """Dict de uma nota para o CSV individual (espelha a lista da tela)."""
+    nfse = reg.tipo == "NFSE"
+    d = reg.to_dict()
+    m, valor_material = _material_validado(reg, marc)
+    d["fornecedor"] = reg.prest_nome if nfse else reg.emit_nome
+    d["cnpj"] = reg.prest_cnpj if nfse else reg.emit_cnpj
+    d["valor"] = reg.valor_servicos if nfse else reg.valor_total
+    d["valor_material"] = valor_material
+    partes = []
+    if reg.campos_faltantes:
+        partes.append("conferir: " + ", ".join(reg.campos_faltantes))
+    if nfse:
+        partes.append(f"material: {m['valor']}" if m else "material não conferido")
+    d["situacao"] = " · ".join(partes) if partes else "pronta"
+    return d
+
+
+def _linha_consolidada(reg, marc) -> dict:
+    """Dict de uma NFS-e para o CSV consolidado (espelha a tabela da tela) + o
+    valor de material validado pelo operador injetado."""
+    d = reg.to_dict()
+    _, d["valor_material"] = _material_validado(reg, marc)
+    return d
+
+
+def _exportar_com_spec(cands, spec, sufixo, builder):
+    """Escritor genérico: monta os dicts (builder) e grava o CSV com a `spec`."""
+    def escritor(regs, lote):
+        marc = StoreMarcacoes()
+        try:
+            dicts = [builder(r, marc) for r in regs]
+        finally:
+            marc.fechar()
+        return ExportadorCsvLocal(PASTA_SAIDA).exportar(dicts, spec, lote, sufixo)
+    return _exportar(cands, escritor)
+
+
 @app.route("/exportar", methods=["POST"])
 def exportar():
     """Padrão INDIVIDUAL: notas avulsas inéditas (não as de consolidação — cada
@@ -322,39 +395,19 @@ def exportar():
     cands = [it["reg"] for it in linhas
              if it["reg"] and not it["ja_exportada"] and not it["erro"]
              and it["reg"].chave not in cons_chaves]
-    escritor = lambda regs, lote: ExportadorCsvLocal(PASTA_SAIDA).exportar(regs, lote)
-    flash(*_exportar(cands, escritor))
+    flash(*_exportar_com_spec(cands, SPEC_INDIVIDUAL, "individual", _linha_individual))
     return redirect(url_for("individuais"))
-
-
-def _linha_consolidada(reg, marc) -> dict:
-    """Dict de uma NFS-e para o CSV consolidado: campos do registro + o valor de
-    material VALIDADO pelo operador (da marcação, I-4). Sem marcação 'sim' com
-    valor, o campo fica vazio — nunca a sugestão crua da máquina."""
-    d = reg.to_dict()
-    m = marc.atual(reg.chave) or {}
-    d["valor_material"] = m.get("valor_material") if m.get("valor") == "sim" else None
-    return d
 
 
 @app.route("/exportar_grupo/<prest_cnpj>/<competencia>", methods=["POST"])
 def exportar_grupo(prest_cnpj, competencia):
-    """Padrão CONSOLIDADO: uma linha por NFS-e do contrato, colunas orientadas ao
-    lançamento no SIAFI (inclui material validado e retenções individualizadas)."""
+    """Padrão CONSOLIDADO: uma linha por NFS-e do contrato, espelhando a tabela da
+    tela + o valor de material validado."""
     linhas = _carregar()
     itens = _grupos(linhas).get((prest_cnpj, competencia), [])
     cands = [it["reg"] for it in itens if not it["ja_exportada"] and not it["erro"]]
-
-    def escritor(regs, lote):
-        marc = StoreMarcacoes()
-        try:
-            dicts = [_linha_consolidada(r, marc) for r in regs]
-        finally:
-            marc.fechar()
-        return ExportadorCsvLocal(PASTA_SAIDA).exportar_consolidado(
-            dicts, RegistroNFSe.EXPORT_SPEC_CONSOLIDADO, lote)
-
-    flash(*_exportar(cands, escritor))
+    flash(*_exportar_com_spec(cands, RegistroNFSe.EXPORT_SPEC_CONSOLIDADO,
+                              "consolidado", _linha_consolidada))
     return redirect(url_for("consolidado", prest_cnpj=prest_cnpj, competencia=competencia))
 
 

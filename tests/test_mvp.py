@@ -91,33 +91,45 @@ def test_idempotencia_recusa_duplicata():
 
 # ---------- I-5: exportação cria artefato novo, imutável ----------
 
+def _linha(reg):
+    """Monta o dict individual (como a rota faz) usando um store de marcação vazio."""
+    from tronco.app import _linha_individual
+    with tempfile.TemporaryDirectory() as d:
+        m = StoreMarcacoes(Path(d) / "m.sqlite")
+        try:
+            return _linha_individual(reg, m)
+        finally:
+            m.fechar()
+
+
 def test_exportador_cria_artefato_e_recusa_sobrescrever():
+    from tronco.app import SPEC_INDIVIDUAL
     with tempfile.TemporaryDirectory() as d:
         exp = ExportadorCsvLocal(d)
-        r = _reg("nfe_exemplo.xml")
-        caminho = exp.exportar([r], "loteX")
+        item = _linha(_reg("nfe_exemplo.xml"))
+        caminho = exp.exportar([item], SPEC_INDIVIDUAL, "loteX", "individual")
         assert os.path.exists(caminho)
         with pytest.raises(FileExistsError):       # imutável por lote
-            exp.exportar([r], "loteX")
+            exp.exportar([item], SPEC_INDIVIDUAL, "loteX", "individual")
 
 
-def test_export_csv_formatado_e_orientado_ao_siafi():
-    """O CSV sai legível para o operador: cabeçalhos em português, pt-BR nos
-    valores, chave crua, retenção rotulada (destaque do emitente), ; + BOM."""
+def test_export_individual_espelha_tela_e_formata():
+    """Padrão individual espelha a lista da tela (Tipo, Número, Fornecedor, CNPJ,
+    Valor, Situação) + retenções/materiais; pt-BR, ; e BOM."""
+    from tronco.app import SPEC_INDIVIDUAL
     with tempfile.TemporaryDirectory() as d:
-        caminho = ExportadorCsvLocal(d).exportar([_reg("nfe_exemplo.xml")], "loteFmt")
+        caminho = ExportadorCsvLocal(d).exportar(
+            [_linha(_reg("nfe_exemplo.xml"))], SPEC_INDIVIDUAL, "loteFmt", "individual")
+        assert caminho.endswith("_individual.csv")
         bruto = Path(caminho).read_bytes()
         assert bruto.startswith(b"\xef\xbb\xbf")          # BOM (Excel pt-BR)
-        texto = bruto.decode("utf-8-sig")
-        cabecalho, primeira = texto.splitlines()[0], texto.splitlines()[1]
-        assert ";" in cabecalho                           # separador ';'
-        # cabeçalho humano, não snake_case
-        assert "Valor total da nota" in cabecalho and "valor_total" not in cabecalho
-        assert any("(destaque do emitente)" in c for c in cabecalho.split(";"))  # I-2
-        # valores formatados pt-BR e chave crua
+        linhas = bruto.decode("utf-8-sig").splitlines()
+        cab, primeira = linhas[0], linhas[1]
+        assert cab.split(";")[:6] == ["Tipo", "Número", "Fornecedor", "CNPJ", "Valor", "Situação"]
+        assert any("(destaque do emitente)" in c for c in cab.split(";"))   # I-2
         assert "R$ 95.700,68" in primeira                 # vNF do exemplo
         assert "75.277.525/0001-78" in primeira           # CNPJ pontuado
-        assert "42210775277525000178550030000266631762885493" in primeira  # chave sem espaços
+        assert primeira.startswith("NFE;")                # Tipo
 
 
 def test_formato_formatar_dispatch():
@@ -182,16 +194,16 @@ def test_export_consolidado_colunas_e_material():
     with tempfile.TemporaryDirectory() as d:
         reg = _reg("nfse_com_material.xml")
         item = reg.to_dict(); item["valor_material"] = "1200.00"
-        caminho = ExportadorCsvLocal(d).exportar_consolidado(
-            [item], RegistroNFSe.EXPORT_SPEC_CONSOLIDADO, "loteCons")
-        assert caminho.endswith("_NFSE_consolidado.csv")
+        caminho = ExportadorCsvLocal(d).exportar(
+            [item], RegistroNFSe.EXPORT_SPEC_CONSOLIDADO, "loteCons", "consolidado")
+        assert caminho.endswith("_consolidado.csv")
         bruto = Path(caminho).read_bytes()
         assert bruto.startswith(b"\xef\xbb\xbf")                 # BOM
         linhas = bruto.decode("utf-8-sig").splitlines()
         cab, primeira = linhas[0], linhas[1]
-        assert "Valor bruto da NFS-e" in cab and "Valor líquido informado na nota" in cab
+        # espelha a tabela da tela: Município, Nº, Valor serviços, ... , Líquido
+        assert cab.split(";")[:3] == ["Município", "Nº", "Valor serviços"]
         assert "Valor dos materiais (validado pelo operador)" in cab
-        assert "Inscrição municipal" not in cab                  # coluna do padrão individual, não do consolidado
         assert any("(destaque do emitente)" in c for c in cab.split(";"))  # retenções individualizadas
         assert "R$ 1.200,00" in primeira                         # material validado, formatado
         assert len(linhas) == 2                                  # cabeçalho + 1 nota

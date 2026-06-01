@@ -20,75 +20,47 @@ import csv
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Protocol
 
 from tronco import formato
 
 
-class TemSpec(Protocol):
-    tipo: str
-    chave: str
-    EXPORT_SPEC: list[tuple[str, str, str]]   # (campo, cabeçalho, formato)
-    def to_dict(self) -> dict: ...
-
-
 class Exportador(ABC):
     @abstractmethod
-    def exportar(self, registros: list[TemSpec], lote_id: str) -> str:
-        """Cria um artefato NOVO com os registros e devolve seu identificador."""
+    def exportar(self, itens: list[dict], spec, lote_id: str, sufixo: str) -> str:
+        """Cria um artefato NOVO (um arquivo) e devolve seu identificador."""
         ...
 
 
 class ExportadorCsvLocal(Exportador):
     """
-    Destino do POC: um CSV novo por lote em `pasta_saida`. Como NF-e e NFS-e têm
-    colunas próprias (galhos independentes), gera um arquivo por tipo dentro do
-    lote. Append-only: nunca abre arquivo existente para edição.
+    Destino do POC: um CSV novo por lote em `pasta_saida`. O FORMATO (quais
+    colunas, em que ordem) é decidido pela `spec` recebida — o padrão individual e
+    o consolidado espelham as respectivas tabelas da tela. Append-only: nunca abre
+    arquivo existente para edição (I-5).
     """
 
     def __init__(self, pasta_saida: str | Path) -> None:
         self.pasta_saida = Path(pasta_saida)
         self.pasta_saida.mkdir(parents=True, exist_ok=True)
 
-    def _escrever(self, destino: Path, spec, dicts) -> str:
-        """Escreve um CSV (cabeçalho + linhas) a partir de uma spec
-        (campo, cabeçalho, formato) e uma sequência de dicts. utf-8-sig grava o
-        BOM (Excel pt-BR abre com acentos certos) e ';' separa colunas (a vírgula
-        é decimal no Brasil). I-5: recusa sobrescrever artefato já criado."""
+    def exportar(self, itens: list[dict], spec, lote_id: str, sufixo: str) -> str:
+        """Escreve um CSV (cabeçalho + uma linha por item) a partir de uma `spec`
+        (campo, cabeçalho, formato) e uma lista de dicts já montados por quem chama.
+        utf-8-sig grava o BOM (Excel pt-BR abre com acentos certos) e ';' separa
+        colunas (a vírgula é decimal no Brasil). I-5: recusa sobrescrever artefato."""
+        if not itens:
+            return ""
+        destino = self.pasta_saida / f"lote_{lote_id}_{sufixo}.csv"
         if destino.exists():
             raise FileExistsError(
                 f"Artefato {destino.name} já existe — exportação é imutável por lote."
             )
-        cabecalhos = [cab for _, cab, _ in spec]
         with destino.open("w", newline="", encoding="utf-8-sig") as fh:
             w = csv.writer(fh, delimiter=";")
-            w.writerow(cabecalhos)
-            for d in dicts:
+            w.writerow([cab for _, cab, _ in spec])
+            for d in itens:
                 w.writerow([formato.formatar(d.get(campo), fmt) for campo, _, fmt in spec])
         return str(destino)
-
-    def exportar(self, registros: list[TemSpec], lote_id: str) -> str:
-        """Padrão INDIVIDUAL: um arquivo por tipo, com a EXPORT_SPEC de cada galho."""
-        if not registros:
-            return ""
-        por_tipo: dict[str, list[TemSpec]] = {}
-        for r in registros:
-            por_tipo.setdefault(r.tipo, []).append(r)
-        artefatos = [
-            self._escrever(self.pasta_saida / f"lote_{lote_id}_{tipo}.csv",
-                           regs[0].EXPORT_SPEC, (r.to_dict() for r in regs))
-            for tipo, regs in por_tipo.items()
-        ]
-        return " | ".join(artefatos)
-
-    def exportar_consolidado(self, itens: list[dict], spec, lote_id: str) -> str:
-        """Padrão CONSOLIDADO: um arquivo, uma linha por NFS-e do grupo, com a
-        `spec` consolidada (recebida do galho NFS-e). Os `itens` já vêm com o
-        valor de material validado pelo operador injetado."""
-        if not itens:
-            return ""
-        return self._escrever(
-            self.pasta_saida / f"lote_{lote_id}_NFSE_consolidado.csv", spec, itens)
 
 
 def novo_lote_id() -> str:
