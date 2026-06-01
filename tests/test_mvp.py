@@ -18,6 +18,7 @@ from tronco.ingestao import ingerir, identificar_tipo
 from tronco.idempotencia import RegistroDeExportacao
 from tronco.exportador import ExportadorCsvLocal
 from tronco.marcacoes import StoreMarcacoes
+from tronco import redefinicao
 
 
 def _reg(nome):
@@ -112,3 +113,89 @@ def test_marcacao_persistida_com_autor():
         assert atual["valor"] == "sim" and atual["autor"] == "Mubarak"
         assert atual["marcado_em"]                  # carimbo de data presente
         store.fechar()
+
+
+# ---------- Redefinição (reset de demonstração): backup antes de apagar ----------
+
+def test_redefinir_faz_backup_antes_de_apagar():
+    """Redefinir zera idempotência (I-1) e marcações (I-4) — mas nunca em
+    silêncio: copia cada banco para um backup datado antes de remover (I-6)."""
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        bd_export = d / "registro_exportacao.sqlite"
+        bd_marc = d / "marcacoes.sqlite"
+        reg = RegistroDeExportacao(bd_export); reg.registrar_lote([("1" * 44, "NFE")], "L1"); reg.fechar()
+        StoreMarcacoes(bd_marc).marcar("9" * 44, "sim", "Mubarak")
+
+        resumo = redefinicao.redefinir_dados(bancos=(bd_export, bd_marc), pastas=(),
+                                             pasta_backup=d / "backups")
+
+        # os bancos sumiram do lugar de trabalho...
+        assert not bd_export.exists() and not bd_marc.exists()
+        # ...mas continuam recuperáveis no backup datado
+        backup = Path(resumo["backup"])
+        assert (backup / "registro_exportacao.sqlite").exists()
+        assert (backup / "marcacoes.sqlite").exists()
+        assert set(resumo["apagados"]) == {"registro_exportacao.sqlite", "marcacoes.sqlite"}
+        # e o estado volta ao inicial: nota antes exportada agora reabre como inédita
+        assert RegistroDeExportacao(bd_export).ja_exportada("1" * 44) is False
+
+
+def test_redefinir_sem_dados_nao_e_erro():
+    """Redefinir o que já está limpo é no-op, não falha (I-6: previsível)."""
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        resumo = redefinicao.redefinir_dados(
+            bancos=(d / "nao_existe.sqlite",), pastas=(), pasta_backup=d / "backups")
+        assert resumo["apagados"] == [] and resumo["backup"] is None
+
+
+# ---------- Notas persistidas: importa uma vez, telas leem do banco ----------
+
+def test_notas_persistidas_round_trip():
+    """A nota extraída é gravada e reconstruída fielmente a partir do banco — sem
+    reler o XML. Reimportar a mesma chave não duplica (PK, alinhado a I-1)."""
+    from tronco.notas import StoreNotas, reconstruir
+    with tempfile.TemporaryDirectory() as d:
+        store = StoreNotas(Path(d) / "n.sqlite")
+        r = _reg("nfe_exemplo.xml")
+        store.salvar(r.chave, "NFE", r.to_dict(), "nfe_exemplo.xml")
+        store.salvar(r.chave, "NFE", r.to_dict(), "nfe_exemplo.xml")  # reimport
+        listados = store.listar()
+        assert len(listados) == 1 and store.contar() == 1     # chave PK
+        reconstruido = reconstruir(listados[0]["tipo"], listados[0]["dados"])
+        assert reconstruido.chave == r.chave
+        assert reconstruido.emit_nome == "Fornos LTDA"
+        assert reconstruido.campos_faltantes == r.campos_faltantes  # lista preservada
+        store.fechar()
+
+
+def test_redefinir_inclui_banco_de_notas():
+    """Redefinir esvazia também as notas importadas (com backup antes)."""
+    from tronco.notas import StoreNotas
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        bd_notas = d / "notas.sqlite"
+        store = StoreNotas(bd_notas)
+        r = _reg("nfe_exemplo.xml")
+        store.salvar(r.chave, "NFE", r.to_dict(), "x.xml")
+        store.fechar()
+        resumo = redefinicao.redefinir_dados(bancos=(bd_notas,), pastas=(),
+                                             pasta_backup=d / "bkp")
+        assert not bd_notas.exists()
+        assert (Path(resumo["backup"]) / "notas.sqlite").exists()
+        assert StoreNotas(bd_notas).contar() == 0       # recriado vazio
+
+
+def test_redefinir_arquiva_e_esvazia_pasta_de_exportacoes():
+    """Os artefatos CSV são ARQUIVADOS no backup antes de a pasta ser esvaziada —
+    I-5: nada é editado/reescrito, o lote é movido inteiro e fica recuperável."""
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        exp = d / "exportacoes"; exp.mkdir()
+        (exp / "lote_X_NFE.csv").write_text("a;b\n1;2\n", encoding="utf-8")
+        resumo = redefinicao.redefinir_dados(bancos=(), pastas=(exp,),
+                                             pasta_backup=d / "bkp")
+        assert resumo["artefatos_limpos"] == 1
+        assert exp.is_dir() and list(exp.iterdir()) == []          # pasta vazia, mas existe
+        assert (Path(resumo["backup"]) / "exportacoes" / "lote_X_NFE.csv").exists()

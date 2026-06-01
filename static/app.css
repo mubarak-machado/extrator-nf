@@ -542,3 +542,60 @@ th.sortable .arr { color: var(--ink-3); font-size: .9em; }
 .small { font-size: .85rem; }
 .break-all { word-break: break-all; }
 .discr-label { font-size: .8rem; color: var(--ink-3); margin: var(--sp-3) 0 var(--sp-1); }
+
+/* ---------- rodapé + redefinição (reset de demonstração) ----------
+   O link de redefinir é deliberadamente discreto: uma ação destrutiva não deve
+   ser tentadora nem confundir-se com o fluxo de trabalho. Mora no rodapé, em
+   tom secundário, e só ganha cor de perigo no hover. */
+.rodape {
+  max-width: 1180px; margin: var(--sp-6) auto 0; padding: var(--sp-5);
+  border-top: 1px solid var(--line); display: flex; gap: var(--sp-4);
+  align-items: center; justify-content: space-between; flex-wrap: wrap;
+}
+.rodape .tag { font-size: .8rem; color: var(--ink-3); }
+.link-redefinir { font-size: .82rem; color: var(--ink-3); text-decoration: none; }
+.link-redefinir:hover, .link-redefinir[aria-current="page"] {
+  color: var(--danger-ink); text-decoration: underline;
+}
+
+/* Cartão da tela de confirmação — sinaliza ação destrutiva sem alarmismo. */
+.perigo-card {
+  max-width: 720px; padding: var(--sp-5) var(--sp-6);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  border-left: 4px solid var(--danger);
+}
+.perigo-head { display: flex; align-items: center; gap: var(--sp-2); color: var(--danger-ink); }
+.perigo-head h3 { margin: 0; font-size: 1.1rem; }
+.perigo-head .icon { width: 1.25rem; height: 1.25rem; }
+.perigo-lead { margin: var(--sp-4) 0 var(--sp-2); }
+.perigo-list { margin: 0 0 var(--sp-4); padding-left: var(--sp-5); display: grid; gap: var(--sp-2); }
+.perigo-list li { font-size: .92rem; color: var(--ink-2); line-height: 1.5; }
+.perigo-ok {
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-4);
+  font-size: .88rem; color: var(--ink-2); margin: 0 0 var(--sp-5);
+}
+.perigo-form .field { margin-bottom: var(--sp-4); }
+.perigo-form code { font-family: var(--font-mono); font-weight: 600; }
+.perigo-form input[type="text"] { font-family: var(--font-mono); letter-spacing: .04em; }
+.btn.perigo { background: var(--danger); color: #fff; }
+.btn.perigo:hover { background: color-mix(in srgb, var(--danger) 85%, #000); color: #fff; }
+.perigo-form .actions { margin-bottom: 0; }
+
+/* ---------- importação manual + estado vazio ---------- */
+.empty-banner {
+  display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap;
+  padding: var(--sp-5) var(--sp-6); margin-bottom: var(--sp-5);
+  border-left: 4px solid var(--primary);
+}
+.empty-banner .icon { width: 1.5rem; height: 1.5rem; color: var(--ink-3); flex: none; }
+.empty-banner > div { flex: 1 1 260px; min-width: 0; }
+.empty-banner h3 { margin: 0 0 .1rem; font-size: 1.05rem; }
+.empty-banner p { margin: 0; color: var(--ink-2); font-size: .9rem; }
+.empty-banner .btn { flex: none; }
+
+.import-card { max-width: 720px; padding: var(--sp-5) var(--sp-6); }
+.import-status { margin: 0 0 var(--sp-4); color: var(--ink-2); font-size: .92rem; }
+.import-form .field { margin-bottom: var(--sp-4); }
+.import-form input[type="text"] { font-family: var(--font-mono); font-size: .85rem; }
+.import-form .actions { margin-bottom: 0; }

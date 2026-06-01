@@ -7,6 +7,17 @@
   <p>Escolha um módulo. Notas avulsas e pagamentos consolidados não se misturam — cada um tem seu fluxo. O que já foi exportado fica no Histórico.</p>
 </div>
 
+{% if cards.sem_notas %}
+<div class="card empty-banner">
+  <svg class="icon" aria-hidden="true"><use href="#i-doc"/></svg>
+  <div>
+    <h3>Nenhuma nota no banco</h3>
+    <p>O aplicativo não importa sozinho. Carregue as notas quando quiser para começar a conferir.</p>
+  </div>
+  <a class="btn" href="{{ url_for('importar') }}"><svg class="icon"><use href="#i-exportar"/></svg> Importar notas</a>
+</div>
+{% endif %}
+
 <section class="modules" aria-label="Módulos">
   <a class="module-card" href="{{ url_for('individuais') }}">
     <div class="mod-top">

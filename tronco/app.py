@@ -20,8 +20,9 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from tronco.ingestao import ingerir_pasta
 from tronco.idempotencia import RegistroDeExportacao
 from tronco.marcacoes import StoreMarcacoes
+from tronco.notas import StoreNotas, reconstruir
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
-from tronco import formato
+from tronco import formato, redefinicao
 
 RAIZ = Path(__file__).resolve().parent.parent
 PASTA_EXEMPLOS = RAIZ / "exemplos"
@@ -67,20 +68,23 @@ def _com_atencao(item) -> bool:
 
 
 def _carregar():
-    resultados = ingerir_pasta(PASTA_EXEMPLOS)
+    """Carrega as notas JÁ IMPORTADAS do banco (nunca lê XML ao vivo). A pasta de
+    exemplos só é lida na importação manual (rota /importar). Lista vazia = nada
+    importado ainda — não é erro, é o estado inicial após redefinir."""
+    notas = StoreNotas()
+    persistidas = notas.listar()
+    notas.fechar()
     registro = RegistroDeExportacao()
     marc = StoreMarcacoes()
     linhas = []
-    for r in resultados:
-        item = {"origem": r.origem, "tipo": r.tipo, "erro": r.erro, "reg": None,
-                "ja_exportada": False, "marcacao": None, "valor": None}
-        if r.registro:
-            item["reg"] = r.registro
-            item["ja_exportada"] = registro.ja_exportada(r.registro.chave)
-            item["valor"] = (r.registro.valor_total if r.tipo == "NFE"
-                             else r.registro.valor_servicos)
-            if r.tipo == "NFSE":
-                item["marcacao"] = marc.atual(r.registro.chave)
+    for n in persistidas:
+        reg = reconstruir(n["tipo"], n["dados"])
+        item = {"origem": n["origem"], "tipo": n["tipo"], "erro": None, "reg": reg,
+                "ja_exportada": registro.ja_exportada(reg.chave),
+                "marcacao": None,
+                "valor": reg.valor_total if n["tipo"] == "NFE" else reg.valor_servicos}
+        if n["tipo"] == "NFSE":
+            item["marcacao"] = marc.atual(reg.chave)
         linhas.append(item)
     registro.fechar(); marc.fechar()
     return linhas
@@ -165,6 +169,7 @@ def hub():
                              for i in _grupos(linhas)[(c["prest_cnpj"], c["competencia"])]
                              if not i["ja_exportada"]], "valor_servicos"),
         "hist_total": len(exportadas),
+        "sem_notas": not linhas,
     }
     return render_template("hub.html", cards=cards)
 
@@ -308,6 +313,87 @@ def exportar_grupo(prest_cnpj, competencia):
     cands = [it["reg"] for it in itens if not it["ja_exportada"] and not it["erro"]]
     flash(_exportar(cands))
     return redirect(url_for("consolidado", prest_cnpj=prest_cnpj, competencia=competencia))
+
+
+@app.route("/importar", methods=["GET"])
+def importar():
+    """Tela de importação manual. O app nunca importa sozinho de pasta nenhuma —
+    a leitura de XML só acontece quando o usuário aciona aqui."""
+    notas = StoreNotas(); n = notas.contar(); notas.fechar()
+    return render_template("importar.html", n_notas=n,
+                           pasta_padrao=str(PASTA_EXEMPLOS))
+
+
+@app.route("/importar", methods=["POST"])
+def importar_executar():
+    """Lê os XML da pasta informada (uma única leitura) e grava as notas no banco.
+    Arquivos não reconhecidos são reportados, não engolidos (I-6). Reimportar não
+    duplica: a chave é PRIMARY KEY (alinhado a I-1)."""
+    pasta_txt = request.form.get("pasta", "").strip() or str(PASTA_EXEMPLOS)
+    pasta = Path(pasta_txt).expanduser()
+    if not pasta.is_dir():
+        flash(f"Pasta não encontrada: {pasta}. Nada foi importado.")
+        return redirect(url_for("importar"))
+    resultados = ingerir_pasta(pasta)
+    if not resultados:
+        flash(f"Nenhum arquivo .xml em {pasta}. Nada foi importado.")
+        return redirect(url_for("importar"))
+    notas = StoreNotas()
+    importadas, erros = 0, []
+    for r in resultados:
+        if r.registro and r.registro.chave and not r.erro:
+            notas.salvar(r.registro.chave, r.tipo, r.registro.to_dict(), r.origem)
+            importadas += 1
+        else:
+            erros.append(r.origem or "(sem nome)")
+    notas.fechar()
+    msg = f"Importação concluída: {importadas} nota(s) gravada(s) no banco."
+    if erros:
+        msg += (f" {len(erros)} arquivo(s) não reconhecido(s), ignorado(s): "
+                f"{', '.join(erros)} (I-6).")
+    flash(msg)
+    return redirect(url_for("hub"))
+
+
+@app.route("/redefinir", methods=["GET"])
+def redefinir():
+    """Tela de confirmação da redefinição de dados (reset de demonstração).
+
+    Página dedicada + frase digitada + POST são três barreiras deliberadas contra
+    deleção acidental. Aqui só mostramos o que será apagado e o estado atual; nada
+    é tocado num GET."""
+    registro = RegistroDeExportacao()
+    n_export = len(registro.listar())
+    registro.fechar()
+    notas = StoreNotas(); n_notas = notas.contar(); notas.fechar()
+    n_artefatos = len([f for f in PASTA_SAIDA.glob("*.csv")]) if PASTA_SAIDA.is_dir() else 0
+    return render_template("redefinir.html", n_export=n_export, n_notas=n_notas,
+                           n_artefatos=n_artefatos, frase=redefinicao.FRASE_CONFIRMACAO)
+
+
+@app.route("/redefinir", methods=["POST"])
+def redefinir_executar():
+    """Executa a redefinição — só se a frase de confirmação bater exatamente.
+
+    Apaga as memórias do tronco (idempotência I-1 e marcações I-4) após copiá-las
+    para um backup datado: a memória é recuperável, não some em silêncio (I-6). As
+    notas dos exemplos não são tocadas — são relidas do XML e voltam a aparecer
+    como pendentes."""
+    confirmacao = request.form.get("confirmacao", "").strip()
+    if confirmacao != redefinicao.FRASE_CONFIRMACAO:
+        flash(f'Redefinição cancelada: digite exatamente "{redefinicao.FRASE_CONFIRMACAO}" '
+              "para confirmar. Nada foi apagado.")
+        return redirect(url_for("redefinir"))
+    resumo = redefinicao.redefinir_dados()
+    if resumo["apagados"] or resumo["artefatos_limpos"]:
+        artef = (f" {resumo['artefatos_limpos']} artefato(s) de exportação arquivado(s)."
+                 if resumo["artefatos_limpos"] else "")
+        flash("Dados redefinidos: notas, memória de exportação e marcações apagadas "
+              f"({', '.join(resumo['apagados'])}).{artef} Backup salvo em {resumo['backup']}. "
+              "A lista está vazia — use Importar para carregar as notas de novo.")
+    else:
+        flash("Não havia dados a redefinir — o banco já estava vazio.")
+    return redirect(url_for("hub"))
 
 
 if __name__ == "__main__":

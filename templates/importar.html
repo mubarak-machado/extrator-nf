@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Importar notas · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head">
+  <h2>Importar notas</h2>
+  <p>A leitura dos XML acontece só aqui, quando você manda. O aplicativo nunca importa sozinho de pasta nenhuma — as telas mostram apenas o que já está no banco.</p>
+</div>
+
+<div class="card import-card">
+  <p class="import-status">
+    {% if n_notas %}
+      Há <strong>{{ n_notas }}</strong> nota(s) no banco. Importar de novo atualiza as existentes (mesma chave) e acrescenta as novas — não duplica.
+    {% else %}
+      O banco está <strong>vazio</strong>. Informe a pasta com os XML e importe.
+    {% endif %}
+  </p>
+
+  <form method="post" action="{{ url_for('importar_executar') }}" class="import-form">
+    <label class="field">
+      <span class="lbl">Pasta com os arquivos .xml</span>
+      <input type="text" name="pasta" value="{{ pasta_padrao }}" autocomplete="off"
+             spellcheck="false" style="width:min(560px,100%)">
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar desta pasta</button>
+      <a class="btn ghost" href="{{ url_for('hub') }}">Voltar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -7,6 +7,7 @@ __pycache__/
 # estado de runtime (não versionar)
 *.sqlite
 exportacoes/
+backups/
 
 # SO
 .DS_Store

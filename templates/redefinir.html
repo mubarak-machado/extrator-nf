@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Redefinir dados · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head">
+  <h2>Redefinir dados da demonstração</h2>
+  <p>Volta a demonstração ao estado inicial: todas as notas dos exemplos passam a aparecer de novo como pendentes, prontas para serem conferidas e exportadas outra vez.</p>
+</div>
+
+<div class="card perigo-card">
+  <div class="perigo-head">
+    <svg class="icon" aria-hidden="true"><use href="#i-alerta"/></svg>
+    <h3>Ação destrutiva — leia antes de confirmar</h3>
+  </div>
+
+  <p class="perigo-lead">Esta operação <strong>apaga</strong> tudo o que está no banco:</p>
+  <ul class="perigo-list">
+    <li><strong>Notas importadas</strong> ({{ n_notas }} no banco). A lista fica <strong>vazia</strong> — e <strong>não</strong> reimporta sozinha. Para carregar de novo, use <strong>Importar</strong> manualmente depois.</li>
+    <li><strong>Registro de exportação</strong> ({{ n_export }} nota(s) marcada(s) como já exportada). É a memória que impede pagar a mesma nota duas vezes.</li>
+    <li><strong>Marcações de material aplicado</strong> feitas nas NFS-e (com autoria e data).</li>
+    <li><strong>Artefatos de exportação</strong> ({{ n_artefatos }} arquivo(s) CSV em <code>exportacoes/</code>). Os lotes são arquivados no backup antes de a pasta ser esvaziada.</li>
+  </ul>
+
+  <p class="perigo-ok">O que <strong>não</strong> é tocado: os arquivos XML de origem (em disco). Antes de apagar, cada banco e cada lote de exportação é copiado para uma pasta de <strong>backup datada</strong>, de modo que nada some de forma irreversível.</p>
+
+  <form method="post" action="{{ url_for('redefinir_executar') }}" class="perigo-form">
+    <label class="field">
+      <span class="lbl">Para confirmar, digite <code>{{ frase }}</code> no campo abaixo:</span>
+      <input type="text" name="confirmacao" autocomplete="off" autocapitalize="characters"
+             spellcheck="false" placeholder="{{ frase }}" required>
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn perigo">Redefinir dados</button>
+      <a class="btn ghost" href="{{ url_for('hub') }}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

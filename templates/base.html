@@ -65,6 +65,7 @@
       <a href="{{ url_for('individuais') }}"{{ ' class=on' if request.endpoint == 'individuais' }}>Individuais</a>
       <a href="{{ url_for('consolidados') }}"{{ ' class=on' if request.endpoint in ['consolidados', 'consolidado'] }}>Consolidadas</a>
       <a href="{{ url_for('historico') }}"{{ ' class=on' if request.endpoint == 'historico' }}>Histórico</a>
+      <a href="{{ url_for('importar') }}"{{ ' class=on' if request.endpoint in ['importar', 'importar_executar'] }}>Importar</a>
     </nav>
 
     <div class="controls">
@@ -93,5 +94,10 @@
 
     {% block conteudo %}{% endblock %}
   </main>
+
+  <footer class="rodape">
+    <span class="tag">POC de demonstração</span>
+    <a class="link-redefinir" href="{{ url_for('redefinir') }}"{{ ' aria-current=page' if request.endpoint in ['redefinir', 'redefinir_executar'] }}>Redefinir dados da demonstração</a>
+  </footer>
 </body>
 </html>
