@@ -845,3 +845,63 @@ def test_notas_migracao_adiciona_npp_id(tmp_path):
     s.salvar("NOVA", "NFE", {}, "n.xml", npp_id=5)
     assert s.listar_por_npp(5)[0]["chave"] == "NOVA"
     s.fechar()
+
+
+# ---------- Validação de retenção pelo operador (Fase 2, validação humana) ----------
+
+def test_validacao_retencao_round_trip_e_normaliza(tmp_path):
+    """validar grava a decisão do operador com autor+data (I-4) e normaliza o valor;
+    atual devolve a vigente."""
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    s = StoreValidacaoRetencao(tmp_path / "v.sqlite")
+    assert s.atual("NOTA1", "IR") is None
+    s.validar("NOTA1", "IR", "confirmado", "48.00", "Mubarak")
+    v = s.atual("NOTA1", "IR")
+    assert v["acao"] == "confirmado" and v["valor"] == "48.00" and v["autor"] == "Mubarak"
+    assert v["validado_em"]
+    # entrada pt-BR / sem casas decimais é normalizada para X.XX
+    s.validar("NOTA1", "INSS", "retificado", "1.200,5", "Mubarak")
+    assert s.atual("NOTA1", "INSS")["valor"] == "1200.50"
+    s.fechar()
+
+
+def test_validacao_retencao_append_mantem_vigente(tmp_path):
+    """Retificar depois de confirmar não apaga o histórico (I-4); a vigente é a última."""
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    s = StoreValidacaoRetencao(tmp_path / "v.sqlite")
+    s.validar("NOTA1", "ISS", "confirmado", "50.00", "op")
+    s.validar("NOTA1", "ISS", "retificado", "40.00", "op")
+    v = s.atual("NOTA1", "ISS")
+    assert v["acao"] == "retificado" and v["valor"] == "40.00"
+    s.fechar()
+
+
+def test_validacao_retencao_atuais_mapa_por_tributo(tmp_path):
+    """atuais devolve a vigente por tributo (uma consulta) — base do total retido/líquido."""
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    s = StoreValidacaoRetencao(tmp_path / "v.sqlite")
+    s.validar("NOTA1", "IR", "confirmado", "48.00", "op")
+    s.validar("NOTA1", "CSLL", "confirmado", "10.00", "op")
+    s.validar("NOTA1", "IR", "retificado", "45.00", "op")    # vigente do IR
+    mapa = s.atuais("NOTA1")
+    assert set(mapa) == {"IR", "CSLL"}
+    assert mapa["IR"]["valor"] == "45.00" and mapa["CSLL"]["valor"] == "10.00"
+    assert s.atuais("OUTRA") == {}
+    s.fechar()
+
+
+def test_validacao_retencao_valida_entradas(tmp_path):
+    """I-6: tributo/ação inválidos, valor não-numérico ou autor vazio são erro visível —
+    nada gravado."""
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    s = StoreValidacaoRetencao(tmp_path / "v.sqlite")
+    with pytest.raises(ValueError):
+        s.validar("N", "XPTO", "confirmado", "10.00", "op")     # tributo inválido
+    with pytest.raises(ValueError):
+        s.validar("N", "IR", "chutado", "10.00", "op")          # ação inválida
+    with pytest.raises(ValueError):
+        s.validar("N", "IR", "confirmado", "abc", "op")         # valor não-numérico
+    with pytest.raises(ValueError):
+        s.validar("N", "IR", "confirmado", "10.00", "   ")      # autor vazio
+    assert s.atuais("N") == {}                                  # nada gravado
+    s.fechar()
