@@ -786,3 +786,62 @@ def test_npp_criar_exige_contrato_competencia_iniciais(tmp_path):
     with pytest.raises(ValueError):
         s.salvar(NPP(contrato_id=7, competencia="2026-05"))
     s.fechar()
+
+
+# ---------- Vínculo nota->NPP em StoreNotas (I-1/I-6) ----------
+
+def test_notas_vinculo_npp_e_listar_por_npp(tmp_path):
+    """salvar grava o npp_id; listar/listar_por_npp devolvem o vínculo e filtram."""
+    from tronco.notas import StoreNotas
+    s = StoreNotas(tmp_path / "n.sqlite")
+    r = _reg("nfe_exemplo.xml")
+    s.salvar(r.chave, "NFE", r.to_dict(), "x.xml", npp_id=1)
+    s.salvar("9" * 44, "NFE", r.to_dict(), "y.xml", npp_id=2)
+    assert {n["chave"] for n in s.listar_por_npp(1)} == {r.chave}
+    assert s.listar_por_npp(1)[0]["npp_id"] == 1
+    assert len(s.listar_por_npp(2)) == 1
+    s.fechar()
+
+
+def test_notas_reimport_mesma_npp_e_idempotente(tmp_path):
+    """Reimportar a mesma chave na MESMA NPP não duplica e não levanta conflito (I-1)."""
+    from tronco.notas import StoreNotas
+    s = StoreNotas(tmp_path / "n.sqlite")
+    r = _reg("nfe_exemplo.xml")
+    s.salvar(r.chave, "NFE", r.to_dict(), "x.xml", npp_id=1)
+    s.salvar(r.chave, "NFE", r.to_dict(), "x.xml", npp_id=1)   # reimport mesma NPP
+    assert s.contar() == 1 and len(s.listar_por_npp(1)) == 1
+    s.fechar()
+
+
+def test_notas_reimport_outra_npp_e_conflito_visivel(tmp_path):
+    """Reimportar uma chave já vinculada a OUTRA NPP é conflito visível, não sobrescreve
+    (I-1/I-6): o erro carrega a NPP onde a nota já consta."""
+    from tronco.notas import StoreNotas, ConflitoDeChave
+    s = StoreNotas(tmp_path / "n.sqlite")
+    r = _reg("nfe_exemplo.xml")
+    s.salvar(r.chave, "NFE", r.to_dict(), "x.xml", npp_id=1)
+    with pytest.raises(ConflitoDeChave) as exc:
+        s.salvar(r.chave, "NFE", r.to_dict(), "x.xml", npp_id=2)
+    assert exc.value.npp_id_existente == 1
+    # não moveu: segue na NPP 1, intacta
+    assert len(s.listar_por_npp(1)) == 1 and s.listar_por_npp(2) == []
+    s.fechar()
+
+
+def test_notas_migracao_adiciona_npp_id(tmp_path):
+    """Banco criado por versão anterior (sem npp_id) ganha a coluna na abertura (I-6)."""
+    import sqlite3
+    bd = tmp_path / "notas.sqlite"
+    conn = sqlite3.connect(str(bd))
+    conn.execute("CREATE TABLE notas (chave TEXT PRIMARY KEY, tipo TEXT NOT NULL, "
+                 "origem TEXT, dados_json TEXT NOT NULL, importado_em TEXT NOT NULL)")
+    conn.execute("INSERT INTO notas VALUES ('VELHA','NFE','v.xml','{}','2025-01-01T00:00:00+00:00')")
+    conn.commit(); conn.close()
+    from tronco.notas import StoreNotas
+    s = StoreNotas(bd)                       # abre -> migra
+    velha = [n for n in s.listar() if n["chave"] == "VELHA"][0]
+    assert velha["npp_id"] is None           # legado sem vínculo, sem quebrar
+    s.salvar("NOVA", "NFE", {}, "n.xml", npp_id=5)
+    assert s.listar_por_npp(5)[0]["chave"] == "NOVA"
+    s.fechar()
