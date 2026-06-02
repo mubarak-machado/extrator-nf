@@ -241,26 +241,9 @@ a:hover { color: var(--primary-hover); }
 .dropdown[open] > summary .chev { transform: rotate(180deg); }
 .dropdown-panel {
   position: absolute; top: calc(100% + 6px); z-index: 40; min-width: max-content;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: var(--sp-3);
 }
-
-/* dropdown de navegação (Notas Fiscais) */
-.nav-dropdown > summary {
-  display: inline-flex; align-items: center; gap: var(--sp-1);
-  color: var(--ink-2); font-size: .88rem; font-weight: 600;
-  padding: .4rem .7rem; border-radius: var(--radius-sm); line-height: 1;
-}
-.nav-dropdown > summary:hover { color: var(--ink); background: var(--surface-2); }
-.nav-dropdown > summary.on { color: var(--primary); background: var(--primary-soft); }
-.nav-dropdown .dropdown-panel { left: 0; padding: var(--sp-2); display: flex; flex-direction: column; gap: 2px; }
-.nav-dropdown .dropdown-panel a {
-  display: block; text-decoration: none; white-space: nowrap;
-  color: var(--ink-2); font-size: .88rem; font-weight: 600;
-  padding: .4rem .7rem; border-radius: var(--radius-sm);
-}
-.nav-dropdown .dropdown-panel a:hover { color: var(--ink); background: var(--surface-2); }
-.nav-dropdown .dropdown-panel a.on { color: var(--primary); background: var(--primary-soft); }
 
 /* dropdown de exibição (fonte + tema) */
 .controls .dropdown-toggle {
@@ -371,6 +354,24 @@ dl.grid dd.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 .selo.diverge { background: var(--danger-bg); color: var(--danger-ink); }
 .selo.indef   { background: var(--warn-bg); color: var(--warn-ink); }
 
+/* validação humana do operador (NPP) — confirmar/retificar por tributo (I-3/I-4).
+   A linha vermelha (campo de retificar nunca pré-preenchido) vive no template. */
+.validar-controles { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.validar-controles form { display: inline-flex; gap: var(--sp-2); align-items: center; margin: 0; }
+.retificar-form input[type="text"] { width: 7rem; }
+.ok-chip {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .74rem; font-weight: 700; letter-spacing: .02em;
+  color: var(--ok-ink); background: var(--ok-bg);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+  padding: .1rem .5rem; border-radius: 999px;
+}
+.revalidar { margin-top: var(--sp-2); font-size: .8rem; }
+.revalidar > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .3rem; color: var(--ink-3); font-weight: 600; }
+.revalidar > summary::-webkit-details-marker { display: none; }
+.revalidar > summary:hover { color: var(--ink); }
+.revalidar[open] > summary { margin-bottom: var(--sp-2); }
+
 .discr { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-4); font-size: .92rem; white-space: pre-wrap; }
 
 /* ---------- tabelas ---------- */
@@ -432,12 +433,12 @@ td .sub.mono { font-family: var(--font-mono); }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .actions { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: center; margin-bottom: var(--sp-4); }
 
-/* card de consolidação sugerida (lista) */
-.consol-card { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
-.consol-card .who { flex: 1 1 260px; min-width: 0; }
-.consol-card .amount { text-align: right; }
-.consol-card .amount .total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.2rem; font-weight: 600; }
-.consol-card .amount .meta { font-size: .78rem; color: var(--ink-3); }
+/* linha de lista clicável (NPPs, contratos) — identidade à esquerda, valor à direita */
+.list-row { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.list-row .who { flex: 1 1 260px; min-width: 0; }
+.list-row .amount { text-align: right; }
+.list-row .amount .total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.2rem; font-weight: 600; }
+.list-row .amount .meta { font-size: .78rem; color: var(--ink-3); }
 
 /* ---------- formulário ---------- */
 fieldset { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--sp-4); margin: var(--sp-3) 0 0; }
@@ -448,10 +449,6 @@ label.opt { display: inline-flex; align-items: center; gap: var(--sp-2); font-si
 .field .lbl { display: block; font-size: .82rem; color: var(--ink-2); margin-bottom: var(--sp-1); font-weight: 500; }
 input[type="text"] { font: inherit; padding: .5rem .7rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); width: min(320px, 100%); }
 input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--primary); }
-
-/* ---------- flash (aria-live) ---------- */
-.flash-area { margin-bottom: var(--sp-4); display: grid; gap: var(--sp-2); }
-.flash { display: flex; gap: var(--sp-2); align-items: flex-start; background: var(--info-bg); color: var(--info-ink); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); border-left: 3px solid var(--info); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-sm); font-size: .9rem; }
 
 .note-foot { color: var(--ink-3); font-size: .8rem; line-height: 1.6; margin-top: var(--sp-4); }
 .note-foot code { font-family: var(--font-mono); font-size: .92em; }
@@ -488,6 +485,8 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 }
 .hero .figure.zero { color: var(--ink-3); font-weight: 400; }
 .hero .figure.small { font-size: clamp(1.4rem, 6vw, 1.9rem); }
+/* nome de contraparte no herói — texto em fonte de UI, não dígito mono */
+.hero .figure.nome { font-size: 1.05rem; font-family: var(--font-ui); font-weight: 600; letter-spacing: 0; }
 .hero .figure-meta { display: flex; align-items: center; gap: var(--sp-2); color: var(--ink-2); font-size: .95rem; margin-top: var(--sp-2); }
 .hero .hero-stats { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-4); }
 .hero .stat { display: inline-flex; align-items: baseline; gap: var(--sp-2); font-size: .85rem; color: var(--ink-2); }
@@ -506,33 +505,6 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .progress > i { display: block; height: 100%; border-radius: 999px; background: var(--ok); transition: width .4s ease; }
 @media (prefers-reduced-motion: reduce) { .progress > i { transition: none; } }
 
-/* ---------- triagem: abas + busca ---------- */
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
-.tabs { display: inline-flex; flex-wrap: wrap; gap: var(--sp-2); }
-.tab {
-  display: inline-flex; align-items: center; gap: var(--sp-2);
-  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
-  font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
-  padding: .4rem .8rem; border-radius: 999px; line-height: 1;
-}
-.tab:hover { color: var(--ink); border-color: var(--line-strong); }
-.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); border-color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
-.tab .n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .78rem; color: var(--ink-3); }
-.tab[aria-selected="true"] .n { color: var(--primary); }
-.tab.attn[aria-selected="true"] { border-color: var(--warn); box-shadow: inset 0 -2px 0 var(--warn); }
-.tab.attn[aria-selected="true"] .n { color: var(--warn-ink); }
-
-.search { position: relative; margin-left: auto; display: inline-flex; align-items: center; }
-.search .icon { position: absolute; left: .65rem; color: var(--ink-3); pointer-events: none; }
-.search input {
-  font: inherit; font-size: .88rem; padding: .45rem .7rem .45rem 2.1rem;
-  border: 1px solid var(--line-strong); border-radius: 999px;
-  background: var(--surface); color: var(--ink); width: min(280px, 60vw);
-}
-.search input::placeholder { color: var(--ink-3); }
-
-th.sortable { cursor: pointer; user-select: none; }
-th.sortable .arr { color: var(--ink-3); font-size: .9em; }
 .empty-msg { padding: var(--sp-5) var(--sp-4); text-align: center; color: var(--ink-3); font-size: .9rem; }
 
 /* primeira coluna fixa na rolagem horizontal (consolidado) */
@@ -552,6 +524,9 @@ th.sortable .arr { color: var(--ink-3); font-size: .9em; }
 .flagline { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .flag { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: .78rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
 .flag .icon { color: var(--primary); }
+/* flag de atenção (ex.: material não conferido — conferência humana pendente, I-6) */
+.flag.warn { color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.flag.warn .icon { color: var(--warn); }
 
 /* ---------- hub: cartões de módulo ---------- */
 .modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--sp-4); }
@@ -590,8 +565,12 @@ th.sortable .arr { color: var(--ink-3); font-size: .9em; }
 .nowrap { white-space: nowrap; }
 .stack-sm > * + * { margin-top: var(--sp-2); }
 .mt-3 { margin-top: var(--sp-3); }
+.mt-4 { margin-top: var(--sp-4); }
 .mb-3 { margin-bottom: var(--sp-3); }
 .mb-5 { margin-bottom: var(--sp-5); }
+.ml-auto { margin-left: auto; }
+/* rótulo de um grupo de impostos (NPP) */
+.group-label { margin: var(--sp-4) 0 var(--sp-2); font-size: 1rem; }
 .small { font-size: .85rem; }
 .break-all { word-break: break-all; }
 .discr-label { font-size: .8rem; color: var(--ink-3); margin: var(--sp-3) 0 var(--sp-1); }

@@ -3,14 +3,14 @@
    Linha vermelha: o campo de retificar NUNCA nasce com a sugestão (`esperado`). #}
 <div class="validar-controles">
   {% if r.destaque is not none %}
-  <form method="post" action="{{ url_for('npp_validar', id_=npp.id, chave=r.chave, tributo=r.tributo) }}" style="display:inline">
+  <form method="post" action="{{ url_for('npp_validar', id_=npp.id, chave=r.chave, tributo=r.tributo) }}">
     <input type="hidden" name="acao" value="confirmado">
     <button type="submit" class="btn ghost" title="Atestar que o destaque do emitente está correto"><svg class="icon"><use href="#i-check"/></svg> Confirmar destaque</button>
   </form>
   {% endif %}
-  <form method="post" action="{{ url_for('npp_validar', id_=npp.id, chave=r.chave, tributo=r.tributo) }}" class="retificar-form" style="display:inline-flex;gap:.3rem;align-items:center">
+  <form method="post" action="{{ url_for('npp_validar', id_=npp.id, chave=r.chave, tributo=r.tributo) }}" class="retificar-form">
     <input type="hidden" name="acao" value="retificado">
-    <input type="text" name="valor" inputmode="decimal" placeholder="0,00" aria-label="Valor retificado de {{ r.tributo }}" style="width:7rem" required>
+    <input type="text" name="valor" inputmode="decimal" placeholder="0,00" aria-label="Valor retificado de {{ r.tributo }}" required>
     <button type="submit" class="btn ghost">Retificar</button>
   </form>
 </div>

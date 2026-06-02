@@ -26,7 +26,7 @@
         {% if item.marcacao %}
           <span class="flag"><svg class="icon"><use href="#i-check"/></svg> Material: {{ item.marcacao.valor|upper }}</span>
         {% else %}
-          <span class="flag" style="color:var(--warn-ink);border-color:color-mix(in srgb,var(--warn) 35%,transparent)"><svg class="icon" style="color:var(--warn)"><use href="#i-alerta"/></svg> Material não conferido</span>
+          <span class="flag warn"><svg class="icon"><use href="#i-alerta"/></svg> Material não conferido</span>
         {% endif %}
       {% endif %}
     </div>
@@ -34,7 +34,7 @@
   <div class="hero-aside">
     <div class="progress-wrap">
       <div class="progress-top"><span>{{ 'Destinatário (órgão)' if nfe else 'Tomador (órgão)' }}</span></div>
-      <p class="figure small" style="font-size:1.05rem;font-family:var(--font-ui);font-weight:600;letter-spacing:0">{{ (r.dest_nome if nfe else r.toma_nome) or '—' }}</p>
+      <p class="figure small nome">{{ (r.dest_nome if nfe else r.toma_nome) or '—' }}</p>
       <p class="mono muted small">
         {% set odoc = r.dest_cnpj if nfe else r.toma_cnpj %}
         {% if odoc %}{{ odoc | cnpj }}{% else %}<span class="falta">— (confira o CNPJ)</span>{% endif %}

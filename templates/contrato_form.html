@@ -178,7 +178,7 @@
     <button type="submit" class="btn"><svg class="icon"><use href="#i-check"/></svg> Salvar contrato</button>
     <a class="btn ghost" href="{{ url_for('contratos') }}">Cancelar</a>
     {% if not novo %}
-    <form method="post" action="{{ url_for('contrato_remover', id_=c.id) }}" onsubmit="return confirm('Remover este contrato?')" style="margin-left:auto">
+    <form method="post" action="{{ url_for('contrato_remover', id_=c.id) }}" onsubmit="return confirm('Remover este contrato?')" class="ml-auto">
       <button type="submit" class="link-inline">Remover contrato</button>
     </form>
     {% endif %}

@@ -81,7 +81,7 @@
     <button type="submit" class="btn"><svg class="icon"><use href="#i-check"/></svg> Salvar regra</button>
     <a class="btn ghost" href="{{ url_for('regras') }}">Cancelar</a>
     {% if not novo %}
-    <form method="post" action="{{ url_for('regra_remover', id_=r.id) }}" onsubmit="return confirm('Remover esta regra?')" style="margin-left:auto">
+    <form method="post" action="{{ url_for('regra_remover', id_=r.id) }}" onsubmit="return confirm('Remover esta regra?')" class="ml-auto">
       <button type="submit" class="link-inline">Remover regra</button>
     </form>
     {% endif %}

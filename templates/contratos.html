@@ -7,7 +7,7 @@
     <h2>Contratos</h2>
     <p>Configuração por contrato — natureza do prestador, previsão de material e enquadramento das retenções. É o que o especialista dita; o sistema guarda para a análise das notas (não apura nada aqui).</p>
   </div>
-  {% if contratos %}<a class="btn" href="{{ url_for('contrato_novo') }}" style="margin-left:auto"><svg class="icon"><use href="#i-doc"/></svg> Novo contrato</a>{% endif %}
+  {% if contratos %}<a class="btn ml-auto" href="{{ url_for('contrato_novo') }}"><svg class="icon"><use href="#i-doc"/></svg> Novo contrato</a>{% endif %}
 </div>
 
 {% if not contratos %}
@@ -22,7 +22,7 @@
 {% else %}
 <section class="section" aria-label="Contratos configurados">
   {% for c in contratos %}
-  <div class="card consol-card" style="margin-top:var(--sp-3)">
+  <div class="card list-row mt-3">
     <div class="who">
       <strong>{{ c.prest_identificacao }}</strong>
       <span class="sub mono">{{ c.prest_documento | cnpj }}</span>

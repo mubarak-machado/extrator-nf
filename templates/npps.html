@@ -7,7 +7,7 @@
     <h2>NPPs — Notas de Pré-Pagamento</h2>
     <p>Cada pagamento é uma NPP: um contrato, uma competência, uma ou mais notas. Crie a NPP e importe as notas dentro dela — não existe nota solta.</p>
   </div>
-  {% if cards %}<a class="btn" href="{{ url_for('npp_nova') }}" style="margin-left:auto"><svg class="icon"><use href="#i-doc"/></svg> Nova NPP</a>{% endif %}
+  {% if cards %}<a class="btn ml-auto" href="{{ url_for('npp_nova') }}"><svg class="icon"><use href="#i-doc"/></svg> Nova NPP</a>{% endif %}
 </div>
 
 {% if not cards %}
@@ -22,7 +22,7 @@
 {% else %}
 <section class="section" aria-label="NPPs">
   {% for card in cards %}
-  <a class="card consol-card" href="{{ url_for('npp_detalhe', id_=card.npp.id) }}" style="margin-top:var(--sp-3)">
+  <a class="card list-row mt-3" href="{{ url_for('npp_detalhe', id_=card.npp.id) }}">
     <div class="who">
       <strong>{{ card.npp.numero }}</strong>
       <span class="sub">{{ card.contrato_rotulo }}</span>

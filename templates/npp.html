@@ -10,14 +10,14 @@
     <p>{{ contrato_rotulo }}{% if npp.rotulo %} · {{ npp.rotulo }}{% endif %}</p>
   </div>
   {% if itens %}
-  <form method="post" action="{{ url_for('npp_exportar', id_=npp.id) }}" style="margin-left:auto">
+  <form method="post" action="{{ url_for('npp_exportar', id_=npp.id) }}" class="ml-auto">
     <button type="submit" class="btn"{% if not n_novas %} disabled title="Todas as notas desta NPP já foram exportadas"{% endif %}>
       <svg class="icon"><use href="#i-exportar"/></svg> Exportar NPP{% if n_novas %} ({{ n_novas }} inédita{{ 's' if n_novas != 1 }}){% else %} (tudo exportado){% endif %}
     </button>
   </form>
   <a class="btn ghost" href="{{ url_for('npp_editar', id_=npp.id) }}">Editar NPP</a>
   {% else %}
-  <a class="btn ghost" href="{{ url_for('npp_editar', id_=npp.id) }}" style="margin-left:auto">Editar NPP</a>
+  <a class="btn ghost ml-auto" href="{{ url_for('npp_editar', id_=npp.id) }}">Editar NPP</a>
   <form method="post" action="{{ url_for('npp_remover', id_=npp.id) }}" onsubmit="return confirm('Remover esta NPP vazia?');">
     <button type="submit" class="btn ghost">Remover</button>
   </form>
@@ -89,7 +89,7 @@
   </div>
 
   {% for grupo in grupos %}
-  <h4 style="margin:var(--sp-4) 0 var(--sp-2)">{{ grupo.label }}</h4>
+  <h4 class="group-label">{{ grupo.label }}</h4>
   {% if not grupo.rows %}
   <p class="muted">Nenhum tributo desta categoria se aplica às notas desta NPP.</p>
   {% else %}
