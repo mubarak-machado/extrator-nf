@@ -27,6 +27,7 @@ from tronco.marcacoes import StoreMarcacoes
 from tronco.notas import StoreNotas, reconstruir, ConflitoDeChave
 from tronco.operador import StoreOperador, Operador
 from tronco.npp import StoreNPP, NPP
+from tronco.validacao_retencao import StoreValidacaoRetencao, TRIBUTOS, ACOES
 from tronco.contratos import (StoreContratos, Contrato,
                               NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS,
                               IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL)
@@ -910,6 +911,95 @@ def _competencia_valida(s):
     return bool(re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", (s or "").strip()))
 
 
+# ---- Seção 2 (Grupos de impostos): a fronteira I-2/I-3/I-4 ----
+# Três camadas explicitamente separadas: destaque do emitente (Fase 1, fiel),
+# sugestão da regra (Fase 2, só exibição) e validação humana (Fase 2, a única gravada).
+_CATEGORIA = {"INSS": "prev", "IR": "federal", "CSLL": "federal",
+              "COFINS": "federal", "PIS": "federal", "ISS": "iss"}
+_GRUPOS_META = [("Contribuição previdenciária", "prev"),
+                ("Tributos federais", "federal"),
+                ("ISS", "iss")]
+
+
+def _conferir_por_tipo(reg, tipo, contrato, material_marcado=None):
+    """Despacha a conferência pelo tipo da nota (galhos independentes), com o contrato
+    vindo da NPP — sem heurística de CNPJ. Só sugestão (I-3); não grava nada."""
+    if tipo == "NFE":
+        from galho_nfe import retencao as ret_nfe
+        return ret_nfe.conferir_retencao(reg, contrato, material_marcado)
+    return retencao.conferir_retencao(reg, contrato, material_marcado)
+
+
+def _material_marcado(chave, tipo, marc):
+    return (marc.atual(chave) or {}).get("valor") if tipo == "NFSE" else None
+
+
+def _pendente_validacao(achado, validacao) -> bool:
+    """Tributo aplicável que ainda falta validar e que pode render retenção > 0 — deixa
+    o líquido provisório (I-6). Já validado, ou sugestão zero (não incide/dispensado),
+    não pendura o líquido."""
+    if validacao is not None:
+        return False
+    if achado.esperado is None:        # indefinido (ex.: material/regime) → atenção
+        return True
+    try:
+        return Decimal(achado.esperado) != 0
+    except (InvalidOperation, ValueError):
+        return True
+
+
+def _grupos_impostos(itens, contrato, val_store=None, marc=None):
+    """Monta as 3 categorias da Seção 2 (linha por nota×tributo aplicável), o total
+    retido (Σ validados) e se o líquido é provisório (há tributo a validar). Stores
+    injetáveis para teste; abertos/fechados aqui por padrão."""
+    fechar_v, fechar_m = val_store is None, marc is None
+    val_store = val_store or StoreValidacaoRetencao()
+    marc = marc or StoreMarcacoes()
+    try:
+        cats = {"prev": [], "federal": [], "iss": []}
+        total_retido = Decimal("0")
+        ha_pendente = False
+        for it in itens:
+            reg, tipo = it["reg"], it["tipo"]
+            if not contrato:
+                continue
+            material = _material_marcado(reg.chave, tipo, marc)
+            achados = _conferir_por_tipo(reg, tipo, contrato, material).achados
+            vals = val_store.atuais(reg.chave)
+            for a in achados:
+                v = vals.get(a.tributo)
+                if v is not None:
+                    try:
+                        total_retido += Decimal(v["valor"])
+                    except (InvalidOperation, ValueError):
+                        pass
+                pendente = _pendente_validacao(a, v)
+                ha_pendente = ha_pendente or pendente
+                cats[_CATEGORIA[a.tributo]].append({
+                    "nota_numero": reg.numero, "chave": reg.chave, "tipo": tipo,
+                    "tributo": a.tributo, "regra": a.regra,
+                    "destaque": a.destaque_emitente, "esperado": a.esperado,
+                    "validacao": v, "pendente": pendente,
+                })
+        grupos = []
+        for label, key in _GRUPOS_META:
+            rows = cats[key]
+            tot = Decimal("0")
+            for r in rows:
+                if r["validacao"] is not None:
+                    try:
+                        tot += Decimal(r["validacao"]["valor"])
+                    except (InvalidOperation, ValueError):
+                        pass
+            grupos.append({"label": label, "rows": rows, "total_validado": f"{tot:.2f}"})
+        return grupos, f"{total_retido:.2f}", ha_pendente
+    finally:
+        if fechar_v:
+            val_store.fechar()
+        if fechar_m:
+            marc.fechar()
+
+
 def _rotulos_contratos(contratos):
     return {c.id: retencao.rotulo_contrato(c) for c in contratos}
 
@@ -988,21 +1078,36 @@ def _obter_npp(id_):
     return npp
 
 
+def _liquido_npp(total_bruto, total_retido):
+    """Líquido = bruto − retido validado (decimal canônico). Aritmética de apresentação
+    sobre valores já existentes — não é apuração de retenção (a retenção é a validada
+    pelo operador, I-3/I-4)."""
+    try:
+        return f"{Decimal(total_bruto or '0') - Decimal(total_retido or '0'):.2f}"
+    except (InvalidOperation, ValueError):
+        return None
+
+
 @app.route("/npp/<int:id_>")
 def npp_detalhe(id_):
-    """Detalhe da NPP: cabeçalho derivado + documentos de origem + importação
-    escopada. Os 'Grupos de impostos' (conferência/validação) entram na etapa 7b."""
+    """Detalhe da NPP: cabeçalho derivado + Documentos de origem (Seção 1) + Grupos de
+    impostos (Seção 2: destaque fiel I-2 + sugestão I-3 + validação humana I-4)."""
     npp = _obter_npp(id_)
     if not npp:
         flash("NPP não encontrada.", "erro")
         return redirect(url_for("npps"))
     cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
     itens = _itens_da_npp(id_)
+    total_bruto = _bruto(itens)
+    grupos, total_retido, liquido_provisorio = _grupos_impostos(itens, contrato)
     return render_template(
         "npp.html", npp=npp, contrato=contrato,
         contrato_rotulo=retencao.rotulo_contrato(contrato) if contrato else "(contrato removido)",
-        itens=itens, total_bruto=_bruto(itens), status=_npp_status(itens),
-        n_novas=sum(1 for i in itens if not i["ja_exportada"]))
+        itens=itens, total_bruto=total_bruto, status=_npp_status(itens),
+        n_novas=sum(1 for i in itens if not i["ja_exportada"]),
+        grupos=grupos, total_retido=total_retido,
+        liquido=_liquido_npp(total_bruto, total_retido),
+        liquido_provisorio=liquido_provisorio)
 
 
 @app.route("/npp/<int:id_>/editar")
@@ -1136,6 +1241,65 @@ def npp_importar_pasta(id_):
         flash("A pasta selecionada não tem arquivos .xml. Nada foi importado.", "erro")
         return redirect(url_for("npp_detalhe", id_=id_))
     _persistir_na_npp(resultados, npp)
+    return redirect(url_for("npp_detalhe", id_=id_))
+
+
+def _nota_item_da_npp(id_, chave):
+    for it in _itens_da_npp(id_):
+        if it["reg"].chave == chave:
+            return it
+    return None
+
+
+@app.route("/npp/<int:id_>/validar/<chave>/<tributo>", methods=["POST"])
+def npp_validar(id_, chave, tributo):
+    """Grava a validação de retenção do operador para um tributo de uma nota (Fase 2,
+    validação humana; I-3/I-4). *Confirmar* atesta o destaque do emitente (recomputado
+    no servidor, nunca o valor da tela). *Retificar* usa o valor digitado pelo operador —
+    o sistema NUNCA pré-preenche esse campo com a sugestão da regra (linha vermelha I-3)."""
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    item = _nota_item_da_npp(id_, chave)
+    if not item:
+        flash("Nota não encontrada nesta NPP.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
+    if not contrato:
+        flash("A NPP não tem contrato — não há regra para validar.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    marc = StoreMarcacoes()
+    material = _material_marcado(chave, item["tipo"], marc)
+    marc.fechar()
+    achados = {a.tributo: a
+               for a in _conferir_por_tipo(item["reg"], item["tipo"], contrato, material).achados}
+    achado = achados.get(tributo)
+    if achado is None:
+        flash(f"O tributo {tributo} não se aplica a esta nota — nada a validar (I-6).", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    acao = request.form.get("acao")
+    if acao == "confirmado":
+        valor = achado.destaque_emitente
+        if valor is None:
+            flash(f"{tributo}: a nota não traz destaque para confirmar — use Retificar e "
+                  "informe o valor.", "erro")
+            return redirect(url_for("npp_detalhe", id_=id_))
+    elif acao == "retificado":
+        valor = request.form.get("valor")
+    else:
+        flash("Ação inválida (use confirmar ou retificar).", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    op = _operador_atual()
+    store = StoreValidacaoRetencao()
+    try:
+        reg_val = store.validar(chave, tributo, acao, valor, op.nome)
+    except ValueError as exc:
+        store.fechar()
+        flash(f"Não foi possível validar {tributo}: {exc}. Nada foi gravado.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    store.fechar()
+    flash(f"{tributo} {acao}: {formato.moeda(reg_val['valor'])} (por {op.nome}).", "ok")
     return redirect(url_for("npp_detalhe", id_=id_))
 
 

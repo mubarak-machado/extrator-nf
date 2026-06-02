@@ -30,9 +30,10 @@ commitados** (módulo federal comum, conferência federal da NF-e, identidade do
 
 Passo 7 (UI) fatiado em **7a** (bootstrap do operador + CRUD da NPP + importação escopada),
 **7b** (detalhe em duas seções + validar/retificar), **7c** (exportação por NPP + remoção do
-fluxo individual/consolidado). **7a feito** (rotas de operador/NPP, templates `operador_form`/
-`npps`/`npp_form`/`npp`, nav "NPPs", importação escopada com conflito/divergência visíveis;
-**57 testes verdes**). **Próximo: 7b.** Depois o **passo 8** (reset). Detalhe no plano.
+fluxo individual/consolidado). **7a e 7b feitos** (rotas de operador/NPP, importação escopada,
+detalhe com Documentos de origem + Grupos de impostos nas 3 camadas, validar/retificar por
+tributo com autor+data e líquido provisório; **60 testes verdes**). **Próximo: 7c** (exportação
+por NPP + remoção do individual/consolidado). Depois o **passo 8** (reset). Detalhe no plano.
 
 ## Mudança de fase — 2026-06-02
 

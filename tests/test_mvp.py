@@ -934,3 +934,65 @@ def test_npp_divergencia_cnpj_e_visivel():
     assert _divergencias_cnpj([res], igual) == []
     assert _divergencias_cnpj([res], diferente)     # lista não-vazia = aviso
     assert _divergencias_cnpj([res], None) == []    # sem contrato → sem ruído
+
+
+# ---------- Passo 7b (UI): conferência via NPP + validação humana ----------
+
+def test_npp_conferir_por_tipo_despacha():
+    """Despacho por tipo (galhos independentes): NF-e não-optante rende federal;
+    NFS-e rende federal + INSS/ISS conforme o contrato. Só sugestão (I-3)."""
+    from tronco.app import _conferir_por_tipo
+    from tronco.contratos import Contrato
+    from tronco.ingestao import ingerir
+    nfe = ingerir(EXEMPLOS / "nfe_exemplo.xml").registro          # CRT=3, não optante
+    c = Contrato(ret_federal_sujeito=True, ret_federal_ir_pct="1.2",
+                 ret_federal_codigo_receita="6190")
+    achados = {a.tributo for a in _conferir_por_tipo(nfe, "NFE", c).achados}
+    assert achados == {"IR", "CSLL", "COFINS", "PIS"}             # NF-e: só federal
+    assert "INSS" not in achados and "ISS" not in achados
+
+
+def test_npp_pendente_validacao_marca_liquido_provisorio():
+    """Tributo aplicável não validado deixa o líquido provisório (I-6); sugestão zero
+    (não incide) não pendura; validado deixa de pender."""
+    from tronco.app import _pendente_validacao
+    from tronco.retencao_federal import Achado
+    aplic = Achado("IR", "IR 1,2%", "240.00", "120.00", "diverge")
+    zero = Achado("PIS", "PIS não incide", None, "0.00", "confere")
+    assert _pendente_validacao(aplic, None) is True
+    assert _pendente_validacao(zero, None) is False
+    assert _pendente_validacao(aplic, {"valor": "120.00", "acao": "retificado"}) is False
+
+
+def test_npp_grupos_impostos_camadas_e_total_retido(tmp_path):
+    """Seção 2: as 3 camadas coexistem. Antes de validar, total retido = 0 e líquido
+    provisório (I-6). Após confirmar/retificar, o validado entra no total — o destaque
+    do emitente segue intocado (I-2) e a sugestão nunca é gravada sozinha (I-3)."""
+    from tronco.app import _grupos_impostos
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    from tronco.marcacoes import StoreMarcacoes
+    from tronco.contratos import Contrato
+    from tronco.ingestao import ingerir
+    reg = ingerir(EXEMPLOS / "nfse_com_material.xml").registro
+    contrato = Contrato(prest_documento=reg.prest_cnpj, ret_federal_sujeito=True,
+                        ret_federal_ir_pct="4.8", ret_federal_codigo_receita="6190",
+                        material_previsao="nao")     # sem gating de material
+    itens = [{"reg": reg, "tipo": "NFSE", "valor": reg.valor_servicos,
+              "ja_exportada": False}]
+    vs = StoreValidacaoRetencao(tmp_path / "v.sqlite")
+    ms = StoreMarcacoes(tmp_path / "m.sqlite")
+
+    grupos, total, prov = _grupos_impostos(itens, contrato, vs, ms)
+    fed = next(g for g in grupos if g["label"] == "Tributos federais")
+    assert {r["tributo"] for r in fed["rows"]} == {"IR", "CSLL", "COFINS", "PIS"}
+    ir = next(r for r in fed["rows"] if r["tributo"] == "IR")
+    assert ir["destaque"] == reg.ir_destaque_emitente     # I-2: destaque fiel exibido
+    assert ir["esperado"] is not None and ir["validacao"] is None   # I-3: sugestão sem gravar
+    assert total == "0.00" and prov is True               # nada validado → provisório
+
+    vs.validar(reg.chave, "IR", "confirmado", reg.ir_destaque_emitente, "op")
+    grupos, total, prov = _grupos_impostos(itens, contrato, vs, ms)
+    assert total == reg.ir_destaque_emitente              # validado entra no total retido
+    fed = next(g for g in grupos if g["label"] == "Tributos federais")
+    assert next(r for r in fed["rows"] if r["tributo"] == "IR")["validacao"]["acao"] == "confirmado"
+    vs.fechar(); ms.fechar()

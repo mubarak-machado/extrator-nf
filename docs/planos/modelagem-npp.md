@@ -419,10 +419,10 @@ Construção de dentro para fora (dados → lógica → UI), cada passo com test
 - [x] **Passo 4 — `tronco/npp.py`** (`NPP` + `StoreNPP`, geração do `numero`). *commit `eb53349`*
 - [x] **Passo 5 — `tronco/notas.py`** (coluna `npp_id` + `listar_por_npp` + `ConflitoDeChave`). *commit `47abaca`*
 - [x] **Passo 6 — `tronco/validacao_retencao.py`** (confirmar/retificar, I-3/I-4). *commit `71d7449`*
-- [ ] **Passo 7 — `tronco/app.py` + `templates/`** — fatiado (ver abaixo). **7a feito**; faltam 7b, 7c.
+- [ ] **Passo 7 — `tronco/app.py` + `templates/`** — fatiado (ver abaixo). **7a e 7b feitos**; falta 7c.
 - [ ] **Passo 8 — `tronco/redefinicao.py`** — incluir `npps.sqlite` + `validacoes_retencao.sqlite` no reset; **preservar** `operador.sqlite`.
 
-55 testes verdes até o passo 6; **57 após o 7a**.
+55 testes verdes até o passo 6; 57 após o 7a; **60 após o 7b**.
 
 ### Divisão do passo 7 (UI) — fazer em sessão nova (janela de contexto)
 
@@ -442,13 +442,17 @@ Cada subetapa termina com `pytest` verde e o app de pé; o fluxo antigo
     `_persistir(resultados, npp_id)` trata `ConflitoDeChave` ("já consta na NPP nº X")
     e `_divergencias_cnpj` sinaliza CNPJ × prestador do contrato (I-6, não bloqueia).
   - *Verificado:* `uv run pytest` 57 verdes + smoke ponta-a-ponta das 11 etapas do fluxo.
-- **7b — Detalhe da NPP (duas seções) + validar/retificar:**
-  - `GET /npp/<id>`: cabeçalho derivado (tabela do §3) + Seção 1 (Documentos de origem)
-    + Seção 2 (Grupos de impostos), seções empilhadas.
-  - `_conferencia` despacha por tipo: NFS-e → `galho_nfse`, NF-e → `galho_nfe` (contrato da NPP).
+- [x] **7b — Detalhe da NPP (duas seções) + validar/retificar:** **FEITO** (60 testes).
+  - `GET /npp/<id>`: cabeçalho derivado (com Total retido + Líquido) + Seção 1 (Documentos
+    de origem) + Seção 2 (Grupos de impostos: 3 categorias, linha por nota×tributo, com as
+    três camadas destaque/sugestão/validação), seções empilhadas.
+  - `_conferir_por_tipo` despacha: NFS-e → `galho_nfse`, NF-e → `galho_nfe`; contrato da NPP,
+    sem heurística de CNPJ. `_grupos_impostos` agrega e soma só os validados.
   - Validar/retificar: `POST /npp/<id>/validar/<chave>/<tributo>` → `StoreValidacaoRetencao`;
-    toggle confirmar / campo retificar — **nunca** pré-preencher com o `esperado` (linha vermelha).
-  - Total retido / líquido derivados das validações.
+    *confirmar* recomputa o destaque no servidor; *retificar* usa o valor digitado — o campo
+    **nasce vazio**, nunca pré-preenchido com o `esperado` (linha vermelha I-3, verificada em teste).
+  - Total retido = Σ validados; líquido = bruto − retido, marcado **provisório** enquanto
+    houver tributo aplicável não validado (I-6). Parcial `templates/_validar_controles.html`.
 - **7c — Exportação por NPP + remoção do fluxo antigo:**
   - `POST /npp/<id>/exportar` (reusa `_exportar` + `RegistroDeExportacao`); NPP mista
     exporta cada tipo com suas colunas.

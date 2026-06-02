@@ -68,7 +68,7 @@
 
     <nav class="nav" aria-label="Módulos">
       <a href="{{ url_for('hub') }}"{{ ' class=on' if request.endpoint == 'hub' }}>Início</a>
-      <a href="{{ url_for('npps') }}"{{ ' class=on' if request.endpoint in ['npps', 'npp_nova', 'npp_criar', 'npp_detalhe', 'npp_editar', 'npp_salvar'] }}>NPPs</a>
+      <a href="{{ url_for('npps') }}"{{ ' class=on' if request.endpoint in ['npps', 'npp_nova', 'npp_criar', 'npp_detalhe', 'npp_editar', 'npp_salvar', 'npp_validar'] }}>NPPs</a>
       <details class="dropdown nav-dropdown">
         <summary class="nav-parent{{ ' on' if request.endpoint in ['individuais', 'consolidados', 'consolidado'] }}">Notas Fiscais <svg class="icon chev"><use href="#i-chevron"/></svg></summary>
         <div class="dropdown-panel" role="menu" aria-label="Notas Fiscais">

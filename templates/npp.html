@@ -24,6 +24,8 @@
     {% if contrato %}<dt>Credor (prestador)</dt><dd>{{ contrato.prest_identificacao }} · <span class="mono">{{ contrato.prest_documento | cnpj }}</span></dd>{% endif %}
     <dt>Competência</dt><dd>{{ npp.competencia | competencia }}</dd>
     <dt>Total dos documentos (bruto)</dt><dd class="num">{{ total_bruto | moeda }}</dd>
+    <dt>Total retido (validado pelo operador)</dt><dd class="num">{{ total_retido | moeda }}{% if liquido_provisorio %} <span class="sub">parcial — há tributo a validar</span>{% endif %}</dd>
+    <dt>Valor líquido</dt><dd class="num">{{ liquido | moeda }}{% if liquido_provisorio %} <span class="chip">provisório</span>{% endif %}</dd>
     {% if npp.observacoes %}<dt>Observações</dt><dd>{{ npp.observacoes }}</dd>{% endif %}
     <dt>Responsável</dt><dd>{{ npp.criada_por }} · criada em {{ npp.criada_em | datahora }}</dd>
   </dl>
@@ -66,8 +68,79 @@
     </table>
   </div>
   {% endif %}
-  <p class="note">A conferência das retenções (“Grupos de impostos”: destaque do emitente, sugestão e validação do operador) entra na próxima etapa.</p>
 </section>
+
+{% if itens %}
+<section class="section" aria-label="Grupos de impostos">
+  <h3>Grupos de impostos</h3>
+  <div class="declarado mb-5">
+    <p class="note">
+      Três camadas, lado a lado: <span class="chip">destaque do emitente</span> (transcrição fiel da nota, Fase 1 — nunca alterada),
+      <span class="chip">sugestão</span> da regra do contrato (Fase 2, <strong>só para você comparar</strong> — o sistema não a adota)
+      e a sua <strong>validação</strong> (confirmar o destaque ou retificar o valor). Só o valor que você valida entra no Total retido e no Líquido.
+    </p>
+  </div>
+
+  {% for grupo in grupos %}
+  <h4 style="margin:var(--sp-4) 0 var(--sp-2)">{{ grupo.label }}</h4>
+  {% if not grupo.rows %}
+  <p class="muted">Nenhum tributo desta categoria se aplica às notas desta NPP.</p>
+  {% else %}
+  <div class="table-wrap dense">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Nota</th>
+          <th scope="col">Tributo</th>
+          <th scope="col" class="num">Destacado pelo emitente</th>
+          <th scope="col" class="num">Sugerido pela regra</th>
+          <th scope="col">Validar / retificar (operador)</th>
+          <th scope="col">Situação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in grupo.rows %}
+        <tr>
+          <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if r.tipo == 'NFE' else 'NFS-e' }}</span></td>
+          <td>{{ r.tributo }}<span class="sub">{{ r.regra }}</span></td>
+          <td class="num{{ ' zero' if r.destaque is ezero else '' }}">{{ r.destaque | moeda if r.destaque is not none else '—' }}</td>
+          <td class="num">{% if r.esperado is not none %}<span class="chip">sugestão</span> {{ r.esperado | moeda }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>
+            {% if r.validacao %}
+            <strong>{{ r.validacao.valor | moeda }}</strong> <span class="sub">{{ r.validacao.acao }} · {{ r.validacao.autor }} · {{ r.validacao.validado_em | datahora }}</span>
+            <details class="revalidar">
+              <summary>Revalidar</summary>
+              {% include "_validar_controles.html" %}
+            </details>
+            {% else %}
+            {% include "_validar_controles.html" %}
+            {% endif %}
+          </td>
+          <td class="nowrap">
+            {% if r.validacao %}<span class="ok-chip">validado</span>
+            {% elif r.pendente %}<span class="warn">a validar</span>
+            {% else %}<span class="muted">não incide</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4">Total validado nesta categoria</td>
+          <td class="num">{{ grupo.total_validado | moeda }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <p class="note-foot">
+    O destaque do emitente é a transcrição fiel da nota e nunca é sobrescrito (I-2). A coluna “sugerido pela regra” é apenas referência para conferência humana — o sistema não decide retenção (I-3). O valor que você valida é gravado com seu nome e a data (I-4); enquanto houver tributo aplicável não validado, o líquido fica marcado como provisório (I-6).
+  </p>
+</section>
+{% endif %}
 
 <section class="section" aria-label="Importar notas para esta NPP">
   <h3>Importar notas para esta NPP</h3>
