@@ -49,6 +49,36 @@ a decisão humana** (persistida com autor+data, I-4, no padrão de `tronco/marca
 Detalhe em `docs/planos/modelagem-npp.md` (§5–§6). Memórias: `fase2-validacao-humana`,
 `fronteira-fase1-fase2`.
 
+## Revisão de UX — 2026-06-02 (fases de melhoria da interface)
+
+Revisão completa do front-end (design/estrutura/UX/jornada), ancorada em boas práticas
+(gov.br Design System / e-PWG; padrões de fluxo financeiro humano-no-circuito). Veredito:
+base já madura (WCAG AA, dark/auto, escala de fonte, invariantes expressos em tokens) —
+**refino, não reescrita**. Identidade visual: **manter o DS próprio** (decisão do humano).
+Roadmap em 4 fases:
+
+- **Fase 0 — Higiene: FEITA** (commit `d7c2d5a`). Corrige `--radius-md` inexistente;
+  define `.ok-chip`/`.revalidar` (eram usados sem estilo na validação da NPP); remove JS/CSS
+  morto do fluxo antigo (triagem `#tabela-notas`, `.nav-dropdown`, `.flash`); troca estilos
+  inline que corroíam o DS por classes (`.flag.warn`, `.ml-auto`, `.group-label`,
+  `.figure.nome`, `.mt-4`); renomeia `.consol-card`→`.list-row`.
+- **Fase 1 — Jornada de validação: FEITA** (commit `f2c68fb`). Rota
+  `POST /npp/<id>/confirmar-destaques` (ateste do destaque do emitente em lote; seleção
+  **mecânica**, nunca por conformidade com a sugestão — linha vermelha I-3; valor recomputado
+  no servidor I-2; autor+data I-4; divergências/sem-destaque reportados I-6). Barra de
+  progresso "validados X de Y" na NPP. Coluna Material + aviso de material não conferido.
+  Teste de ponta a ponta da rota de lote. **65 testes verdes.**
+- **Fase 2 — Validação inline: PENDENTE (próximo).** Gravar confirmar/retificar sem recarregar
+  a página (fetch), atualizando só a linha e o "Total retido"/progresso. **Progressive
+  enhancement**: sem JS, continua o POST atual. **Guardas:** o servidor segue recomputando o
+  destaque (I-2) e gravando com autor (I-4); o campo de retificar **nunca** nasce preenchido
+  com a sugestão (I-3); erros visíveis (I-6). Pontos de partida: `templates/_validar_controles.html`,
+  rota `npp_validar` em `tronco/app.py`, e o `app.js` (novo IIFE de envio assíncrono).
+- **Fase 3 — Painel + IA: PENDENTE.** Hub vira dashboard (líquido pendente, tributos a validar
+  somando NPPs, NPPs prontas p/ exportar); grupo "Configuração" na nav (abriga Contratos,
+  Regras e o futuro Backup/Sync); filtro/busca na lista de NPPs (reaproveitar o padrão de
+  triagem acessível que foi removido — `aria-selected`/`aria-sort`).
+
 ## Decisões em aberto (resolver com o humano, não sozinho)
 
 1. **Layout da NFS-e:** só padrão nacional, ou chegam municípios em layout antigo
