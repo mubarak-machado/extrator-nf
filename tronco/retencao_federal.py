@@ -18,7 +18,7 @@ comparação/formatação compartilhados pelos dois galhos (INSS/ISS, no galho N
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
 from tronco import formato
@@ -38,6 +38,19 @@ class Achado:
     esperado: str | None               # valor sugerido pela regra — SUGESTÃO, não decisão
     situacao: str                      # "confere" | "diverge" | "indefinido"
     nota: str = ""                     # observação curta (ex.: "marque o material")
+
+
+@dataclass
+class ResultadoConferencia:
+    """Resultado por contrato — comum aos dois galhos (mesmo formato de tela)."""
+    contrato_rotulo: str               # ex. "02/2026"
+    achados: list[Achado] = field(default_factory=list)
+
+
+def rotulo_contrato(c) -> str:
+    """Rótulo curto do contrato (entidade do tronco) — usado pelos dois galhos e pela UI."""
+    num_ = c.numero or "—"
+    return f"{num_}/{c.ano}" if c.ano else num_
 
 
 def achados_federais(*, base, ir_pct, ir_codigo, ir_destaque,

@@ -493,6 +493,65 @@ def test_retencao_federal_comum_contrib_inativa_e_ir_sem_material_gating():
     assert por["COFINS"].situacao == "diverge"    # não incide mas destacou 30
 
 
+# ---------- Conferência da NF-e (galho NF-e, Fase 2) — federal, gatilho Simples ----------
+
+def _reg_nfe(**kw):
+    """RegistroNFe mínimo para conferência (demais campos default None)."""
+    from galho_nfe.modelo import RegistroNFe
+    base = dict(chave="NFE1", emit_cnpj="11222333000181", valor_total="1000.00",
+                emit_optante_simples=False)
+    base.update(kw)
+    return RegistroNFe(**base)
+
+
+def test_nfe_nao_optante_retem_federal_e_nao_inss_iss():
+    """NF-e de fornecedor NÃO optante: bloco federal aplica (sugestão); INSS/ISS não
+    entram (não se aplicam à venda mercantil)."""
+    from galho_nfe import retencao
+    reg = _reg_nfe(emit_optante_simples=False)
+    contrato = _contrato(ret_federal_sujeito=True, ret_federal_ir_pct="1.2",
+                         ret_federal_codigo_receita="6147")
+    res = retencao.conferir_retencao(reg, contrato)
+    assert {a.tributo for a in res.achados} == {"IR", "CSLL", "COFINS", "PIS"}  # só federal
+    ir = [a for a in res.achados if a.tributo == "IR"][0]
+    assert ir.esperado == "12.00"                       # 1,2% de 1000
+    # NF-e não destaca a retenção -> destaque ausente, diverge do esperado (operador valida)
+    assert ir.destaque_emitente is None and ir.situacao == "diverge"
+
+
+def test_nfe_optante_simples_dispensa_retencao():
+    """NF-e de fornecedor optante do Simples: retenção federal dispensada (LC 123/2006)."""
+    from galho_nfe import retencao
+    reg = _reg_nfe(emit_optante_simples=True)
+    res = retencao.conferir_retencao(reg, _contrato(ret_federal_sujeito=True, ret_federal_ir_pct="1.2"))
+    assert {a.tributo for a in res.achados} == {"IR", "CSLL", "COFINS", "PIS"}
+    assert all(a.esperado == "0.00" and a.situacao == "confere" for a in res.achados)
+
+
+def test_nfe_regime_indefinido_quando_optante_desconhecido():
+    """Sem indicador de optante (CRT ausente) -> indefinido visível, nunca chuta (I-6)."""
+    from galho_nfe import retencao
+    reg = _reg_nfe(emit_optante_simples=None)
+    res = retencao.conferir_retencao(reg, _contrato(ret_federal_sujeito=True, ret_federal_ir_pct="1.2"))
+    assert all(a.situacao == "indefinido" and a.esperado is None for a in res.achados)
+
+
+def test_federal_comum_paridade_nfe_nfse():
+    """O bloco federal é o MESMO para os dois galhos: mesmas entradas -> mesmos esperados.
+    Prova que a NF-e e a NFS-e compartilham tronco/retencao_federal.py sem divergir."""
+    from galho_nfe import retencao as ret_nfe
+    from galho_nfse import retencao as ret_nfse
+    contrato = _contrato(ret_federal_sujeito=True, ret_federal_ir_pct="4.8")
+    fed_nfe = {a.tributo: a.esperado
+               for a in ret_nfe.conferir_retencao(_reg_nfe(emit_optante_simples=False), contrato).achados}
+    nfse_achados = ret_nfse.conferir_retencao(_reg_nfse(), contrato).achados
+    fed_nfse = {a.tributo: a.esperado for a in nfse_achados if a.tributo in _FEDERAIS_TRIB}
+    assert fed_nfe == fed_nfse == {"IR": "48.00", "CSLL": "10.00", "COFINS": "30.00", "PIS": "6.50"}
+
+
+_FEDERAIS_TRIB = ("IR", "CSLL", "COFINS", "PIS")
+
+
 # ---------- Motor de enquadramento federal — Fase 2, derivação (I-3/I-6) ----------
 # O catálogo real é lançado pelo especialista (galho_nfse/catalogo_federal.py) e começa
 # vazio. Aqui testamos o MOTOR com um catálogo de fixture, e que o real começa vazio.

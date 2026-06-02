@@ -26,17 +26,14 @@ O vínculo nota↔contrato é a heurística por CNPJ (decisão #2 segue aberta):
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from decimal import Decimal
 
 from tronco import formato
-from tronco.retencao_federal import Achado, achados_federais, comparar, fmt, num, pct_txt
-
-
-@dataclass
-class ResultadoConferencia:
-    contrato_rotulo: str               # ex. "02/2026"
-    achados: list[Achado] = field(default_factory=list)
+# ResultadoConferencia e rotulo_contrato são re-exportados do tronco (comuns aos 2 galhos).
+from tronco.retencao_federal import (
+    Achado, ResultadoConferencia, achados_federais, comparar, fmt, num, pct_txt,
+    rotulo_contrato,
+)
 
 
 def casar_contratos(reg, contratos):
@@ -46,11 +43,6 @@ def casar_contratos(reg, contratos):
     if not doc:
         return []
     return [c for c in contratos if formato._digitos(c.prest_documento) == doc]
-
-
-def rotulo_contrato(c) -> str:
-    num_ = c.numero or "—"
-    return f"{num_}/{c.ano}" if c.ano else num_
 
 
 def conferir_retencao(reg, contrato, material_marcado=None) -> ResultadoConferencia:
