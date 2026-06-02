@@ -100,6 +100,22 @@ class StoreRegrasFederais:
         cur = self._conn.execute("SELECT COALESCE(MAX(ordem), 0) + 1 AS n FROM regras_federais")
         return cur.fetchone()["n"]
 
+    def proximo_codigo(self, prefixo: str = "TF") -> str:
+        """Próximo código sequencial do grupo, no formato ``<prefixo>-NNN`` (ex.: TF-001).
+        Controlado pelo sistema (o usuário não digita) — o número segue o maior já gravado
+        com aquele prefixo. Como só o usuário master cria regras e os demais recebem por
+        sincronização do arquivo, não há risco de códigos concorrentes (decisão do humano)."""
+        marca = f"{prefixo}-"
+        rows = self._conn.execute(
+            "SELECT codigo FROM regras_federais WHERE codigo LIKE ?", (marca + "%",)
+        ).fetchall()
+        maior = 0
+        for r in rows:
+            sufixo = (r["codigo"] or "").rsplit("-", 1)[-1]
+            if sufixo.isdigit():
+                maior = max(maior, int(sufixo))
+        return f"{marca}{maior + 1:03d}"
+
     def salvar(self, r: RegraEnquadramento) -> int:
         """Insere (id None) ou atualiza. Mantém criado_em; atualiza atualizado_em. A
         UNIQUE(codigo) impede código duplicado (estoura IntegrityError — tratado pela

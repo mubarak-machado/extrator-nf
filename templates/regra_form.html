@@ -7,20 +7,22 @@
 
 <div class="page-head">
   <h2>{{ 'Nova regra' if novo else 'Editar regra ' ~ r.codigo }}</h2>
-  <p>O sistema guarda a regra que você dita e a usa para <strong>sugerir</strong> o enquadramento — nunca decide a retenção sozinho (I-3). A agregada (IR + 4,65%) é calculada sozinha.</p>
+  <p>O sistema guarda a regra que você dita (I-3). O <strong>código é gerado automaticamente</strong> (sequencial por grupo). A agregada (IR + contribuições) é calculada sozinha.</p>
 </div>
 
 <form method="post" action="{{ url_for('regra_salvar', id_=r.id) if not novo else url_for('regra_salvar') }}" class="form-contrato">
 
   <fieldset class="card card-b">
     <legend>Identificação</legend>
+    {# Código controlado pelo sistema (TF-/INSS-/ISS-): mostrado, não digitado. Em edição
+       viaja num hidden para preservar o valor. #}
+    <input type="hidden" name="codigo" value="{{ r.codigo }}">
     <div class="grid-3">
-      <label class="field"><span class="lbl">Código (estável, ex.: TF-001)</span>
-        <input type="text" name="codigo" value="{{ r.codigo }}" required></label>
+      <div class="field"><span class="lbl">Código (automático)</span>
+        <p><span class="chip">{{ codigo_previsto }}</span></p>
+      </div>
       <label class="field"><span class="lbl">Ordem de avaliação (menor = primeiro)</span>
         <input type="text" name="ordem" inputmode="numeric" value="{{ r.ordem }}"></label>
-      <label class="field"><span class="lbl">Código de receita (DARF)</span>
-        <input type="text" name="codigo_receita" placeholder="ex.: 6190" value="{{ r.codigo_receita or '' }}"></label>
     </div>
     <label class="field"><span class="lbl">Descrição</span>
       <input type="text" name="descricao" value="{{ r.descricao }}" placeholder="ex.: PJ não optante — serviço sem material" required></label>
@@ -29,49 +31,50 @@
   </fieldset>
 
   <fieldset class="card card-b">
-    <legend>Quando se aplica <span class="lbl" style="font-weight:400">(condição — deixe um grupo vazio para “não restringir”)</span></legend>
-    <div class="field"><span class="lbl">Natureza do prestador</span>
+    <legend>Quando se aplica <span class="lbl" style="font-weight:400">(condição)</span></legend>
+    <div class="field"><span class="lbl">Tipo de prestador</span>
+      {% set nat_atual = (r.naturezas[0] if r.naturezas else '') %}
       <div class="radio-row">
         {% for chave, rotulo in vocab.naturezas.items() %}
-        <label class="opt"><input type="checkbox" name="naturezas" value="{{ chave }}" {{ 'checked' if chave in r.naturezas }}> {{ rotulo }}</label>
-        {% endfor %}
-      </div>
-    </div>
-    <div class="field"><span class="lbl">Categoria do serviço</span>
-      <div class="radio-row">
-        {% for chave, rotulo in vocab.categorias.items() %}
-        <label class="opt"><input type="checkbox" name="categorias" value="{{ chave }}" {{ 'checked' if chave in r.categorias }}> {{ rotulo }}</label>
-        {% endfor %}
-      </div>
-    </div>
-    <div class="field"><span class="lbl">Previsão de material</span>
-      <div class="radio-row">
-        {% for chave, rotulo in vocab.materiais.items() %}
-        <label class="opt"><input type="checkbox" name="materiais" value="{{ chave }}" {{ 'checked' if chave in r.materiais }}> {{ rotulo }}</label>
+        <label class="opt"><input type="radio" name="natureza" value="{{ chave }}" {{ 'checked' if nat_atual == chave }}> {{ rotulo }}</label>
         {% endfor %}
       </div>
     </div>
   </fieldset>
 
   <fieldset class="card card-b">
-    <legend>Efeito <span class="lbl" style="font-weight:400">(o enquadramento que a regra dita)</span></legend>
-    <label class="opt block"><input type="checkbox" name="sujeito" {{ 'checked' if r.sujeito }}> Os tributos federais <strong>incidem</strong> (retidos juntos)</label>
+    <legend>Incidência <span class="lbl" style="font-weight:400">(o enquadramento que a regra dita)</span></legend>
+    <label class="opt block"><input type="checkbox" name="sujeito" id="reg-sujeito" {{ 'checked' if r.sujeito }}> Os tributos federais <strong>incidem</strong> (retidos juntos)</label>
     <div class="sub-field" data-mostra-se="sujeito">
-      <label class="field"><span class="lbl">Percentual de IR</span>
-        <select name="ir_pct">
-          <option value="">—</option>
-          {% for chave, rotulo in vocab.ir_percentuais.items() %}<option value="{{ chave }}" {{ 'selected' if r.ir_pct == chave }}>{{ rotulo }}</option>{% endfor %}
+
+      <label class="field"><span class="lbl">Alíquota agregada (IN 1234/2012) — preenche os tributos abaixo</span>
+        <select name="codigo_receita" id="reg-codigo">
+          <option value="">— informar por tributo —</option>
+          {% for c in vocab.codigos_in %}
+          <option value="{{ c.codigo }}" {{ 'selected' if r.codigo_receita == c.codigo }}>
+            {{ c.codigo }} · {{ c.total }}% (IR {{ c.ir }} · CSLL {{ c.csll }} · COFINS {{ c.cofins }} · PIS {{ c.pis }})
+          </option>
+          {% endfor %}
         </select>
       </label>
-      <div class="field"><span class="lbl">Contribuições que incidem (compõem os 4,65%)</span>
+
+      <div class="grid-2">
+        <label class="field"><span class="lbl">IR (%) — escolha da lista ou digite</span>
+          <input type="text" name="ir_pct" id="reg-ir" list="ir-opcoes" inputmode="decimal" value="{{ r.ir_pct or '' }}">
+          <datalist id="ir-opcoes">
+            {% for v in vocab.ir_valores %}<option value="{{ v }}"></option>{% endfor %}
+          </datalist>
+        </label>
+      </div>
+      <div class="field"><span class="lbl">Contribuições que incidem (alíquotas fixas em lei)</span>
         <div class="radio-row">
-          <label class="opt"><input type="checkbox" name="csll" {{ 'checked' if r.csll }}> CSLL 1%</label>
-          <label class="opt"><input type="checkbox" name="cofins" {{ 'checked' if r.cofins }}> COFINS 3%</label>
-          <label class="opt"><input type="checkbox" name="pis" {{ 'checked' if r.pis }}> PIS 0,65%</label>
+          <label class="opt"><input type="checkbox" name="csll" id="reg-csll" {{ 'checked' if r.csll }}> CSLL 1%</label>
+          <label class="opt"><input type="checkbox" name="cofins" id="reg-cofins" {{ 'checked' if r.cofins }}> COFINS 3%</label>
+          <label class="opt"><input type="checkbox" name="pis" id="reg-pis" {{ 'checked' if r.pis }}> PIS 0,65%</label>
         </div>
       </div>
     </div>
-    <p class="note-foot">Sem marcar “incidem”, a regra significa <strong>dispensa</strong> de retenção federal (ex.: optante do Simples, MEI, pessoa física).</p>
+    <p class="note-foot">Sem marcar “incidem”, a regra significa <strong>dispensa</strong> de retenção federal (ex.: optante do Simples, MEI, pessoa física). Ao escolher uma alíquota agregada, os campos são preenchidos pela tabela da IN 1234/2012 — você ainda pode ajustar.</p>
   </fieldset>
 
   <div class="actions">
@@ -84,4 +87,26 @@
     {% endif %}
   </div>
 </form>
+
+{# Autopreenchimento pela tabela da IN 1234/2012: escolher um código agregado preenche
+   IR e marca as contribuições devidas. É conveniência de configuração — o humano ratifica. #}
+<script>
+(function () {
+  var TAB = {{ vocab.codigos_in | tojson }};
+  var porCodigo = {}; TAB.forEach(function (c) { porCodigo[c.codigo] = c; });
+  var sel = document.getElementById("reg-codigo");
+  if (!sel) return;
+  function pos(v) { return parseFloat(v || "0") > 0; }
+  sel.addEventListener("change", function () {
+    var c = porCodigo[sel.value];
+    if (!c) return;
+    document.getElementById("reg-ir").value = c.ir;
+    document.getElementById("reg-csll").checked = pos(c.csll);
+    document.getElementById("reg-cofins").checked = pos(c.cofins);
+    document.getElementById("reg-pis").checked = pos(c.pis);
+    var suj = document.getElementById("reg-sujeito");
+    if (!suj.checked) { suj.checked = true; suj.dispatchEvent(new Event("change", {bubbles: true})); }
+  });
+})();
+</script>
 {% endblock %}

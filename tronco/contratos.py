@@ -32,10 +32,10 @@ CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "contratos.sqlite"
 
 # Vocabulários (apresentação na tela). Apenas rótulos — não decidem nada.
 NATUREZAS = {
+    "nao_optante": "PJ não optante do Simples Nacional",
+    "simples": "PJ optante do Simples Nacional",
+    "mei": "Microempreendedor Individual (MEI)",
     "pessoa_fisica": "Pessoa física",
-    "mei": "MEI",
-    "simples": "Simples Nacional",
-    "nao_optante": "PJ não optante",
 }
 CATEGORIAS = {
     "geral": "Serviços em geral",

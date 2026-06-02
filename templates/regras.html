@@ -33,7 +33,7 @@
         <td class="num">{{ r.ordem }}</td>
         <td><span class="chip">{{ r.codigo }}</span></td>
         <td class="small">{{ r.descricao }}
-          <br><span class="muted">{% if r.naturezas %}natureza: {{ r.naturezas|map('replace','_',' ')|join(', ') }}{% else %}qualquer natureza{% endif %}{% if r.categorias %} · categoria: {{ r.categorias|join(', ') }}{% endif %}{% if r.materiais %} · material: {{ r.materiais|join(', ') }}{% endif %}</span>
+          <br><span class="muted">{% if r.naturezas %}prestador: {{ r.naturezas|map('replace','_',' ')|join(', ') }}{% else %}qualquer prestador{% endif %}{% if r.codigo_receita %} · código {{ r.codigo_receita }}{% endif %}</span>
           {% if r.fundamento %}<br><span class="muted">{{ r.fundamento }}</span>{% endif %}</td>
         <td class="num">{{ r.ir_txt() }}</td>
         <td class="small">{% if r.sujeito %}{{ 'CSLL' if r.csll }}{{ ' · COFINS' if r.cofins }}{{ ' · PIS' if r.pis }}{% else %}<span class="muted">dispensado</span>{% endif %}</td>

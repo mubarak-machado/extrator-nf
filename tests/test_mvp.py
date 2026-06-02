@@ -1064,3 +1064,42 @@ def test_redefinir_inclui_npp_e_validacoes_preserva_operador(tmp_path):
     assert StoreNPP(bd_npp).listar() == []                          # recriado vazio
     assert StoreValidacaoRetencao(bd_val).atuais("CH") == {}
     assert bd_op.exists() and StoreOperador(bd_op).atual().iniciais == "MNM"  # preservado
+
+
+# ---------- Catálogo de regras: código sequencial automático (TF-/INSS-/ISS-) ----------
+
+def test_proximo_codigo_sequencial_por_prefixo(tmp_path):
+    """O código é controlado pelo sistema: sequencial por prefixo de grupo, zero-padded;
+    segue o maior já gravado (resistente a remoções no meio)."""
+    from galho_nfse.catalogo_federal import StoreRegrasFederais
+    from galho_nfse.enquadramento import RegraEnquadramento
+    s = StoreRegrasFederais(tmp_path / "r.sqlite")
+    assert s.proximo_codigo("TF") == "TF-001"
+    s.salvar(RegraEnquadramento(codigo="TF-001", descricao="a", fundamento=""))
+    s.salvar(RegraEnquadramento(codigo="TF-002", descricao="b", fundamento=""))
+    assert s.proximo_codigo("TF") == "TF-003"
+    assert s.proximo_codigo("INSS") == "INSS-001"   # grupo independente
+    s.fechar()
+
+
+def test_regra_rota_gera_codigo_e_natureza_unica(tmp_path, monkeypatch):
+    """A rota cria a regra com código sequencial (usuário não digita) e natureza única."""
+    import tronco.app as A
+    from tronco.operador import StoreOperador
+    from galho_nfse.catalogo_federal import StoreRegrasFederais
+    monkeypatch.setattr(A, "StoreOperador", lambda *a, **k: StoreOperador(tmp_path / "op.sqlite"))
+    monkeypatch.setattr(A, "StoreRegrasFederais", lambda *a, **k: StoreRegrasFederais(tmp_path / "r.sqlite"))
+    A.app.config.update(TESTING=True)
+    cli = A.app.test_client()
+    cli.post("/operador", data={"iniciais": "op", "nome": "Op"})
+    cli.post("/regras", data={"descricao": "PJ não optante — serviço",
+                              "natureza": "nao_optante", "sujeito": "on",
+                              "ir_pct": "4.8", "csll": "on", "cofins": "on", "pis": "on",
+                              "codigo_receita": "6190", "ordem": "1"})
+    regras = StoreRegrasFederais(tmp_path / "r.sqlite").listar()
+    assert len(regras) == 1
+    r = regras[0]
+    assert r.codigo == "TF-001"                 # gerado pelo sistema
+    assert r.naturezas == ("nao_optante",)      # seleção única
+    assert r.categorias == ()                   # categoria removida
+    assert r.ir_pct == "4.8" and r.codigo_receita == "6190"

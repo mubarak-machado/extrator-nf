@@ -34,7 +34,7 @@ from tronco.contratos import (StoreContratos, Contrato,
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
 from tronco import formato, redefinicao
 from galho_nfse.material import sugerir_material
-from galho_nfse import retencao, enquadramento
+from galho_nfse import retencao, enquadramento, tabela_in1234
 from galho_nfse.enquadramento import RegraEnquadramento
 from galho_nfse.catalogo_federal import StoreRegrasFederais
 
@@ -409,7 +409,10 @@ def redefinir_executar():
 _VOCAB_CONTRATO = {"naturezas": NATUREZAS, "categorias": CATEGORIAS,
                    "materiais": MATERIAL_PREVISAO, "bases": BASES_MINIMAS,
                    "ir_percentuais": IR_PERCENTUAIS, "inss_adicional": INSS_ADICIONAL,
-                   "iss_local": ISS_LOCAL, "anexos": ["I", "II", "III", "IV", "V"]}
+                   "iss_local": ISS_LOCAL, "anexos": ["I", "II", "III", "IV", "V"],
+                   # IN 1234/2012: valores de IR p/ a lista e os códigos agregados (autopreenchimento)
+                   "ir_valores": tabela_in1234.IR_VALORES,
+                   "codigos_in": tabela_in1234.opcoes_agregadas()}
 
 
 def _contrato_do_form(form, id_=None) -> Contrato:
@@ -511,8 +514,10 @@ def contratos():
 
 
 def _regra_do_form(form, id_=None) -> RegraEnquadramento:
-    """Monta uma RegraEnquadramento a partir do formulário. Condições são multi-seleção
-    (getlist); checkbox ausente = False. O sistema só guarda o que o especialista dita."""
+    """Monta uma RegraEnquadramento a partir do formulário. A natureza do prestador é
+    seleção ÚNICA (radio); categoria saiu (não é mais condição). O `codigo` é controlado
+    pelo sistema (sequencial) — não vem do form em regra nova. Só guarda o que o
+    especialista dita (I-3)."""
     def s(campo):
         v = (form.get(campo) or "").strip()
         return v or None
@@ -520,13 +525,14 @@ def _regra_do_form(form, id_=None) -> RegraEnquadramento:
         ordem = int(form.get("ordem") or 0)
     except ValueError:
         ordem = 0
+    natureza = (form.get("natureza") or "").strip()
     return RegraEnquadramento(
         id=id_,
-        codigo=(form.get("codigo") or "").strip(),
+        codigo=(form.get("codigo") or "").strip(),   # preservado em edição; em nova é gerado na rota
         descricao=(form.get("descricao") or "").strip(),
         fundamento=(form.get("fundamento") or "").strip(),
-        naturezas=tuple(form.getlist("naturezas")),
-        categorias=tuple(form.getlist("categorias")),
+        naturezas=(natureza,) if natureza else (),
+        categorias=(),                                # categoria removida das condições
         materiais=tuple(form.getlist("materiais")),
         sujeito=form.get("sujeito") == "on",
         ir_pct=s("ir_pct"),
@@ -548,9 +554,13 @@ def regras():
 
 @app.route("/regras/nova")
 def regra_nova():
-    store = StoreRegrasFederais(); ordem = store.proxima_ordem(); store.fechar()
+    store = StoreRegrasFederais()
+    ordem = store.proxima_ordem()
+    codigo_previsto = store.proximo_codigo("TF")   # federal; INSS-/ISS- quando houver grupos
+    store.fechar()
     nova = RegraEnquadramento(codigo="", descricao="", fundamento="", ordem=ordem)
-    return render_template("regra_form.html", regra=nova, vocab=_VOCAB_CONTRATO, novo=True)
+    return render_template("regra_form.html", regra=nova, vocab=_VOCAB_CONTRATO, novo=True,
+                           codigo_previsto=codigo_previsto)
 
 
 @app.route("/regras/<int:id_>/editar")
@@ -559,28 +569,35 @@ def regra_editar(id_):
     if not r:
         flash("Regra não encontrada.", "erro")
         return redirect(url_for("regras"))
-    return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=False)
+    return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=False,
+                           codigo_previsto=r.codigo)
 
 
 @app.route("/regras", methods=["POST"])
 @app.route("/regras/<int:id_>", methods=["POST"])
 def regra_salvar(id_=None):
     r = _regra_do_form(request.form, id_)
-    if not r.codigo or not r.descricao:
-        flash("Informe ao menos o código e a descrição da regra. Nada foi salvo.", "erro")
-        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+    store = StoreRegrasFederais()
+    if id_ is None:
+        r.codigo = store.proximo_codigo("TF")      # código sequencial, controlado pelo sistema
+    if not r.descricao:
+        store.fechar()
+        flash("Informe ao menos a descrição da regra. Nada foi salvo.", "erro")
+        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO,
+                               novo=(id_ is None), codigo_previsto=r.codigo)
     if r.sujeito and not r.ir_pct:
+        store.fechar()
         flash("Como os tributos federais incidem nesta regra, defina o percentual de IR. "
               "Nada foi salvo.", "erro")
-        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=(id_ is None))
-    store = StoreRegrasFederais()
+        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO,
+                               novo=(id_ is None), codigo_previsto=r.codigo)
     try:
         store.salvar(r)
     except Exception as exc:
         store.fechar()
-        flash(f"Não foi possível salvar: já existe regra com o código “{r.codigo}”? "
-              f"({type(exc).__name__}).", "erro")
-        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+        flash(f"Não foi possível salvar a regra ({type(exc).__name__}).", "erro")
+        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO,
+                               novo=(id_ is None), codigo_previsto=r.codigo)
     store.fechar()
     flash(f"Regra {r.codigo} salva.", "ok")
     return redirect(url_for("regras"))
