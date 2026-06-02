@@ -6,8 +6,13 @@ __pycache__/
 
 # estado de runtime (não versionar)
 *.sqlite
+secret.key
 exportacoes/
 backups/
+
+# artefatos de empacotamento (PyInstaller)
+build/
+dist/
 
 # SO
 .DS_Store

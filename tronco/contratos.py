@@ -28,7 +28,8 @@ from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 from pathlib import Path
 
-CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "contratos.sqlite"
+from tronco.config import caminho_dado
+CAMINHO_PADRAO = caminho_dado("contratos.sqlite")
 
 # Vocabulários (apresentação na tela). Apenas rótulos — não decidem nada.
 NATUREZAS = {

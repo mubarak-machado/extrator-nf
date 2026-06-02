@@ -15,7 +15,8 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "marcacoes.sqlite"
+from tronco.config import caminho_dado
+CAMINHO_PADRAO = caminho_dado("marcacoes.sqlite")
 
 
 class StoreMarcacoes:

@@ -25,7 +25,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "notas.sqlite"
+from tronco.config import caminho_dado
+CAMINHO_PADRAO = caminho_dado("notas.sqlite")
 
 
 def reconstruir(tipo: str, dados: dict) -> Any:

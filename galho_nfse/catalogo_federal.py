@@ -24,7 +24,8 @@ from pathlib import Path
 
 from galho_nfse.enquadramento import RegraEnquadramento
 
-CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "catalogo_federal.sqlite"
+from tronco.config import caminho_dado
+CAMINHO_PADRAO = caminho_dado("catalogo_federal.sqlite")
 
 # Colunas de lista (CSV) e booleanas — para serializar/desserializar.
 _LISTAS = ("naturezas", "categorias", "materiais")

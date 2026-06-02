@@ -1,0 +1,45 @@
+name: Build Windows (.exe)
+
+# Gera o executável de duplo-clique para Windows. Roda em runner Windows porque o
+# PyInstaller NÃO faz cross-compile (não sai .exe de um Mac/Linux). Dispara ao
+# empurrar uma tag v* (anexa o .exe ao release) e também sob demanda.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # necessário para anexar o .exe ao release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v5
+
+      # Python 3.12: estável e suportado pelo PyInstaller (o 3.14 ainda é recente
+      # demais para empacotar com segurança). O projeto exige >=3.10, então serve.
+      - name: Instalar Python 3.12
+        run: uv python install 3.12
+
+      - name: Sincronizar dependências + empacotamento
+        run: uv sync --python 3.12 --group empacotamento
+
+      - name: Gerar o executável (onefile)
+        run: uv run --python 3.12 pyinstaller extrator-nf.spec
+
+      - name: Publicar como artefato do workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExtratorNF-windows
+          path: dist/ExtratorNF.exe
+          if-no-files-found: error
+
+      - name: Anexar ao release (somente em tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ExtratorNF.exe

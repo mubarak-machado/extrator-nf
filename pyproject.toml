@@ -14,6 +14,13 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+# Empacotamento do executável de distribuição (fora do uso normal em dev).
+# `pyinstaller` gera o .exe; `waitress` é o servidor WSGI que o run_app.py usa no
+# app empacotado. Instale com `uv sync --group empacotamento`.
+empacotamento = [
+    "pyinstaller>=6.10",
+    "waitress>=3.0",
+]
 
 [tool.uv]
 # Aplicação, não biblioteca: o uv não tenta "instalar" o próprio código como

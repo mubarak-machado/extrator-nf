@@ -19,7 +19,8 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "registro_exportacao.sqlite"
+from tronco.config import caminho_dado
+CAMINHO_PADRAO = caminho_dado("registro_exportacao.sqlite")
 
 
 class RegistroDeExportacao:

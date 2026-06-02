@@ -28,21 +28,24 @@ from tronco.contratos import (StoreContratos, Contrato,
                               NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS,
                               IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL)
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
-from tronco import formato, redefinicao
+from tronco import formato, redefinicao, config
 from galho_nfse.modelo import RegistroNFSe
 from galho_nfse.material import sugerir_material
 from galho_nfse import retencao, enquadramento
 from galho_nfse.enquadramento import RegraEnquadramento
 from galho_nfse.catalogo_federal import StoreRegrasFederais
 
-RAIZ = Path(__file__).resolve().parent.parent
-PASTA_EXEMPLOS = RAIZ / "exemplos"
-PASTA_SAIDA = RAIZ / "exportacoes"
+# Recursos (templates/static/exemplos) são só-leitura e vivem junto do código; as
+# exportações precisam de lugar gravável e persistente. Empacotado (PyInstaller),
+# esses lugares divergem — ver tronco/config.py.
+RECURSOS = config.raiz_recursos()
+PASTA_EXEMPLOS = RECURSOS / "exemplos"
+PASTA_SAIDA = config.diretorio_dados() / "exportacoes"
 
 app = Flask(__name__,
-            template_folder=str(RAIZ / "templates"),
-            static_folder=str(RAIZ / "static"))
-app.secret_key = "mvp-poc-extrator-nf"
+            template_folder=str(RECURSOS / "templates"),
+            static_folder=str(RECURSOS / "static"))
+app.secret_key = config.chave_secreta()
 
 for nome in ("moeda", "numero", "data", "datahora", "competencia",
              "cnpj", "percent", "chave", "simnao"):
@@ -815,4 +818,7 @@ def contrato_remover(id_):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Debug desligado por padrão (o debugger do Werkzeug executa código); ligue só
+    # via EXTRATOR_NF_DEBUG=1 em desenvolvimento. Para o app distribuído, o ponto de
+    # entrada é run_app.py (abre o navegador e serve via waitress).
+    app.run(debug=config.debug_ativo(), host="127.0.0.1", port=5000)
