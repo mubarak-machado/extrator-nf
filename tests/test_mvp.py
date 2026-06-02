@@ -1103,3 +1103,39 @@ def test_regra_rota_gera_codigo_e_natureza_unica(tmp_path, monkeypatch):
     assert r.naturezas == ("nao_optante",)      # seleção única
     assert r.categorias == ()                   # categoria removida
     assert r.ir_pct == "4.8" and r.codigo_receita == "6190"
+
+
+# ---------- Contrato: enquadramento federal por SELEÇÃO de regra (sem sugestão) ----------
+
+def test_contrato_seleciona_regra_do_catalogo(tmp_path, monkeypatch):
+    """O contrato copia o efeito da regra ESCOLHIDA no catálogo (origem 'derivado'); sem
+    regra e sem ajuste manual é barrado (I-6). Sem heurística/sugestão automática."""
+    import tronco.app as A
+    from tronco.operador import StoreOperador
+    from tronco.contratos import StoreContratos
+    from galho_nfse.catalogo_federal import StoreRegrasFederais
+    from galho_nfse.enquadramento import RegraEnquadramento
+    monkeypatch.setattr(A, "StoreOperador", lambda *a, **k: StoreOperador(tmp_path / "op.sqlite"))
+    monkeypatch.setattr(A, "StoreContratos", lambda *a, **k: StoreContratos(tmp_path / "c.sqlite"))
+    monkeypatch.setattr(A, "StoreRegrasFederais", lambda *a, **k: StoreRegrasFederais(tmp_path / "r.sqlite"))
+    A.app.config.update(TESTING=True)
+    cli = A.app.test_client()
+    cli.post("/operador", data={"iniciais": "op", "nome": "Op"})
+    rs = StoreRegrasFederais(tmp_path / "r.sqlite")
+    rid = rs.salvar(RegraEnquadramento(codigo="TF-001", descricao="serviço", fundamento="",
+                    naturezas=("nao_optante",), sujeito=True, ir_pct="4.8",
+                    csll=True, cofins=True, pis=True, codigo_receita="6190"))
+    rs.fechar()
+    cli.post("/contratos", data={"prest_identificacao": "ACME", "prest_documento": "11222333000181",
+             "prest_natureza": "nao_optante", "numero": "10", "ano": "2026",
+             "ret_federal_regra_id": str(rid)})
+    ct = StoreContratos(tmp_path / "c.sqlite").listar()[0]
+    assert ct.ret_federal_regra_codigo == "TF-001" and ct.ret_federal_origem == "derivado"
+    assert ct.ret_federal_ir_pct == "4.8" and ct.ret_federal_sujeito is True
+    assert ct.ret_federal_codigo_receita == "6190"
+
+    # sem regra e sem ajuste manual: barrado, nada salvo
+    r = cli.post("/contratos", data={"prest_identificacao": "X", "prest_documento": "1",
+                 "numero": "9", "ano": "2026"})
+    assert r.status_code == 200 and "Selecione a regra".encode() in r.data
+    assert len(StoreContratos(tmp_path / "c.sqlite").listar()) == 1   # nada novo gravado

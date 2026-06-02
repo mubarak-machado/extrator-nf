@@ -468,42 +468,49 @@ def _catalogo_federal():
 
 
 def _render_contrato_form(c, novo):
-    """Renderiza o form já com a regra federal derivada das características de `c`
-    (catálogo cadastrado na tela Regras). A derivação é pura e só sugere — a gravação
-    é da rota (I-3)."""
-    sug = enquadramento.aplicar_catalogo_federal(c, _catalogo_federal())
+    """Renderiza o form com o catálogo de regras federais para o operador SELECIONAR
+    (sem sugestão automática — decisão do humano). A gravação copia o efeito da regra
+    escolhida para o contrato (I-3: o sistema estrutura, não decide)."""
     return render_template("contrato_form.html", contrato=c, vocab=_VOCAB_CONTRATO,
-                           novo=novo, sugestao_federal=sug)
+                           novo=novo, regras_federais=_catalogo_federal())
 
 
 def _aplicar_enquadramento_federal(c, form):
-    """Resolve o grupo federal de `c` antes de salvar. Sem ajuste manual: grava o
-    enquadramento da regra casada no catálogo (origem 'derivado', código da regra). Com
-    ajuste manual: mantém o que o operador preencheu, exige justificativa e registra
-    autor/data (I-4). Indefinido sem ajuste é barrado, não chutado (I-6).
+    """Resolve o grupo federal de `c` antes de salvar. **Seleção de regra** (padrão): copia
+    o efeito da regra escolhida no catálogo (origem 'derivado', código da regra). **Ajuste
+    manual**: usa as alíquotas que o operador digitou, exige justificativa e registra
+    autor/data (I-4). Sem regra escolhida e sem ajuste → barrado, não chutado (I-6).
     Devolve (ok, erro)."""
-    ajustar = form.get("ret_federal_ajustar") == "on"
-    sug = enquadramento.aplicar_catalogo_federal(c, _catalogo_federal())
-    if not ajustar and sug.regra is not None:
-        r = sug.regra
-        c.ret_federal_regra_codigo = r.codigo
-        c.ret_federal_origem = "derivado"
-        c.ret_federal_sujeito = r.sujeito
-        c.ret_federal_ir_pct = r.ir_pct
-        c.ret_federal_codigo_receita = r.codigo_receita
-        c.ret_federal_csll, c.ret_federal_cofins, c.ret_federal_pis = r.csll, r.cofins, r.pis
-        c.ret_federal_justificativa = None
-        c.ret_federal_ajustado_por = c.ret_federal_ajustado_em = None
-        return True, None
-    # Ajuste manual (ou indefinido que o operador precisa resolver): exige justificativa.
-    if not (c.ret_federal_justificativa or "").strip():
-        motivo = sug.indefinido_motivo or "o enquadramento federal foi ajustado à mão"
-        return False, ("Justifique o ajuste do enquadramento federal — " + motivo +
-                       " Nada foi salvo.")
-    c.ret_federal_origem = "ajustado"
-    c.ret_federal_regra_codigo = sug.regra.codigo if sug.regra else None
-    c.ret_federal_ajustado_por = "operador"
-    c.ret_federal_ajustado_em = datetime.now(timezone.utc).isoformat()
+    if form.get("ret_federal_ajustar") == "on":
+        if not (c.ret_federal_justificativa or "").strip():
+            return False, ("Justifique o ajuste manual do enquadramento federal. "
+                           "Nada foi salvo.")
+        c.ret_federal_origem = "ajustado"
+        c.ret_federal_ajustado_por = "operador"
+        c.ret_federal_ajustado_em = datetime.now(timezone.utc).isoformat()
+        return True, None  # ret_federal_* já vieram do form via _contrato_do_form
+    # Seleção de regra do catálogo (a tela Regras é a fonte; aqui só se escolhe).
+    regra_id = (form.get("ret_federal_regra_id") or "").strip()
+    if not regra_id:
+        return False, ("Selecione a regra federal do catálogo (ou marque ajuste manual). "
+                       "Nada foi salvo.")
+    store = StoreRegrasFederais()
+    try:
+        regra = store.obter(int(regra_id))
+    except (ValueError, TypeError):
+        regra = None
+    finally:
+        store.fechar()
+    if not regra:
+        return False, "Regra federal não encontrada no catálogo. Nada foi salvo."
+    c.ret_federal_regra_codigo = regra.codigo
+    c.ret_federal_origem = "derivado"
+    c.ret_federal_sujeito = regra.sujeito
+    c.ret_federal_ir_pct = regra.ir_pct
+    c.ret_federal_codigo_receita = regra.codigo_receita
+    c.ret_federal_csll, c.ret_federal_cofins, c.ret_federal_pis = regra.csll, regra.cofins, regra.pis
+    c.ret_federal_justificativa = None
+    c.ret_federal_ajustado_por = c.ret_federal_ajustado_em = None
     return True, None
 
 

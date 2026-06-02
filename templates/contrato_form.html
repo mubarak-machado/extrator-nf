@@ -66,11 +66,6 @@
       </div>
     </div>
     <label class="field"><span class="lbl">Objeto</span><input type="text" name="objeto" value="{{ c.objeto or '' }}"></label>
-    <label class="field"><span class="lbl">Categoria do serviço (define base mínima de INSS)</span>
-      <select name="categoria_servico">
-        {% for chave, rotulo in vocab.categorias.items() %}<option value="{{ chave }}" {{ 'selected' if c.categoria_servico == chave }}>{{ rotulo }}</option>{% endfor %}
-      </select>
-    </label>
   </fieldset>
 
   <fieldset class="card card-b">
@@ -85,49 +80,51 @@
   <fieldset class="card card-b">
     <legend>Enquadramento de retenções <span class="lbl" style="font-weight:400">(declarado — base para a Fase 2)</span></legend>
 
-    {# Tributos federais: o enquadramento é DERIVADO das características acima (catálogo
-       TF-xxx). Read-only por padrão; "ajustar manualmente" libera os campos e exige
-       justificativa (I-3 sugere, humano ratifica; I-4 grava o override; I-6 indefinido
-       visível). Ver galho_nfse/enquadramento.py. #}
-    {% set sf = sugestao_federal %}
-    <p class="lbl" style="font-weight:600;margin-bottom:.4rem">Tributos federais (IR/CSLL/COFINS/PIS) — <a href="{{ url_for('regras') }}">IN 1234/2012</a></p>
-    {% if sf and sf.regra %}
-      {% set rf = sf.regra %}
-      <div class="regra-derivada" role="note">
-        <p><span class="chip">{{ rf.codigo }}</span> <strong>{{ rf.descricao }}</strong></p>
-        <p class="muted small">{{ rf.fundamento }}</p>
-        {% if rf.sujeito %}
-        <p class="small">IR <strong>{{ rf.ir_txt() }}</strong> + CSLL/COFINS/PIS &middot; agregada <strong>{{ rf.agregada_txt() }}</strong></p>
-        {% else %}
-        <p class="small"><strong>Retenção federal dispensada.</strong></p>
-        {% endif %}
-      </div>
+    {# Tributos federais: o operador SELECIONA a regra do catálogo (tela Regras). O sistema
+       não sugere (decisão do humano). "Ajustar manualmente" abre os campos para digitar as
+       alíquotas, com justificativa (I-4). Ver galho_nfse/catalogo_federal.py. #}
+    <p class="lbl" style="font-weight:600;margin-bottom:.4rem">Tributos federais (IR/CSLL/COFINS/PIS) — <a href="{{ url_for('regras') }}">catálogo IN 1234/2012</a></p>
+    {% if regras_federais %}
+    <label class="field"><span class="lbl">Regra do catálogo</span>
+      <select name="ret_federal_regra_id">
+        <option value="">— selecione a regra —</option>
+        {% for rf in regras_federais %}
+        <option value="{{ rf.id }}" {{ 'selected' if c.ret_federal_regra_codigo == rf.codigo }}>
+          {{ rf.codigo }} · {{ rf.descricao }} · {% if rf.sujeito %}agregada {{ rf.agregada_txt() }}{% else %}dispensado{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
     {% else %}
-      <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> {{ sf.indefinido_motivo if sf else 'Defina o enquadramento federal manualmente.' }}</p></div>
+    <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> Nenhuma regra federal cadastrada. <a href="{{ url_for('regra_nova') }}">Cadastre uma regra</a> ou ajuste manualmente abaixo.</p></div>
     {% endif %}
 
-    <label class="opt block"><input type="checkbox" name="ret_federal_ajustar" {{ 'checked' if c.ret_federal_origem == 'ajustado' or not (sf and sf.regra) }}> Ajustar manualmente este enquadramento <span class="lbl" style="font-weight:400">(exige justificativa)</span></label>
+    <label class="opt block"><input type="checkbox" name="ret_federal_ajustar" {{ 'checked' if c.ret_federal_origem == 'ajustado' }}> Ajustar manualmente <span class="lbl" style="font-weight:400">(digitar as alíquotas; exige justificativa)</span></label>
     <div class="sub-field" data-mostra-se="ret_federal_ajustar">
-      <label class="opt block"><input type="checkbox" name="ret_federal_sujeito" {{ 'checked' if c.ret_federal_sujeito }}> Os tributos federais incidem (retidos juntos)</label>
+      <label class="opt block"><input type="checkbox" name="ret_federal_sujeito" id="ct-sujeito" {{ 'checked' if c.ret_federal_sujeito }}> Os tributos federais incidem (retidos juntos)</label>
+      <label class="field"><span class="lbl">Alíquota agregada (IN 1234/2012) — preenche os tributos abaixo</span>
+        <select name="ret_federal_codigo_receita" id="ct-codigo">
+          <option value="">— informar por tributo —</option>
+          {% for cod in vocab.codigos_in %}
+          <option value="{{ cod.codigo }}" {{ 'selected' if c.ret_federal_codigo_receita == cod.codigo }}>{{ cod.codigo }} · {{ cod.total }}% (IR {{ cod.ir }} · CSLL {{ cod.csll }} · COFINS {{ cod.cofins }} · PIS {{ cod.pis }})</option>
+          {% endfor %}
+        </select>
+      </label>
       <div class="grid-2">
-        <label class="field"><span class="lbl">Percentual de IR (natureza — Anexo I)</span>
-          <select name="ret_federal_ir_pct">
-            <option value="">—</option>
-            {% for chave, rotulo in vocab.ir_percentuais.items() %}<option value="{{ chave }}" {{ 'selected' if c.ret_federal_ir_pct == chave }}>{{ rotulo }}</option>{% endfor %}
-          </select>
+        <label class="field"><span class="lbl">IR (%) — escolha da lista ou digite</span>
+          <input type="text" name="ret_federal_ir_pct" id="ct-ir" list="ct-ir-opcoes" inputmode="decimal" value="{{ c.ret_federal_ir_pct or '' }}">
+          <datalist id="ct-ir-opcoes">{% for v in vocab.ir_valores %}<option value="{{ v }}"></option>{% endfor %}</datalist>
         </label>
-        <label class="field"><span class="lbl">Código de receita (DARF)</span>
-          <input type="text" name="ret_federal_codigo_receita" placeholder="ex.: 6147" value="{{ c.ret_federal_codigo_receita or '' }}"></label>
       </div>
-      <div class="field"><span class="lbl">Contribuições que incidem (compõem os 4,65%)</span>
+      <div class="field"><span class="lbl">Contribuições que incidem (alíquotas fixas em lei)</span>
         <div class="radio-row">
-          <label class="opt"><input type="checkbox" name="ret_federal_csll" {{ 'checked' if c.ret_federal_csll }}> CSLL 1%</label>
-          <label class="opt"><input type="checkbox" name="ret_federal_cofins" {{ 'checked' if c.ret_federal_cofins }}> COFINS 3%</label>
-          <label class="opt"><input type="checkbox" name="ret_federal_pis" {{ 'checked' if c.ret_federal_pis }}> PIS 0,65%</label>
+          <label class="opt"><input type="checkbox" name="ret_federal_csll" id="ct-csll" {{ 'checked' if c.ret_federal_csll }}> CSLL 1%</label>
+          <label class="opt"><input type="checkbox" name="ret_federal_cofins" id="ct-cofins" {{ 'checked' if c.ret_federal_cofins }}> COFINS 3%</label>
+          <label class="opt"><input type="checkbox" name="ret_federal_pis" id="ct-pis" {{ 'checked' if c.ret_federal_pis }}> PIS 0,65%</label>
         </div>
       </div>
       <label class="field"><span class="lbl">Justificativa do ajuste manual (obrigatória)</span>
-        <textarea name="ret_federal_justificativa" rows="2" placeholder="Por que o enquadramento derivado não se aplica a este contrato?">{{ c.ret_federal_justificativa or '' }}</textarea></label>
+        <textarea name="ret_federal_justificativa" rows="2" placeholder="Por que este contrato não usa uma regra do catálogo?">{{ c.ret_federal_justificativa or '' }}</textarea></label>
     </div>
 
     <label class="opt block"><input type="checkbox" name="inss_cessao_mao_obra" {{ 'checked' if c.inss_cessao_mao_obra }}> <strong>INSS</strong> — cessão de mão de obra / empreitada (IN 2110/2022)</label>
@@ -228,6 +225,25 @@
         sel.parentNode.replaceChild(inp, sel);
       });
     });
+})();
+
+// Ajuste manual dos federais: a alíquota agregada (IN 1234/2012) preenche os tributos.
+(function () {
+  var TAB = {{ vocab.codigos_in | tojson }};
+  var porCodigo = {}; TAB.forEach(function (c) { porCodigo[c.codigo] = c; });
+  var sel = document.getElementById("ct-codigo");
+  if (!sel) return;
+  function pos(v) { return parseFloat(v || "0") > 0; }
+  sel.addEventListener("change", function () {
+    var c = porCodigo[sel.value];
+    if (!c) return;
+    document.getElementById("ct-ir").value = c.ir;
+    document.getElementById("ct-csll").checked = pos(c.csll);
+    document.getElementById("ct-cofins").checked = pos(c.cofins);
+    document.getElementById("ct-pis").checked = pos(c.pis);
+    var suj = document.getElementById("ct-sujeito");
+    if (suj && !suj.checked) suj.checked = true;
+  });
 })();
 </script>
 {% endblock %}
