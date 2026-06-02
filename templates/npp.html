@@ -52,6 +52,7 @@
           <th scope="col">Tipo</th>
           <th scope="col">Emissão</th>
           <th scope="col" class="num">Valor</th>
+          <th scope="col">Material</th>
           <th scope="col" class="nowrap">Situação</th>
         </tr>
       </thead>
@@ -62,6 +63,11 @@
           <td>{{ 'NF-e' if it.tipo == 'NFE' else 'NFS-e' }}</td>
           <td>{{ r.data_emissao | data }}</td>
           <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
+          <td class="nowrap">
+            {% if it.tipo == 'NFSE' %}
+              {% if it.marcacao %}{{ it.marcacao.valor|upper }}{% else %}<a class="falta" href="{{ url_for('detalhe', chave=r.chave) }}">não conferido</a>{% endif %}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
           <td class="nowrap">{{ 'exportada' if it.ja_exportada else 'inédita' }}</td>
         </tr>
         {% endfor %}
@@ -69,7 +75,7 @@
       <tfoot>
         <tr>
           <td>Total ({{ itens|length }})</td><td></td><td></td>
-          <td class="num">{{ total_bruto | moeda }}</td><td></td>
+          <td class="num">{{ total_bruto | moeda }}</td><td></td><td></td>
         </tr>
       </tfoot>
     </table>
@@ -80,6 +86,30 @@
 {% if itens %}
 <section class="section" aria-label="Grupos de impostos">
   <h3>Grupos de impostos</h3>
+
+  {% if validavel %}
+  <div class="progress-wrap mb-3">
+    <div class="progress-top">
+      <span>Validação das retenções</span>
+      <span><b>{{ validados }}</b> de <b>{{ validavel }}</b> tributo(s){% if not n_pendentes %} · concluída{% endif %}</span>
+    </div>
+    <div class="progress"><i style="width:{{ (100 * validados / validavel) | round }}%"></i></div>
+  </div>
+  {% endif %}
+
+  {% if n_pendentes %}
+  <form method="post" action="{{ url_for('npp_confirmar_destaques', id_=npp.id) }}" class="mb-3"
+        onsubmit="return confirm('Confirmar o destaque do emitente para os {{ n_pendentes }} tributo(s) pendentes que têm valor destacado? Cada um é gravado em seu nome; você pode retificar individualmente depois.');">
+    <button type="submit" class="btn ghost"><svg class="icon"><use href="#i-check"/></svg> Confirmar destaques pendentes ({{ n_pendentes }})</button>
+  </form>
+  {% endif %}
+
+  {% if material_pendente %}
+  <div class="atencao mb-3">
+    <p class="note"><svg class="icon"><use href="#i-alerta"/></svg> {{ material_pendente }} nota(s) de serviço com <strong>material não conferido</strong> — isso afeta o IR e a base do INSS. Confira na nota (coluna Material acima) antes de validar esses tributos.</p>
+  </div>
+  {% endif %}
+
   <div class="declarado mb-5">
     <p class="note">
       Três camadas, lado a lado: <span class="chip">destaque do emitente</span> (transcrição fiel da nota, Fase 1 — nunca alterada),

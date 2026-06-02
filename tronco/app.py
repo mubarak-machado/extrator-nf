@@ -701,13 +701,15 @@ def _itens_da_npp(npp_id):
     exportação. Base das seções da tela e dos totais derivados."""
     notas = StoreNotas(); persistidas = notas.listar_por_npp(npp_id); notas.fechar()
     registro = RegistroDeExportacao()
+    marc = StoreMarcacoes()
     itens = []
     for n in persistidas:
         reg = reconstruir(n["tipo"], n["dados"])
         itens.append({"reg": reg, "tipo": n["tipo"], "origem": n["origem"],
                       "ja_exportada": registro.ja_exportada(reg.chave),
+                      "marcacao": marc.atual(reg.chave) if n["tipo"] == "NFSE" else None,
                       "valor": reg.valor_total if n["tipo"] == "NFE" else reg.valor_servicos})
-    registro.fechar()
+    registro.fechar(); marc.fechar()
     return itens
 
 
@@ -912,6 +914,14 @@ def npp_detalhe(id_):
     itens = _itens_da_npp(id_)
     total_bruto = _bruto(itens)
     grupos, total_retido, liquido_provisorio = _grupos_impostos(itens, contrato)
+    # Progresso de validação (I-6: dar fim claro à tarefa). Denominador = tributos que
+    # pedem decisão (já validados + pendentes); "não incide" não conta. Material não
+    # conferido das NFS-e afeta IR/INSS — sinalizado, nunca decidido pela máquina (I-2).
+    rows = [r for g in grupos for r in g["rows"]]
+    n_validados = sum(1 for r in rows if r["validacao"] is not None)
+    n_pendentes = sum(1 for r in rows if r["pendente"])
+    material_pendente = sum(1 for it in itens
+                            if it["tipo"] == "NFSE" and not it["marcacao"])
     return render_template(
         "npp.html", npp=npp, contrato=contrato,
         contrato_rotulo=retencao.rotulo_contrato(contrato) if contrato else "(contrato removido)",
@@ -919,7 +929,9 @@ def npp_detalhe(id_):
         n_novas=sum(1 for i in itens if not i["ja_exportada"]),
         grupos=grupos, total_retido=total_retido,
         liquido=_liquido_npp(total_bruto, total_retido),
-        liquido_provisorio=liquido_provisorio)
+        liquido_provisorio=liquido_provisorio,
+        validados=n_validados, validavel=n_validados + n_pendentes,
+        n_pendentes=n_pendentes, material_pendente=material_pendente)
 
 
 @app.route("/npp/<int:id_>/editar")
@@ -1122,6 +1134,66 @@ def npp_importar_exemplos(id_):
         flash("NPP não encontrada.", "erro")
         return redirect(url_for("npps"))
     _persistir_na_npp(list(ingerir_pasta(PASTA_EXEMPLOS)), npp)
+    return redirect(url_for("npp_detalhe", id_=id_))
+
+
+@app.route("/npp/<int:id_>/confirmar-destaques", methods=["POST"])
+def npp_confirmar_destaques(id_):
+    """Confirma em lote o destaque do emitente para os tributos PENDENTES que têm valor
+    destacado (Fase 2, validação humana; I-3/I-4). É atestação humana em bloco dos valores
+    do EMITENTE — não usa a sugestão da regra como critério de seleção (linha vermelha I-3):
+    o filtro é mecânico (pendente + tem destaque + não validado). O destaque é recomputado
+    no servidor (I-2), nunca o valor da tela. Divergências em relação à sugestão e tributos
+    sem destaque são REPORTADOS (I-6), não decididos. O confirmar/retificar individual segue
+    disponível para o caso a caso."""
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
+    if not contrato:
+        flash("A NPP não tem contrato — não há retenção para validar.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    op = _operador_atual()
+    itens = _itens_da_npp(id_)
+    marc = StoreMarcacoes()
+    store = StoreValidacaoRetencao()
+    confirmados = divergentes = sem_destaque = 0
+    try:
+        for it in itens:
+            material = _material_marcado(it["reg"].chave, it["tipo"], marc)
+            achados = _conferir_por_tipo(it["reg"], it["tipo"], contrato, material).achados
+            ja_validados = store.atuais(it["reg"].chave)
+            for a in achados:
+                if a.tributo in ja_validados:          # já decidido pelo operador — não mexe
+                    continue
+                if not _pendente_validacao(a, None):    # "não incide"/dispensado — nada a reter
+                    continue
+                if a.destaque_emitente is None:         # sem destaque → exige retificar manual
+                    sem_destaque += 1
+                    continue
+                store.validar(it["reg"].chave, a.tributo, "confirmado", a.destaque_emitente, op.nome)
+                confirmados += 1
+                try:
+                    if a.esperado is not None and Decimal(a.destaque_emitente) != Decimal(a.esperado):
+                        divergentes += 1
+                except (InvalidOperation, ValueError):
+                    pass
+    finally:
+        marc.fechar(); store.fechar()
+    if not confirmados:
+        falta = (f" {sem_destaque} tributo(s) pendente(s) não têm destaque e precisam de retificação manual."
+                 if sem_destaque else "")
+        flash(("Nada a confirmar em lote: os tributos pendentes não têm destaque do emitente." + falta)
+              if sem_destaque else
+              "Nada a confirmar em lote: não há tributo pendente com destaque do emitente.", "info")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    partes = [f"{confirmados} tributo(s) confirmado(s) pelo destaque do emitente (por {op.nome})."]
+    if divergentes:
+        partes.append(f"{divergentes} divergia(m) da sugestão da regra — revise com Retificar se necessário.")
+    if sem_destaque:
+        partes.append(f"{sem_destaque} sem destaque ficaram para retificação manual.")
+    flash(" ".join(partes), "ok")
     return redirect(url_for("npp_detalhe", id_=id_))
 
 

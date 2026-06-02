@@ -1139,3 +1139,66 @@ def test_contrato_seleciona_regra_do_catalogo(tmp_path, monkeypatch):
                  "numero": "9", "ano": "2026"})
     assert r.status_code == 200 and "Selecione a regra".encode() in r.data
     assert len(StoreContratos(tmp_path / "c.sqlite").listar()) == 1   # nada novo gravado
+
+
+# ---------- Fase 1 (UX): confirmação de destaques em lote na NPP ----------
+
+def test_npp_confirmar_destaques_em_lote(tmp_path, monkeypatch):
+    """Confirmação em lote ateste o destaque do EMITENTE para os tributos pendentes que
+    têm destaque. I-3: a seleção é mecânica (pendente + tem destaque), não por conformidade
+    com a sugestão. I-2: o valor gravado é o destaque recomputado no servidor. I-4: gravado
+    com autor. Idempotente: re-rodar não cria novas validações vigentes."""
+    import tronco.app as A
+    from tronco.operador import StoreOperador
+    from tronco.npp import StoreNPP
+    from tronco.notas import StoreNotas
+    from tronco.contratos import StoreContratos
+    from tronco.idempotencia import RegistroDeExportacao
+    from tronco.marcacoes import StoreMarcacoes
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+
+    monkeypatch.setattr(A, "StoreOperador", lambda *a, **k: StoreOperador(tmp_path / "op.sqlite"))
+    monkeypatch.setattr(A, "StoreNPP", lambda *a, **k: StoreNPP(tmp_path / "npp.sqlite"))
+    monkeypatch.setattr(A, "StoreNotas", lambda *a, **k: StoreNotas(tmp_path / "notas.sqlite"))
+    monkeypatch.setattr(A, "StoreContratos", lambda *a, **k: StoreContratos(tmp_path / "contr.sqlite"))
+    monkeypatch.setattr(A, "RegistroDeExportacao", lambda *a, **k: RegistroDeExportacao(tmp_path / "exp.sqlite"))
+    monkeypatch.setattr(A, "StoreMarcacoes", lambda *a, **k: StoreMarcacoes(tmp_path / "marc.sqlite"))
+    monkeypatch.setattr(A, "StoreValidacaoRetencao", lambda *a, **k: StoreValidacaoRetencao(tmp_path / "val.sqlite"))
+    A.app.config.update(TESTING=True)
+    cli = A.app.test_client()
+
+    cli.post("/operador", data={"iniciais": "op", "nome": "Op"})
+    cs = StoreContratos(tmp_path / "contr.sqlite")
+    cid = cs.salvar(_contrato(iss_retido_tomador=True, iss_aliquota="5",
+                              ret_federal_sujeito=True, ret_federal_ir_pct="4.8")); cs.fechar()
+    cli.post("/npps", data={"contrato_id": str(cid), "competencia": "2026-05"})
+    nid = StoreNPP(tmp_path / "npp.sqlite").listar()[0].id
+    cli.post(f"/npp/{nid}/importar/exemplos")
+
+    # esperado = tributos pendentes COM destaque (mesmo critério mecânico da rota)
+    contrato = StoreContratos(tmp_path / "contr.sqlite").obter(cid)
+    esperado = 0
+    for it in A._itens_da_npp(nid):
+        mat = it["marcacao"]["valor"] if it["marcacao"] else None
+        for a in A._conferir_por_tipo(it["reg"], it["tipo"], contrato, mat).achados:
+            if A._pendente_validacao(a, None) and a.destaque_emitente is not None:
+                esperado += 1
+    assert esperado > 0
+
+    cli.post(f"/npp/{nid}/confirmar-destaques", follow_redirects=True)
+    v = StoreValidacaoRetencao(tmp_path / "val.sqlite")
+    total = 0
+    for it in A._itens_da_npp(nid):
+        atuais = v.atuais(it["reg"].chave)
+        total += len(atuais)
+        assert all(x["acao"] == "confirmado" for x in atuais.values())   # I-3: só confirma destaque
+        assert all(x["autor"] == "Op" for x in atuais.values())          # I-4: autoria
+    v.fechar()
+    assert total == esperado
+
+    # idempotente: re-rodar não cria novas vigentes
+    cli.post(f"/npp/{nid}/confirmar-destaques", follow_redirects=True)
+    v = StoreValidacaoRetencao(tmp_path / "val.sqlite")
+    total2 = sum(len(v.atuais(it["reg"].chave)) for it in A._itens_da_npp(nid))
+    v.fechar()
+    assert total2 == esperado
