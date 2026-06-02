@@ -21,19 +21,44 @@ Resumo: exportador é CSV local (não Sheets real), XMLs são sintéticos, sem a
 `debug=True` e `secret_key` fixa, SQLite no repo. Nada disso pode ir a dado real
 sem revisão.
 
+## Mudança de fase — 2026-06-02
+
+O projeto **cruzou para a Fase 2**, mas só na metade de **validação/aprovação humana**
+(I-3): o operador passa a **confirmar ou retificar** os valores de retenção destacados na
+nota (o destaque pode estar equivocado), e é isso que alimenta o **valor líquido confiável**.
+A **apuração/aplicação autônoma de regra pelo software continua fora de escopo** — o
+software exibe destaque (Fase 1) e sugestão (`conferir_retencao`, só leitura) e **registra
+a decisão humana** (persistida com autor+data, I-4, no padrão de `tronco/marcacoes.py`).
+Detalhe em `docs/planos/modelagem-npp.md` (§5–§6). Memórias: `fase2-validacao-humana`,
+`fronteira-fase1-fase2`.
+
 ## Decisões em aberto (resolver com o humano, não sozinho)
 
 1. **Layout da NFS-e:** só padrão nacional, ou chegam municípios em layout antigo
    (Abrasf/Ginfes/Betha)? O segundo caso adiciona outra biblioteca e outro parser.
-2. **Vínculo de contrato:** hoje a consolidação agrupa por *prestador + competência*
-   (heurística), porque o número do contrato do órgão **não vem no XML**. Como
-   amarrar o contrato de verdade? (identificador do lado do órgão, entrada manual?)
-3. **Somatório na consolidação:** somar destaques é apresentação, mas encosta em I-2.
-   Manter como "soma de conferência" ou não totalizar? (decisão sua)
+2. ~~**Vínculo de contrato**~~ → **RESOLVIDO** pela modelagem NPP: vínculo explícito
+   nota → NPP → contrato, escolhido pelo operador (substitui a heurística por CNPJ).
+3. ~~**Somatório na consolidação**~~ → **RESOLVIDO**: o líquido/totais somam **valores
+   validados pelo operador** (não destaque cru), o que tira a tensão com o I-2.
 4. **Destino de exportação:** quando e como plugar o Google Sheets real (OAuth,
    conta de serviço?).
-5. **Como a tela é entregue** em produção (app local? web interna?).
+5. **Como a tela é entregue** em produção (app local por servidor — confirmado; backup e
+   sincronização entre máquinas ficam para depois).
 6. **Lista final de campos** por tipo — refinar contra XMLs reais.
+7. ~~**NF-e e valor líquido**~~ → **RESOLVIDO**: NF-e tem retenção **federal**
+   (IR/CSLL/COFINS/PIS, IN 1234/2012) quando o fornecedor **não** é optante do Simples;
+   optante → dispensa, líquido = bruto. INSS/ISS **não se aplicam** à NF-e. Mesmo fluxo de
+   validação da NFS-e, só muda o conjunto de tributos.
+8. ~~**Reset apaga o cadastro do operador?**~~ → **RESOLVIDO**: **não apaga**; detalhes
+   (preservação/portabilidade) ficam para a etapa de backup e sincronização.
+9. ~~**Suporte federal da NF-e — compartilhar ou espelhar?**~~ → **RESOLVIDO**: NF-e tem
+   **paridade total** com a NFS-e (sugestão + validação). A regra federal (IN 1234/2012)
+   vira módulo **comum** `tronco/retencao_federal.py`, chamado pelos dois galhos — comum =
+   infraestrutura, sem dependência galho↔galho (respeita a "forma" do `01`).
+10. **NPP de tipos mistos** (NFS-e + NF-e na mesma NPP) **é suportada**: bruto = soma de
+    todas; líquido = Σbruto − Σretenções validadas; federal agrega os dois tipos, INSS/ISS
+    só NFS-e. Pendente só o **layout do artefato de exportação misto** (seção por tipo) —
+    detalhe de implementação, não muda os totais.
 
 ## Backlog inicial — RASCUNHO, edite
 
@@ -57,9 +82,14 @@ sem revisão.
 ### D. UI / jornada do operador
 - [ ] (seus itens de melhoria de UI entram aqui)
 
-### E. Fase 2 (só depois da Fase 1 provada — não começar agora)
+### E. Fase 2
+**E1 — Validação humana (EM ESCOPO desde 2026-06-02, via plano NPP):**
+- [ ] Operador confirma/retifica os valores de retenção por tributo (toggle + campo),
+      persistido com autor+data; líquido sobre validados. *(toca I-2, I-3, I-4, I-6)*
+
+**E2 — Apuração por regra (FORA DE ESCOPO — não começar; exige decisão humana explícita):**
 - [ ] Estruturar regras de retenção ditadas pelo especialista, uma a uma. *(toca I-3)*
-- [ ] Usar a marcação de material como input da apuração. *(toca I-3, I-4)*
+- [ ] Usar a marcação de material como input da apuração automática. *(toca I-3, I-4)*
 
 ## Sugestão de primeiro passo no Claude Code
 
