@@ -39,10 +39,15 @@
         {% for a in vocab.anexos %}<option value="{{ a }}" {{ 'selected' if c.prest_simples_anexo == a }}>Anexo {{ a }}</option>{% endfor %}
       </select>
     </label>
-    <div class="grid-3">
-      <label class="field"><span class="lbl">Endereço</span><input type="text" name="prest_endereco" value="{{ c.prest_endereco or '' }}"></label>
-      <label class="field"><span class="lbl">Município</span><input type="text" name="prest_municipio" value="{{ c.prest_municipio or '' }}"></label>
-      <label class="field"><span class="lbl">UF</span><input type="text" name="prest_uf" maxlength="2" value="{{ c.prest_uf or '' }}"></label>
+    <div class="grid-2">
+      <label class="field"><span class="lbl">UF</span>
+        {# UF e município vêm da base oficial do IBGE empacotada (offline). O município é
+           preenchido por JS conforme a UF escolhida — ver o script no fim da página. #}
+        <select name="prest_uf" id="prest_uf" data-atual="{{ c.prest_uf or '' }}"></select>
+      </label>
+      <label class="field"><span class="lbl">Município</span>
+        <select name="prest_municipio" id="prest_municipio" data-atual="{{ c.prest_municipio or '' }}"></select>
+      </label>
     </div>
     <label class="field"><span class="lbl">Inscrição municipal (opcional)</span><input type="text" name="prest_im" value="{{ c.prest_im or '' }}"></label>
   </fieldset>
@@ -182,4 +187,47 @@
     {% endif %}
   </div>
 </form>
+
+{# UF → município a partir da base oficial do IBGE (servida localmente, offline). #}
+<script>
+(function () {
+  var ufSel = document.getElementById("prest_uf");
+  var muniSel = document.getElementById("prest_municipio");
+  if (!ufSel || !muniSel) return;
+  var ufAtual = ufSel.dataset.atual || "";
+  var muniAtual = muniSel.dataset.atual || "";
+
+  function opcoes(sel, itens, atual, placeholder) {
+    sel.innerHTML = "";
+    var o = document.createElement("option");
+    o.value = ""; o.textContent = placeholder; sel.appendChild(o);
+    itens.forEach(function (it) {
+      var op = document.createElement("option");
+      op.value = it; op.textContent = it;
+      if (it === atual) op.selected = true;
+      sel.appendChild(op);
+    });
+  }
+
+  fetch("{{ url_for('static', filename='dados/municipios_ibge.json') }}")
+    .then(function (r) { return r.json(); })
+    .then(function (base) {
+      opcoes(ufSel, base.ufs.map(function (u) { return u.sigla; }), ufAtual, "—");
+      function preencheMunicipios() {
+        var lista = base.municipios[ufSel.value] || [];
+        opcoes(muniSel, lista, muniAtual, lista.length ? "Selecione…" : "Escolha a UF primeiro");
+      }
+      preencheMunicipios();
+      ufSel.addEventListener("change", function () { muniAtual = ""; preencheMunicipios(); });
+    })
+    .catch(function () {
+      // Sem a base (ex.: arquivo ausente): degrada para campo de texto, não trava o form.
+      [ufSel, muniSel].forEach(function (sel) {
+        var inp = document.createElement("input");
+        inp.type = "text"; inp.name = sel.name; inp.value = sel.dataset.atual || "";
+        sel.parentNode.replaceChild(inp, sel);
+      });
+    });
+})();
+</script>
 {% endblock %}
