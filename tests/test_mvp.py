@@ -458,6 +458,41 @@ def test_conferencia_nao_grava_nada():
             os.chdir(cwd)
 
 
+# ---------- Bloco federal comum (tronco) — IN 1234/2012, reusável pelos 2 galhos ----------
+
+def test_retencao_federal_comum_calcula_ir_e_contribuicoes():
+    """O bloco federal comum (tronco) calcula IR + CSLL/COFINS/PIS sobre a base, como
+    SUGESTÃO (I-3). Mesmas entradas normalizadas → mesmos `Achado` p/ qualquer galho."""
+    from tronco import retencao_federal
+    achados = retencao_federal.achados_federais(
+        base="1000.00", ir_pct="4.8", ir_codigo="6147", ir_destaque="48.00",
+        csll_ativo=True, csll_destaque="10.00",
+        cofins_ativo=True, cofins_destaque="30.00",
+        pis_ativo=True, pis_destaque="6.50",
+    )
+    por = {a.tributo: a for a in achados}
+    assert por["IR"].esperado == "48.00" and por["IR"].situacao == "confere"     # 4,8% de 1000
+    assert por["CSLL"].esperado == "10.00" and por["CSLL"].situacao == "confere"  # 1%
+    assert por["COFINS"].esperado == "30.00" and por["COFINS"].situacao == "confere"  # 3%
+    assert por["PIS"].esperado == "6.50" and por["PIS"].situacao == "confere"     # 0,65%
+
+
+def test_retencao_federal_comum_contrib_inativa_e_ir_sem_material_gating():
+    """Contribuição não-incidente: confere se a nota não destacou, diverge se destacou (I-6).
+    E sem gating de material (default 'nao'/None), o IR é conferido direto — caminho da NF-e."""
+    from tronco import retencao_federal
+    achados = retencao_federal.achados_federais(
+        base="1000.00", ir_pct="1.2", ir_codigo=None, ir_destaque="12.00",
+        csll_ativo=False, csll_destaque=None,
+        cofins_ativo=False, cofins_destaque="30.00",
+        pis_ativo=True, pis_destaque="6.50",
+    )
+    por = {a.tributo: a for a in achados}
+    assert por["IR"].situacao == "confere"        # 1,2% de 1000 = 12,00, sem gating
+    assert por["CSLL"].situacao == "confere"      # não incide e não destacou
+    assert por["COFINS"].situacao == "diverge"    # não incide mas destacou 30
+
+
 # ---------- Motor de enquadramento federal — Fase 2, derivação (I-3/I-6) ----------
 # O catálogo real é lançado pelo especialista (galho_nfse/catalogo_federal.py) e começa
 # vazio. Aqui testamos o MOTOR com um catálogo de fixture, e que o real começa vazio.
