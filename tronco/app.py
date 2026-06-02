@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import tempfile
 from collections import defaultdict
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -30,7 +31,9 @@ from tronco.exportador import ExportadorCsvLocal, novo_lote_id
 from tronco import formato, redefinicao
 from galho_nfse.modelo import RegistroNFSe
 from galho_nfse.material import sugerir_material
-from galho_nfse import retencao
+from galho_nfse import retencao, enquadramento
+from galho_nfse.enquadramento import RegraEnquadramento
+from galho_nfse.catalogo_federal import StoreRegrasFederais
 
 RAIZ = Path(__file__).resolve().parent.parent
 PASTA_EXEMPLOS = RAIZ / "exemplos"
@@ -287,8 +290,12 @@ def _conferencia(item):
         return {"estado": "varios",
                 "rotulos": [retencao.rotulo_contrato(c) for c in casados]}
     marcado = item["marcacao"].valor if item["marcacao"] else None
-    resultado = retencao.conferir_retencao(item["reg"], casados[0], marcado)
-    return {"estado": "ok", "resultado": resultado}
+    contrato = casados[0]
+    resultado = retencao.conferir_retencao(item["reg"], contrato, marcado)
+    return {"estado": "ok", "resultado": resultado,
+            "federal_origem": contrato.ret_federal_origem,
+            "federal_codigo": contrato.ret_federal_regra_codigo,
+            "federal_justificativa": contrato.ret_federal_justificativa}
 
 
 @app.route("/marcar/<chave>", methods=["POST"])
@@ -610,6 +617,7 @@ def _contrato_do_form(form, id_=None) -> Contrato:
         ret_federal_csll=form.get("ret_federal_csll") == "on",
         ret_federal_cofins=form.get("ret_federal_cofins") == "on",
         ret_federal_pis=form.get("ret_federal_pis") == "on",
+        ret_federal_justificativa=s("ret_federal_justificativa"),
         inss_cessao_mao_obra=form.get("inss_cessao_mao_obra") == "on",
         inss_aliquota=s("inss_aliquota"),
         inss_base_minima_pct=s("inss_base_minima_pct"),
@@ -624,16 +632,145 @@ def _contrato_do_form(form, id_=None) -> Contrato:
     )
 
 
+def _catalogo_federal():
+    """Carrega o catálogo de regras federais do banco (ordenado). O motor é puro: quem
+    faz I/O e passa a lista é a camada de aplicação."""
+    store = StoreRegrasFederais(); regras = store.listar(); store.fechar()
+    return regras
+
+
+def _render_contrato_form(c, novo):
+    """Renderiza o form já com a regra federal derivada das características de `c`
+    (catálogo cadastrado na tela Regras). A derivação é pura e só sugere — a gravação
+    é da rota (I-3)."""
+    sug = enquadramento.aplicar_catalogo_federal(c, _catalogo_federal())
+    return render_template("contrato_form.html", contrato=c, vocab=_VOCAB_CONTRATO,
+                           novo=novo, sugestao_federal=sug)
+
+
+def _aplicar_enquadramento_federal(c, form):
+    """Resolve o grupo federal de `c` antes de salvar. Sem ajuste manual: grava o
+    enquadramento da regra casada no catálogo (origem 'derivado', código da regra). Com
+    ajuste manual: mantém o que o operador preencheu, exige justificativa e registra
+    autor/data (I-4). Indefinido sem ajuste é barrado, não chutado (I-6).
+    Devolve (ok, erro)."""
+    ajustar = form.get("ret_federal_ajustar") == "on"
+    sug = enquadramento.aplicar_catalogo_federal(c, _catalogo_federal())
+    if not ajustar and sug.regra is not None:
+        r = sug.regra
+        c.ret_federal_regra_codigo = r.codigo
+        c.ret_federal_origem = "derivado"
+        c.ret_federal_sujeito = r.sujeito
+        c.ret_federal_ir_pct = r.ir_pct
+        c.ret_federal_codigo_receita = r.codigo_receita
+        c.ret_federal_csll, c.ret_federal_cofins, c.ret_federal_pis = r.csll, r.cofins, r.pis
+        c.ret_federal_justificativa = None
+        c.ret_federal_ajustado_por = c.ret_federal_ajustado_em = None
+        return True, None
+    # Ajuste manual (ou indefinido que o operador precisa resolver): exige justificativa.
+    if not (c.ret_federal_justificativa or "").strip():
+        motivo = sug.indefinido_motivo or "o enquadramento federal foi ajustado à mão"
+        return False, ("Justifique o ajuste do enquadramento federal — " + motivo +
+                       " Nada foi salvo.")
+    c.ret_federal_origem = "ajustado"
+    c.ret_federal_regra_codigo = sug.regra.codigo if sug.regra else None
+    c.ret_federal_ajustado_por = "operador"
+    c.ret_federal_ajustado_em = datetime.now(timezone.utc).isoformat()
+    return True, None
+
+
 @app.route("/contratos")
 def contratos():
     store = StoreContratos(); lista = store.listar(); store.fechar()
     return render_template("contratos.html", contratos=lista, vocab=_VOCAB_CONTRATO)
 
 
+def _regra_do_form(form, id_=None) -> RegraEnquadramento:
+    """Monta uma RegraEnquadramento a partir do formulário. Condições são multi-seleção
+    (getlist); checkbox ausente = False. O sistema só guarda o que o especialista dita."""
+    def s(campo):
+        v = (form.get(campo) or "").strip()
+        return v or None
+    try:
+        ordem = int(form.get("ordem") or 0)
+    except ValueError:
+        ordem = 0
+    return RegraEnquadramento(
+        id=id_,
+        codigo=(form.get("codigo") or "").strip(),
+        descricao=(form.get("descricao") or "").strip(),
+        fundamento=(form.get("fundamento") or "").strip(),
+        naturezas=tuple(form.getlist("naturezas")),
+        categorias=tuple(form.getlist("categorias")),
+        materiais=tuple(form.getlist("materiais")),
+        sujeito=form.get("sujeito") == "on",
+        ir_pct=s("ir_pct"),
+        csll=form.get("csll") == "on",
+        cofins=form.get("cofins") == "on",
+        pis=form.get("pis") == "on",
+        codigo_receita=s("codigo_receita"),
+        ordem=ordem,
+    )
+
+
+@app.route("/regras")
+def regras():
+    """Catálogo de regras de tratamento tributário — cadastrado pelo especialista. A
+    primeira regra cuja condição casar um contrato sugere o enquadramento (I-3)."""
+    store = StoreRegrasFederais(); catalogo = store.listar(); store.fechar()
+    return render_template("regras.html", catalogo=catalogo, vocab=_VOCAB_CONTRATO)
+
+
+@app.route("/regras/nova")
+def regra_nova():
+    store = StoreRegrasFederais(); ordem = store.proxima_ordem(); store.fechar()
+    nova = RegraEnquadramento(codigo="", descricao="", fundamento="", ordem=ordem)
+    return render_template("regra_form.html", regra=nova, vocab=_VOCAB_CONTRATO, novo=True)
+
+
+@app.route("/regras/<int:id_>/editar")
+def regra_editar(id_):
+    store = StoreRegrasFederais(); r = store.obter(id_); store.fechar()
+    if not r:
+        flash("Regra não encontrada.", "erro")
+        return redirect(url_for("regras"))
+    return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=False)
+
+
+@app.route("/regras", methods=["POST"])
+@app.route("/regras/<int:id_>", methods=["POST"])
+def regra_salvar(id_=None):
+    r = _regra_do_form(request.form, id_)
+    if not r.codigo or not r.descricao:
+        flash("Informe ao menos o código e a descrição da regra. Nada foi salvo.", "erro")
+        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+    if r.sujeito and not r.ir_pct:
+        flash("Como os tributos federais incidem nesta regra, defina o percentual de IR. "
+              "Nada foi salvo.", "erro")
+        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+    store = StoreRegrasFederais()
+    try:
+        store.salvar(r)
+    except Exception as exc:
+        store.fechar()
+        flash(f"Não foi possível salvar: já existe regra com o código “{r.codigo}”? "
+              f"({type(exc).__name__}).", "erro")
+        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+    store.fechar()
+    flash(f"Regra {r.codigo} salva.", "ok")
+    return redirect(url_for("regras"))
+
+
+@app.route("/regras/<int:id_>/remover", methods=["POST"])
+def regra_remover(id_):
+    store = StoreRegrasFederais(); store.remover(id_); store.fechar()
+    flash("Regra removida.", "ok")
+    return redirect(url_for("regras"))
+
+
 @app.route("/contratos/novo")
 def contrato_novo():
-    return render_template("contrato_form.html", contrato=Contrato(),
-                           vocab=_VOCAB_CONTRATO, novo=True)
+    return _render_contrato_form(Contrato(), novo=True)
 
 
 @app.route("/contratos/<int:id_>/editar")
@@ -642,8 +779,7 @@ def contrato_editar(id_):
     if not c:
         flash("Contrato não encontrado.", "erro")
         return redirect(url_for("contratos"))
-    return render_template("contrato_form.html", contrato=c,
-                           vocab=_VOCAB_CONTRATO, novo=False)
+    return _render_contrato_form(c, novo=False)
 
 
 @app.route("/contratos", methods=["POST"])
@@ -653,8 +789,11 @@ def contrato_salvar(id_=None):
     if not c.prest_identificacao or not c.numero:
         flash("Informe ao menos a identificação do prestador e o número do contrato. "
               "Nada foi salvo.", "erro")
-        return render_template("contrato_form.html", contrato=c,
-                               vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+        return _render_contrato_form(c, novo=(id_ is None))
+    ok, erro = _aplicar_enquadramento_federal(c, request.form)
+    if not ok:
+        flash(erro, "erro")
+        return _render_contrato_form(c, novo=(id_ is None))
     store = StoreContratos()
     try:
         store.salvar(c)
@@ -662,8 +801,7 @@ def contrato_salvar(id_=None):
         store.fechar()
         flash(f"Não foi possível salvar: já existe contrato com este prestador, número "
               f"e ano? ({type(exc).__name__}).", "erro")
-        return render_template("contrato_form.html", contrato=c,
-                               vocab=_VOCAB_CONTRATO, novo=(id_ is None))
+        return _render_contrato_form(c, novo=(id_ is None))
     store.fechar()
     flash(f"Contrato {c.numero}/{c.ano} de {c.prest_identificacao} salvo.", "ok")
     return redirect(url_for("contratos"))

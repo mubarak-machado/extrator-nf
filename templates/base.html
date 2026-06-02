@@ -48,6 +48,12 @@
       <symbol id="i-id" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M7 9h.01"/><path d="M7 13h.01"/><path d="M11 9h6"/><path d="M11 13h6"/>
       </symbol>
+      <symbol id="i-config" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="18" r="2"/>
+      </symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m6 9 6 6 6-6"/>
+      </symbol>
     </defs>
   </svg>
 
@@ -62,25 +68,46 @@
 
     <nav class="nav" aria-label="Módulos">
       <a href="{{ url_for('hub') }}"{{ ' class=on' if request.endpoint == 'hub' }}>Início</a>
-      <a href="{{ url_for('individuais') }}"{{ ' class=on' if request.endpoint == 'individuais' }}>Individuais</a>
-      <a href="{{ url_for('consolidados') }}"{{ ' class=on' if request.endpoint in ['consolidados', 'consolidado'] }}>Consolidadas</a>
+      <details class="dropdown nav-dropdown">
+        <summary class="nav-parent{{ ' on' if request.endpoint in ['individuais', 'consolidados', 'consolidado'] }}">Notas Fiscais <svg class="icon chev"><use href="#i-chevron"/></svg></summary>
+        <div class="dropdown-panel" role="menu" aria-label="Notas Fiscais">
+          <a role="menuitem" href="{{ url_for('individuais') }}"{{ ' class=on' if request.endpoint == 'individuais' }}>Individuais</a>
+          <a role="menuitem" href="{{ url_for('consolidados') }}"{{ ' class=on' if request.endpoint in ['consolidados', 'consolidado'] }}>Consolidadas</a>
+        </div>
+      </details>
       <a href="{{ url_for('historico') }}"{{ ' class=on' if request.endpoint == 'historico' }}>Histórico</a>
       <a href="{{ url_for('contratos') }}"{{ ' class=on' if request.endpoint in ['contratos', 'contrato_novo', 'contrato_editar', 'contrato_salvar'] }}>Contratos</a>
+      <a href="{{ url_for('regras') }}"{{ ' class=on' if request.endpoint in ['regras', 'regra_nova', 'regra_editar', 'regra_salvar'] }}>Regras</a>
       <a href="{{ url_for('importar') }}"{{ ' class=on' if request.endpoint in ['importar', 'importar_executar'] }}>Importar</a>
     </nav>
 
     <div class="controls">
-      <div class="seg" role="group" aria-label="Tamanho da fonte">
-        <button type="button" data-set-fs="100" title="Fonte padrão">A</button>
-        <button type="button" data-set-fs="112" title="Fonte maior" style="font-size:.92rem">A</button>
-        <button type="button" data-set-fs="125" title="Fonte grande" style="font-size:1.02rem">A</button>
-        <button type="button" data-set-fs="140" title="Fonte muito grande" style="font-size:1.12rem">A</button>
-      </div>
-      <div class="seg" role="group" aria-label="Tema de cores">
-        <button type="button" data-set-theme="auto" title="Tema automático (segue o sistema)">Auto</button>
-        <button type="button" data-set-theme="light" title="Tema claro">Claro</button>
-        <button type="button" data-set-theme="dark" title="Tema escuro">Escuro</button>
-      </div>
+      <details class="dropdown" id="menu-exibicao">
+        <summary class="dropdown-toggle" aria-label="Preferências de exibição" title="Preferências de exibição">
+          <svg class="icon"><use href="#i-config"/></svg>
+          <span class="dropdown-label">Exibição</span>
+          <svg class="icon chev"><use href="#i-chevron"/></svg>
+        </summary>
+        <div class="dropdown-panel">
+          <div class="menu-group">
+            <span class="menu-label">Tamanho da fonte</span>
+            <div class="seg" role="group" aria-label="Tamanho da fonte">
+              <button type="button" data-set-fs="100" title="Fonte padrão">A</button>
+              <button type="button" data-set-fs="112" title="Fonte maior" style="font-size:.92rem">A</button>
+              <button type="button" data-set-fs="125" title="Fonte grande" style="font-size:1.02rem">A</button>
+              <button type="button" data-set-fs="140" title="Fonte muito grande" style="font-size:1.12rem">A</button>
+            </div>
+          </div>
+          <div class="menu-group">
+            <span class="menu-label">Tema de cores</span>
+            <div class="seg" role="group" aria-label="Tema de cores">
+              <button type="button" data-set-theme="auto" title="Tema automático (segue o sistema)">Auto</button>
+              <button type="button" data-set-theme="light" title="Tema claro">Claro</button>
+              <button type="button" data-set-theme="dark" title="Tema escuro">Escuro</button>
+            </div>
+          </div>
+        </div>
+      </details>
     </div>
   </header>
 

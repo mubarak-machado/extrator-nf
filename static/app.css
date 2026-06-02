@@ -232,6 +232,48 @@ a:hover { color: var(--primary-hover); }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
 .seg button:hover { color: var(--ink); }
 
+/* ---------- menus expansíveis (disclosure nativo <details class="dropdown">) ---------- */
+.dropdown { position: relative; }
+.dropdown > summary { list-style: none; cursor: pointer; user-select: none; }
+.dropdown > summary::-webkit-details-marker { display: none; }
+.dropdown > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-sm); }
+.dropdown .chev { width: .82rem; height: .82rem; opacity: .7; transition: transform .15s ease; }
+.dropdown[open] > summary .chev { transform: rotate(180deg); }
+.dropdown-panel {
+  position: absolute; top: calc(100% + 6px); z-index: 40; min-width: max-content;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md);
+  box-shadow: var(--shadow); padding: var(--sp-3);
+}
+
+/* dropdown de navegação (Notas Fiscais) */
+.nav-dropdown > summary {
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  color: var(--ink-2); font-size: .88rem; font-weight: 600;
+  padding: .4rem .7rem; border-radius: var(--radius-sm); line-height: 1;
+}
+.nav-dropdown > summary:hover { color: var(--ink); background: var(--surface-2); }
+.nav-dropdown > summary.on { color: var(--primary); background: var(--primary-soft); }
+.nav-dropdown .dropdown-panel { left: 0; padding: var(--sp-2); display: flex; flex-direction: column; gap: 2px; }
+.nav-dropdown .dropdown-panel a {
+  display: block; text-decoration: none; white-space: nowrap;
+  color: var(--ink-2); font-size: .88rem; font-weight: 600;
+  padding: .4rem .7rem; border-radius: var(--radius-sm);
+}
+.nav-dropdown .dropdown-panel a:hover { color: var(--ink); background: var(--surface-2); }
+.nav-dropdown .dropdown-panel a.on { color: var(--primary); background: var(--primary-soft); }
+
+/* dropdown de exibição (fonte + tema) */
+.controls .dropdown-toggle {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: .42rem .62rem; color: var(--ink-2); font-size: .82rem; font-weight: 600; line-height: 1;
+}
+.controls .dropdown-toggle:hover { color: var(--ink); }
+.controls .dropdown-toggle .icon { width: 1.05rem; height: 1.05rem; }
+.controls .dropdown-panel { right: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+.menu-group { display: flex; flex-direction: column; gap: var(--sp-2); }
+.menu-label { font-size: .72rem; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .03em; }
+
 /* ---------- layout ---------- */
 main { max-width: 1180px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) var(--sp-8); }
 .page-head { margin-bottom: var(--sp-5); }
@@ -520,7 +562,6 @@ th.sortable .arr { color: var(--ink-3); font-size: .9em; }
   position: relative; overflow: hidden;
 }
 .module-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--primary); }
-.module-card.span-all { grid-column: 1 / -1; }
 .module-card:hover { box-shadow: var(--shadow); border-color: var(--line-strong); color: inherit; }
 .module-card .mod-icon {
   width: 2.6rem; height: 2.6rem; border-radius: var(--radius); flex: none; display: grid; place-items: center;
@@ -687,3 +728,11 @@ input[type="file"]::file-selector-button:hover { background: var(--surface); }
 .form-contrato select { font: inherit; padding: .5rem .7rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
 .opt.block { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-1); font-size: .95rem; }
 .sub-field { margin: 0 0 var(--sp-3) var(--sp-5); }
+/* Caixa da regra federal derivada do catálogo (read-only por padrão). */
+.regra-derivada {
+  background: var(--info-bg); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+  border-left: 3px solid var(--info); border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3);
+}
+.regra-derivada p { margin: 0 0 var(--sp-1); }
+.regra-derivada p:last-child { margin-bottom: 0; }

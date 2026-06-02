@@ -4,9 +4,12 @@
 
 {% set pct = (kpis.prontas * 100 // kpis.ineditas) if kpis.ineditas else 100 %}
 
-<div class="page-head">
-  <h2>Notas individuais</h2>
-  <p>Notas avulsas pendentes (NF-e e NFS-e fora de consolidação). Os valores tributários são o que o emitente destacou, não uma apuração do sistema.</p>
+<div class="page-head row">
+  <div>
+    <h2>Notas individuais</h2>
+    <p>Notas avulsas pendentes (NF-e e NFS-e fora de consolidação). Os valores tributários são o que o emitente destacou, não uma apuração do sistema.</p>
+  </div>
+  <a class="btn ghost" href="{{ url_for('importar') }}" style="margin-left:auto"><svg class="icon"><use href="#i-exportar"/></svg> Importar notas</a>
 </div>
 
 <section class="hero" aria-label="Prontidão das avulsas">

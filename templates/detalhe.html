@@ -162,6 +162,11 @@
     {% else %}
       {% set res = conf.resultado %}
       <p class="note"><span class="chip">contrato {{ res.contrato_rotulo }}</span> Comparação da regra declarada com o destaque do emitente. É <strong>sugestão para conferência</strong> — nada é aplicado (Fase 2).</p>
+      {% if conf.federal_origem == 'ajustado' %}
+      <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> Enquadramento federal <strong>ajustado pelo operador</strong>{% if conf.federal_codigo %} (sobre a regra {{ conf.federal_codigo }}){% endif %} — não veio do catálogo padrão.{% if conf.federal_justificativa %} Justificativa: “{{ conf.federal_justificativa }}”.{% endif %}</p></div>
+      {% elif conf.federal_codigo %}
+      <p class="muted small">Enquadramento federal derivado da regra <span class="chip">{{ conf.federal_codigo }}</span> do catálogo.</p>
+      {% endif %}
       <table class="conf-tab">
         <thead><tr><th>Tributo</th><th>Regra do contrato</th><th class="num">Destaque emitente</th><th class="num">Esperado (sugestão)</th><th>Situação</th></tr></thead>
         <tbody>

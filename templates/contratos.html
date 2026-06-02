@@ -7,7 +7,7 @@
     <h2>Contratos</h2>
     <p>Configuração por contrato — natureza do prestador, previsão de material e enquadramento das retenções. É o que o especialista dita; o sistema guarda para a análise das notas (não apura nada aqui).</p>
   </div>
-  <a class="btn" href="{{ url_for('contrato_novo') }}" style="margin-left:auto"><svg class="icon"><use href="#i-doc"/></svg> Novo contrato</a>
+  {% if contratos %}<a class="btn" href="{{ url_for('contrato_novo') }}" style="margin-left:auto"><svg class="icon"><use href="#i-doc"/></svg> Novo contrato</a>{% endif %}
 </div>
 
 {% if not contratos %}

@@ -2,9 +2,12 @@
 {% block title %}Pagamentos consolidados · Extrator NF{% endblock %}
 {% block conteudo %}
 
-<div class="page-head">
-  <h2>Pagamentos consolidados</h2>
-  <p>Conjuntos de notas de um mesmo contrato, pagos de forma agregada. O vínculo de contrato não consta no XML — o agrupamento abaixo é <strong>sugerido</strong> por prestador + competência; confira antes de pagar.</p>
+<div class="page-head row">
+  <div>
+    <h2>Pagamentos consolidados</h2>
+    <p>Conjuntos de notas de um mesmo contrato, pagos de forma agregada. O vínculo de contrato não consta no XML — o agrupamento abaixo é <strong>sugerido</strong> por prestador + competência; confira antes de pagar.</p>
+  </div>
+  <a class="btn ghost" href="{{ url_for('importar') }}" style="margin-left:auto"><svg class="icon"><use href="#i-exportar"/></svg> Importar notas</a>
 </div>
 
 {% if consolidacoes %}

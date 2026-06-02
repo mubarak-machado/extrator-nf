@@ -456,3 +456,123 @@ def test_conferencia_nao_grava_nada():
             assert list(Path(d).glob("*.sqlite")) == []   # nada gravado
         finally:
             os.chdir(cwd)
+
+
+# ---------- Motor de enquadramento federal — Fase 2, derivação (I-3/I-6) ----------
+# O catálogo real é lançado pelo especialista (galho_nfse/catalogo_federal.py) e começa
+# vazio. Aqui testamos o MOTOR com um catálogo de fixture, e que o real começa vazio.
+
+def _catalogo_fixture():
+    from galho_nfse.enquadramento import RegraEnquadramento
+    return [
+        RegraEnquadramento(codigo="X-000", descricao="dispensa", fundamento="f",
+                           naturezas=("simples", "mei", "pessoa_fisica"), sujeito=False),
+        RegraEnquadramento(codigo="X-001", descricao="com material", fundamento="f",
+                           naturezas=("nao_optante",), categorias=("geral",),
+                           materiais=("sim_discriminado", "sim_sem_discriminacao"),
+                           sujeito=True, ir_pct="1.2", csll=True, cofins=True, pis=True),
+        RegraEnquadramento(codigo="X-002", descricao="sem material", fundamento="f",
+                           naturezas=("nao_optante",), categorias=("geral",),
+                           materiais=("nao",),
+                           sujeito=True, ir_pct="4.8", csll=True, cofins=True, pis=True),
+    ]
+
+
+def test_motor_casa_primeira_regra():
+    """O motor devolve a primeira regra cuja condição casa o contrato."""
+    from galho_nfse import enquadramento
+    cat = _catalogo_fixture()
+    sug = enquadramento.aplicar_catalogo_federal(_contrato(prest_natureza="simples"), catalogo=cat)
+    assert sug.regra.codigo == "X-000" and sug.regra.sujeito is False
+    sug = enquadramento.aplicar_catalogo_federal(
+        _contrato(prest_natureza="nao_optante", categoria_servico="geral", material_previsao="nao"),
+        catalogo=cat)
+    assert sug.regra.codigo == "X-002" and sug.regra.ir_pct == "4.8"
+    sug = enquadramento.aplicar_catalogo_federal(
+        _contrato(prest_natureza="nao_optante", categoria_servico="geral",
+                  material_previsao="sim_discriminado"), catalogo=cat)
+    assert sug.regra.codigo == "X-001"
+
+
+def test_motor_indefinido_quando_nenhuma_regra_casa():
+    """I-6: nenhuma regra casa (inclui catálogo vazio) → indefinido com motivo visível."""
+    from galho_nfse import enquadramento
+    sug = enquadramento.aplicar_catalogo_federal(_contrato(prest_natureza="nao_optante"), catalogo=[])
+    assert sug.regra is None and sug.indefinido_motivo
+    sug = enquadramento.aplicar_catalogo_federal(
+        _contrato(prest_natureza="nao_optante", categoria_servico="transporte_passageiros",
+                  material_previsao="nao"), catalogo=_catalogo_fixture())
+    assert sug.regra is None
+
+
+def test_motor_pureza_nao_muta_contrato():
+    """I-3: aplicar o catálogo não muta o contrato nem grava nada."""
+    from galho_nfse import enquadramento
+    c = _contrato(prest_natureza="nao_optante")
+    enquadramento.aplicar_catalogo_federal(c, _catalogo_fixture())
+    assert c.ret_federal_origem == "derivado" and c.ret_federal_regra_codigo is None  # default intacto
+
+
+def test_store_regras_crud_e_ordem(tmp_path):
+    """CRUD do catálogo cadastrado pela tela (I-4): salvar/listar/obter/editar/remover;
+    condição (listas) e audit voltam do banco; a ordem de avaliação é respeitada."""
+    from galho_nfse.enquadramento import RegraEnquadramento
+    from galho_nfse.catalogo_federal import StoreRegrasFederais
+    store = StoreRegrasFederais(tmp_path / "cat.sqlite")
+    assert store.listar() == []                                  # começa vazio
+    r1 = RegraEnquadramento(codigo="TF-001", descricao="com material", fundamento="IN",
+                            naturezas=("nao_optante",), categorias=("geral",),
+                            materiais=("sim_discriminado",), sujeito=True, ir_pct="1.2",
+                            csll=True, cofins=True, pis=True, ordem=2)
+    r2 = RegraEnquadramento(codigo="TF-000", descricao="dispensa", fundamento="IN",
+                            naturezas=("simples",), sujeito=False, ordem=1)
+    store.salvar(r1); store.salvar(r2)
+    lista = store.listar()
+    assert [r.codigo for r in lista] == ["TF-000", "TF-001"]     # ordenado por `ordem`
+    lido = store.obter(lista[1].id)
+    assert lido.naturezas == ("nao_optante",) and lido.materiais == ("sim_discriminado",)
+    assert lido.sujeito is True and lido.criado_em                # audit gravado (I-4)
+    # editar mantém criado_em e atualiza atualizado_em
+    lido.descricao = "com material (revisado)"
+    store.salvar(lido)
+    rel = store.obter(lido.id)
+    assert rel.descricao == "com material (revisado)" and rel.criado_em == lido.criado_em
+    store.remover(lido.id)
+    assert [r.codigo for r in store.listar()] == ["TF-000"]
+    store.fechar()
+
+
+def test_regra_agregada_derivada():
+    """A agregada é IR + as contribuições que incidem (nunca digitada)."""
+    from decimal import Decimal
+    from galho_nfse.enquadramento import RegraEnquadramento
+    r = RegraEnquadramento(codigo="X", descricao="d", fundamento="f", sujeito=True,
+                           ir_pct="4.8", csll=True, cofins=True, pis=True)
+    assert r.agregada_pct() == Decimal("9.45") and r.agregada_txt() == "9,45%"
+    assert r.ir_txt() == "4,8%"
+    r2 = RegraEnquadramento(codigo="Y", descricao="d", fundamento="f", sujeito=True, ir_pct="1.5")
+    assert r2.agregada_pct() == Decimal("1.5")      # só IR, sem trio
+
+
+def test_contrato_persiste_codigo_e_override_federal(tmp_path):
+    """I-4: o contrato persiste o código da regra derivada e, no override manual,
+    a justificativa + autor + data — reler do banco devolve tudo."""
+    from tronco.contratos import StoreContratos
+    store = StoreContratos(tmp_path / "contratos.sqlite")
+    c = _contrato(prest_natureza="nao_optante", ret_federal_regra_codigo="TF-002",
+                  ret_federal_origem="derivado", ret_federal_sujeito=True,
+                  ret_federal_ir_pct="4.8")
+    id_ = store.salvar(c)
+    lido = store.obter(id_)
+    assert lido.ret_federal_regra_codigo == "TF-002" and lido.ret_federal_origem == "derivado"
+    # Override manual (caso especial) → persiste rastro completo.
+    lido.ret_federal_origem = "ajustado"
+    lido.ret_federal_justificativa = "Aquisição de combustível — alíquota específica."
+    lido.ret_federal_ajustado_por = "operador"
+    lido.ret_federal_ajustado_em = "2026-06-02T12:00:00+00:00"
+    store.salvar(lido)
+    rel = store.obter(id_)
+    assert rel.ret_federal_origem == "ajustado"
+    assert rel.ret_federal_justificativa == "Aquisição de combustível — alíquota específica."
+    assert rel.ret_federal_ajustado_por == "operador"
+    store.fechar()

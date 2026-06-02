@@ -39,6 +39,32 @@
   document.addEventListener("DOMContentLoaded", syncBotoes);
 })();
 
+/* Menus expansíveis (<details class="dropdown">): fecham ao clicar fora ou com Esc,
+   e só um fica aberto por vez. Disclosure nativo — sem JS ainda abrem no clique e são
+   acessíveis por teclado. */
+(function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    var menus = Array.prototype.slice.call(document.querySelectorAll("details.dropdown"));
+    if (!menus.length) return;
+    menus.forEach(function (d) {
+      d.addEventListener("toggle", function () {
+        if (d.open) menus.forEach(function (o) { if (o !== d) o.removeAttribute("open"); });
+      });
+    });
+    document.addEventListener("click", function (e) {
+      menus.forEach(function (d) {
+        if (d.open && !d.contains(e.target)) d.removeAttribute("open");
+      });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      menus.forEach(function (d) {
+        if (d.open) { d.removeAttribute("open"); var s = d.querySelector("summary"); if (s) s.focus(); }
+      });
+    });
+  });
+})();
+
 /* Triagem da lista: abas por situação + busca + ordenação. Tudo client-side,
    sobre as linhas já renderizadas (volume de POC). Acessível: abas com
    aria-selected, ordenação reflete aria-sort. */

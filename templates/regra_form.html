@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Nova regra' if novo else 'Editar regra' }} · Extrator NF{% endblock %}
+{% block conteudo %}
+{% set r = regra %}
+
+<p class="breadcrumb"><a href="{{ url_for('regras') }}">Regras</a> › {{ 'Nova regra' if novo else r.codigo }}</p>
+
+<div class="page-head">
+  <h2>{{ 'Nova regra' if novo else 'Editar regra ' ~ r.codigo }}</h2>
+  <p>O sistema guarda a regra que você dita e a usa para <strong>sugerir</strong> o enquadramento — nunca decide a retenção sozinho (I-3). A agregada (IR + 4,65%) é calculada sozinha.</p>
+</div>
+
+<form method="post" action="{{ url_for('regra_salvar', id_=r.id) if not novo else url_for('regra_salvar') }}" class="form-contrato">
+
+  <fieldset class="card card-b">
+    <legend>Identificação</legend>
+    <div class="grid-3">
+      <label class="field"><span class="lbl">Código (estável, ex.: TF-001)</span>
+        <input type="text" name="codigo" value="{{ r.codigo }}" required></label>
+      <label class="field"><span class="lbl">Ordem de avaliação (menor = primeiro)</span>
+        <input type="text" name="ordem" inputmode="numeric" value="{{ r.ordem }}"></label>
+      <label class="field"><span class="lbl">Código de receita (DARF)</span>
+        <input type="text" name="codigo_receita" placeholder="ex.: 6190" value="{{ r.codigo_receita or '' }}"></label>
+    </div>
+    <label class="field"><span class="lbl">Descrição</span>
+      <input type="text" name="descricao" value="{{ r.descricao }}" placeholder="ex.: PJ não optante — serviço sem material" required></label>
+    <label class="field"><span class="lbl">Fundamento legal</span>
+      <input type="text" name="fundamento" value="{{ r.fundamento }}" placeholder="ex.: IN RFB 1234/2012, Anexo I"></label>
+  </fieldset>
+
+  <fieldset class="card card-b">
+    <legend>Quando se aplica <span class="lbl" style="font-weight:400">(condição — deixe um grupo vazio para “não restringir”)</span></legend>
+    <div class="field"><span class="lbl">Natureza do prestador</span>
+      <div class="radio-row">
+        {% for chave, rotulo in vocab.naturezas.items() %}
+        <label class="opt"><input type="checkbox" name="naturezas" value="{{ chave }}" {{ 'checked' if chave in r.naturezas }}> {{ rotulo }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="field"><span class="lbl">Categoria do serviço</span>
+      <div class="radio-row">
+        {% for chave, rotulo in vocab.categorias.items() %}
+        <label class="opt"><input type="checkbox" name="categorias" value="{{ chave }}" {{ 'checked' if chave in r.categorias }}> {{ rotulo }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="field"><span class="lbl">Previsão de material</span>
+      <div class="radio-row">
+        {% for chave, rotulo in vocab.materiais.items() %}
+        <label class="opt"><input type="checkbox" name="materiais" value="{{ chave }}" {{ 'checked' if chave in r.materiais }}> {{ rotulo }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="card card-b">
+    <legend>Efeito <span class="lbl" style="font-weight:400">(o enquadramento que a regra dita)</span></legend>
+    <label class="opt block"><input type="checkbox" name="sujeito" {{ 'checked' if r.sujeito }}> Os tributos federais <strong>incidem</strong> (retidos juntos)</label>
+    <div class="sub-field" data-mostra-se="sujeito">
+      <label class="field"><span class="lbl">Percentual de IR</span>
+        <select name="ir_pct">
+          <option value="">—</option>
+          {% for chave, rotulo in vocab.ir_percentuais.items() %}<option value="{{ chave }}" {{ 'selected' if r.ir_pct == chave }}>{{ rotulo }}</option>{% endfor %}
+        </select>
+      </label>
+      <div class="field"><span class="lbl">Contribuições que incidem (compõem os 4,65%)</span>
+        <div class="radio-row">
+          <label class="opt"><input type="checkbox" name="csll" {{ 'checked' if r.csll }}> CSLL 1%</label>
+          <label class="opt"><input type="checkbox" name="cofins" {{ 'checked' if r.cofins }}> COFINS 3%</label>
+          <label class="opt"><input type="checkbox" name="pis" {{ 'checked' if r.pis }}> PIS 0,65%</label>
+        </div>
+      </div>
+    </div>
+    <p class="note-foot">Sem marcar “incidem”, a regra significa <strong>dispensa</strong> de retenção federal (ex.: optante do Simples, MEI, pessoa física).</p>
+  </fieldset>
+
+  <div class="actions">
+    <button type="submit" class="btn"><svg class="icon"><use href="#i-check"/></svg> Salvar regra</button>
+    <a class="btn ghost" href="{{ url_for('regras') }}">Cancelar</a>
+    {% if not novo %}
+    <form method="post" action="{{ url_for('regra_remover', id_=r.id) }}" onsubmit="return confirm('Remover esta regra?')" style="margin-left:auto">
+      <button type="submit" class="link-inline">Remover regra</button>
+    </form>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

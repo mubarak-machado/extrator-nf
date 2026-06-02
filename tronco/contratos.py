@@ -94,6 +94,13 @@ class Contrato:
     ret_federal_csll: bool = True            # CSLL 1% incide?
     ret_federal_cofins: bool = True          # COFINS 3% incide?
     ret_federal_pis: bool = True             # PIS 0,65% incide?
+    # Procedência do enquadramento federal: derivado do catálogo (galho_nfse.
+    # enquadramento) ou ajustado à mão pelo operador, com justificativa (I-4).
+    ret_federal_regra_codigo: str | None = None   # "TF-002" — regra que gerou
+    ret_federal_origem: str = "derivado"          # "derivado" | "ajustado"
+    ret_federal_justificativa: str | None = None  # obrigatória quando "ajustado" (I-6)
+    ret_federal_ajustado_por: str | None = None   # autor do override (I-4)
+    ret_federal_ajustado_em: str | None = None    # data ISO-8601 do override (I-4)
     inss_cessao_mao_obra: bool = False       # INSS (IN 2110/2022)
     inss_aliquota: str | None = None         # "11" | "3.5"
     inss_base_minima_pct: str | None = None  # ver BASES_MINIMAS

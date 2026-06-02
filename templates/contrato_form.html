@@ -80,8 +80,30 @@
   <fieldset class="card card-b">
     <legend>Enquadramento de retenções <span class="lbl" style="font-weight:400">(declarado — base para a Fase 2)</span></legend>
 
-    <label class="opt block"><input type="checkbox" name="ret_federal_sujeito" {{ 'checked' if c.ret_federal_sujeito }}> <strong>IR/CSLL/COFINS/PIS</strong> — IN 1234/2012 (dispensado se Simples ou PF)</label>
-    <div class="sub-field" data-mostra-se="ret_federal_sujeito">
+    {# Tributos federais: o enquadramento é DERIVADO das características acima (catálogo
+       TF-xxx). Read-only por padrão; "ajustar manualmente" libera os campos e exige
+       justificativa (I-3 sugere, humano ratifica; I-4 grava o override; I-6 indefinido
+       visível). Ver galho_nfse/enquadramento.py. #}
+    {% set sf = sugestao_federal %}
+    <p class="lbl" style="font-weight:600;margin-bottom:.4rem">Tributos federais (IR/CSLL/COFINS/PIS) — <a href="{{ url_for('regras') }}">IN 1234/2012</a></p>
+    {% if sf and sf.regra %}
+      {% set rf = sf.regra %}
+      <div class="regra-derivada" role="note">
+        <p><span class="chip">{{ rf.codigo }}</span> <strong>{{ rf.descricao }}</strong></p>
+        <p class="muted small">{{ rf.fundamento }}</p>
+        {% if rf.sujeito %}
+        <p class="small">IR <strong>{{ rf.ir_txt() }}</strong> + CSLL/COFINS/PIS &middot; agregada <strong>{{ rf.agregada_txt() }}</strong></p>
+        {% else %}
+        <p class="small"><strong>Retenção federal dispensada.</strong></p>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> {{ sf.indefinido_motivo if sf else 'Defina o enquadramento federal manualmente.' }}</p></div>
+    {% endif %}
+
+    <label class="opt block"><input type="checkbox" name="ret_federal_ajustar" {{ 'checked' if c.ret_federal_origem == 'ajustado' or not (sf and sf.regra) }}> Ajustar manualmente este enquadramento <span class="lbl" style="font-weight:400">(exige justificativa)</span></label>
+    <div class="sub-field" data-mostra-se="ret_federal_ajustar">
+      <label class="opt block"><input type="checkbox" name="ret_federal_sujeito" {{ 'checked' if c.ret_federal_sujeito }}> Os tributos federais incidem (retidos juntos)</label>
       <div class="grid-2">
         <label class="field"><span class="lbl">Percentual de IR (natureza — Anexo I)</span>
           <select name="ret_federal_ir_pct">
@@ -99,6 +121,8 @@
           <label class="opt"><input type="checkbox" name="ret_federal_pis" {{ 'checked' if c.ret_federal_pis }}> PIS 0,65%</label>
         </div>
       </div>
+      <label class="field"><span class="lbl">Justificativa do ajuste manual (obrigatória)</span>
+        <textarea name="ret_federal_justificativa" rows="2" placeholder="Por que o enquadramento derivado não se aplica a este contrato?">{{ c.ret_federal_justificativa or '' }}</textarea></label>
     </div>
 
     <label class="opt block"><input type="checkbox" name="inss_cessao_mao_obra" {{ 'checked' if c.inss_cessao_mao_obra }}> <strong>INSS</strong> — cessão de mão de obra / empreitada (IN 2110/2022)</label>

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Regras de enquadramento · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head row">
+  <div>
+    <h2>Regras de enquadramento — tributos federais</h2>
+    <p>As regras que derivam o enquadramento das retenções federais (IR/CSLL/COFINS/PIS)
+       a partir das características do contrato. Aplica-se a <strong>primeira</strong> regra
+       cuja condição casar (a ordem importa). O sistema <strong>sugere</strong>; o especialista
+       ratifica por contrato (Fase 2).</p>
+  </div>
+  {% if catalogo %}<a class="btn" href="{{ url_for('regra_nova') }}" style="margin-left:auto"><svg class="icon"><use href="#i-doc"/></svg> Nova regra</a>{% endif %}
+</div>
+
+{% if not catalogo %}
+<div class="card empty-banner">
+  <svg class="icon" aria-hidden="true"><use href="#i-doc"/></svg>
+  <div>
+    <h3>Nenhuma regra cadastrada</h3>
+    <p>Enquanto o catálogo estiver vazio, todo contrato cai em <em>indefinido</em> e o enquadramento
+       federal precisa ser definido manualmente, com justificativa. Cadastre a primeira regra.</p>
+  </div>
+  <a class="btn" href="{{ url_for('regra_nova') }}">Nova regra</a>
+</div>
+{% else %}
+<section class="card"><div class="card-b">
+  <table class="conf-tab">
+    <thead><tr><th>Ordem</th><th>Código</th><th>Quando se aplica</th><th class="num">IR</th><th>Contribuições</th><th class="num">Agregada</th><th></th></tr></thead>
+    <tbody>
+      {% for r in catalogo %}
+      <tr>
+        <td class="num">{{ r.ordem }}</td>
+        <td><span class="chip">{{ r.codigo }}</span></td>
+        <td class="small">{{ r.descricao }}
+          <br><span class="muted">{% if r.naturezas %}natureza: {{ r.naturezas|map('replace','_',' ')|join(', ') }}{% else %}qualquer natureza{% endif %}{% if r.categorias %} · categoria: {{ r.categorias|join(', ') }}{% endif %}{% if r.materiais %} · material: {{ r.materiais|join(', ') }}{% endif %}</span>
+          {% if r.fundamento %}<br><span class="muted">{{ r.fundamento }}</span>{% endif %}</td>
+        <td class="num">{{ r.ir_txt() }}</td>
+        <td class="small">{% if r.sujeito %}{{ 'CSLL' if r.csll }}{{ ' · COFINS' if r.cofins }}{{ ' · PIS' if r.pis }}{% else %}<span class="muted">dispensado</span>{% endif %}</td>
+        <td class="num"><strong>{{ r.agregada_txt() }}</strong></td>
+        <td><a class="row-link" href="{{ url_for('regra_editar', id_=r.id) }}">editar <svg class="icon"><use href="#i-seta"/></svg></a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note-foot">A agregada é derivada (IR + as contribuições que incidem) — nunca digitada.
+     Os percentuais e o enquadramento são responsabilidade técnica do especialista; o sistema não confere nem inventa (I-3).</p>
+</div></section>
+{% endif %}
+{% endblock %}
