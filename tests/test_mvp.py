@@ -712,3 +712,77 @@ def test_operador_edicao_mantem_historico_e_vigente(tmp_path):
     s.salvar("XYZ", "Nova")
     assert s.atual().iniciais == "XYZ" and s.atual().nome == "Nova"
     s.fechar()
+
+
+# ---------- NPP — entidade de vínculo nota->NPP->contrato (tronco) ----------
+
+def test_npp_criar_gera_numero_e_audita(tmp_path):
+    """Criar gera o numero portátil (NPP_<iniciais>_<AAAAMMDD>_<NNNN>) e grava autoria
+    e datas (I-4); a NPP é recuperável por id."""
+    from datetime import datetime, timezone
+    from tronco.npp import StoreNPP
+    s = StoreNPP(tmp_path / "npps.sqlite")
+    dia = datetime(2026, 6, 2, tzinfo=timezone.utc)
+    npp = s.criar(contrato_id=7, competencia="2026-05", iniciais="MNM",
+                  autor="Mubarak Nunes Machado", rotulo="maio/parcela 1", agora=dia)
+    assert npp.numero == "NPP_MNM_20260602_0001"
+    assert npp.id is not None and npp.criada_por == "Mubarak Nunes Machado"
+    assert npp.criada_em == npp.atualizada_em
+    assert s.obter(npp.id).competencia == "2026-05"
+    s.fechar()
+
+
+def test_npp_sequencia_por_dia_reinicia(tmp_path):
+    """NNNN incrementa no mesmo dia e reinicia em outro dia (sequência local por data)."""
+    from datetime import datetime, timezone
+    from tronco.npp import StoreNPP
+    s = StoreNPP(tmp_path / "npps.sqlite")
+    d1 = datetime(2026, 6, 2, tzinfo=timezone.utc)
+    d2 = datetime(2026, 6, 3, tzinfo=timezone.utc)
+    a = s.criar(contrato_id=1, competencia="2026-05", iniciais="MNM", autor="x", agora=d1)
+    b = s.criar(contrato_id=1, competencia="2026-05", iniciais="MNM", autor="x", agora=d1)
+    c = s.criar(contrato_id=2, competencia="2026-06", iniciais="MNM", autor="x", agora=d2)
+    assert a.numero.endswith("20260602_0001")
+    assert b.numero.endswith("20260602_0002")   # mesmo dia -> incrementa
+    assert c.numero.endswith("20260603_0001")   # outro dia -> reinicia
+    s.fechar()
+
+
+def test_npp_par_contrato_competencia_nao_e_unico(tmp_path):
+    """Decisão do humano: vários NPPs no mesmo (contrato, competência) coexistem."""
+    from tronco.npp import StoreNPP
+    s = StoreNPP(tmp_path / "npps.sqlite")
+    a = s.criar(contrato_id=7, competencia="2026-05", iniciais="AB", autor="x")
+    b = s.criar(contrato_id=7, competencia="2026-05", iniciais="AB", autor="x")
+    assert a.id != b.id and a.numero != b.numero
+    assert len(s.listar_por_contrato(7)) == 2
+    s.fechar()
+
+
+def test_npp_salvar_atualiza_sem_mudar_numero(tmp_path):
+    """salvar() atualiza rótulo/observações/competência; o numero (identidade) é imutável."""
+    from tronco.npp import StoreNPP
+    s = StoreNPP(tmp_path / "npps.sqlite")
+    npp = s.criar(contrato_id=7, competencia="2026-05", iniciais="AB", autor="x", rotulo="v1")
+    numero = npp.numero
+    npp.rotulo, npp.observacoes = "v2", "ajuste"
+    s.salvar(npp)
+    lido = s.obter(npp.id)
+    assert lido.rotulo == "v2" and lido.observacoes == "ajuste" and lido.numero == numero
+    s.fechar()
+
+
+def test_npp_criar_exige_contrato_competencia_iniciais(tmp_path):
+    """I-6: criar sem contrato, competência ou iniciais é erro visível; salvar() numa
+    NPP nova (sem id) também é erro (use criar)."""
+    from tronco.npp import StoreNPP, NPP
+    s = StoreNPP(tmp_path / "npps.sqlite")
+    with pytest.raises(ValueError):
+        s.criar(contrato_id=None, competencia="2026-05", iniciais="AB", autor="x")
+    with pytest.raises(ValueError):
+        s.criar(contrato_id=7, competencia="  ", iniciais="AB", autor="x")
+    with pytest.raises(ValueError):
+        s.criar(contrato_id=7, competencia="2026-05", iniciais="", autor="x")
+    with pytest.raises(ValueError):
+        s.salvar(NPP(contrato_id=7, competencia="2026-05"))
+    s.fechar()
