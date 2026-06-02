@@ -372,9 +372,11 @@ def redefinir():
     n_export = len(registro.listar())
     registro.fechar()
     notas = StoreNotas(); n_notas = notas.contar(); notas.fechar()
+    store = StoreNPP(); n_npps = len(store.listar()); store.fechar()
     n_artefatos = len([f for f in PASTA_SAIDA.glob("*.csv")]) if PASTA_SAIDA.is_dir() else 0
     return render_template("redefinir.html", n_export=n_export, n_notas=n_notas,
-                           n_artefatos=n_artefatos, frase=redefinicao.FRASE_CONFIRMACAO)
+                           n_npps=n_npps, n_artefatos=n_artefatos,
+                           frase=redefinicao.FRASE_CONFIRMACAO)
 
 
 @app.route("/redefinir", methods=["POST"])

@@ -30,12 +30,13 @@ commitados** (módulo federal comum, conferência federal da NF-e, identidade do
 
 Passo 7 (UI) fatiado em **7a** (bootstrap do operador + CRUD da NPP + importação escopada),
 **7b** (detalhe em duas seções + validar/retificar), **7c** (exportação por NPP + remoção do
-fluxo individual/consolidado). **7a, 7b e 7c feitos** — jornada por NPP completa: operador,
-CRUD/importação escopada, detalhe com Grupos de impostos (3 camadas) + validar/retificar, e
-**exportação por NPP** (idempotente, artefato novo). O **fluxo antigo foi removido**
-(individual/consolidado, heurística por CNPJ, importação global) e a nav é só "NPPs". **60
-testes verdes.** **Falta só o passo 8** (reset incluir `npps.sqlite`+`validacoes_retencao.sqlite`,
-preservar `operador.sqlite`). Detalhe no plano.
+fluxo individual/consolidado). **Plano NPP concluído (passos 1–8).** Jornada por NPP completa:
+operador, CRUD/importação escopada, detalhe com Grupos de impostos (3 camadas) +
+validar/retificar, **exportação por NPP** (idempotente, artefato novo) e **reset** incluindo
+`npps.sqlite`+`validacoes_retencao.sqlite` (preservando `operador.sqlite` e a configuração). O
+**fluxo antigo foi removido** (individual/consolidado, heurística por CNPJ, importação global);
+a nav é só "NPPs". **61 testes verdes.** Falta mergear a branch e seguir para os próximos temas
+(exportador Sheets real — decisão #4; endurecimento de dado real). Detalhe no plano.
 
 ## Mudança de fase — 2026-06-02
 

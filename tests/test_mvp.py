@@ -1029,3 +1029,38 @@ def test_npp_exportar_idempotente_e_artefato(tmp_path):
     reg = RegistroDeExportacao(tmp_path / "exp.sqlite")
     assert len(reg.listar()) == n                       # idempotência: nada duplicado
     reg.fechar()
+
+
+# ---------- Passo 8: reset inclui NPP + validações, preserva o operador ----------
+
+def test_redefinir_inclui_npp_e_validacoes_preserva_operador(tmp_path):
+    """O reset zera NPPs e validações de retenção (com backup antes, I-6) e NÃO toca o
+    cadastro do operador — identidade da máquina, fora da lista de bancos a zerar."""
+    from datetime import datetime, timezone
+    from tronco.npp import StoreNPP
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    from tronco.operador import StoreOperador
+
+    # o default já inclui os dois novos bancos e exclui o operador
+    nomes = {Path(b).name for b in redefinicao.BANCOS_PADRAO}
+    assert {"npps.sqlite", "validacoes_retencao.sqlite"} <= nomes
+    assert "operador.sqlite" not in nomes
+
+    bd_npp = tmp_path / "npps.sqlite"
+    bd_val = tmp_path / "validacoes_retencao.sqlite"
+    bd_op = tmp_path / "operador.sqlite"
+    s = StoreNPP(bd_npp)
+    s.criar(contrato_id=1, competencia="2026-05", iniciais="MNM", autor="Mubarak",
+            agora=datetime(2026, 6, 2, tzinfo=timezone.utc)); s.fechar()
+    v = StoreValidacaoRetencao(bd_val)
+    v.validar("CH", "IR", "confirmado", "10.00", "Mubarak"); v.fechar()
+    StoreOperador(bd_op).salvar("MNM", "Mubarak")
+
+    resumo = redefinicao.redefinir_dados(bancos=(bd_npp, bd_val), pastas=(),
+                                         pasta_backup=tmp_path / "bkp")
+    assert not bd_npp.exists() and not bd_val.exists()              # zerados
+    assert (Path(resumo["backup"]) / "npps.sqlite").exists()        # backup antes (I-6)
+    assert (Path(resumo["backup"]) / "validacoes_retencao.sqlite").exists()
+    assert StoreNPP(bd_npp).listar() == []                          # recriado vazio
+    assert StoreValidacaoRetencao(bd_val).atuais("CH") == {}
+    assert bd_op.exists() and StoreOperador(bd_op).atual().iniciais == "MNM"  # preservado

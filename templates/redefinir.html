@@ -15,13 +15,14 @@
 
   <p class="perigo-lead">Esta operação <strong>apaga</strong> tudo o que está no banco:</p>
   <ul class="perigo-list">
-    <li><strong>Notas importadas</strong> ({{ n_notas }} no banco). A lista fica <strong>vazia</strong> — e <strong>não</strong> reimporta sozinha. Para carregar de novo, use <strong>Importar</strong> manualmente depois.</li>
+    <li><strong>NPPs</strong> ({{ n_npps }} no banco) e suas notas vinculadas. A lista de NPPs fica <strong>vazia</strong> — e <strong>não</strong> reimporta sozinha. Para recomeçar, crie uma NPP e importe as notas dentro dela.</li>
+    <li><strong>Validações de retenção</strong> do operador (confirmar/retificar por tributo, com autoria e data).</li>
     <li><strong>Registro de exportação</strong> ({{ n_export }} nota(s) marcada(s) como já exportada). É a memória que impede pagar a mesma nota duas vezes.</li>
     <li><strong>Marcações de material aplicado</strong> feitas nas NFS-e (com autoria e data).</li>
     <li><strong>Artefatos de exportação</strong> ({{ n_artefatos }} arquivo(s) CSV em <code>exportacoes/</code>). Os lotes são arquivados no backup antes de a pasta ser esvaziada.</li>
   </ul>
 
-  <p class="perigo-ok">O que <strong>não</strong> é tocado: os arquivos XML de origem (em disco). Antes de apagar, cada banco e cada lote de exportação é copiado para uma pasta de <strong>backup datada</strong>, de modo que nada some de forma irreversível.</p>
+  <p class="perigo-ok">O que <strong>não</strong> é tocado: os arquivos XML de origem, o <strong>cadastro do operador</strong> (iniciais/nome desta máquina) e a <strong>configuração</strong> (contratos e regras). Antes de apagar, cada banco e cada lote de exportação é copiado para uma pasta de <strong>backup datada</strong>, de modo que nada some de forma irreversível.</p>
 
   <form method="post" action="{{ url_for('redefinir_executar') }}" class="perigo-form">
     <label class="field">

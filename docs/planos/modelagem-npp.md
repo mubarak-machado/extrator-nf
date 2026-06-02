@@ -420,10 +420,12 @@ Construção de dentro para fora (dados → lógica → UI), cada passo com test
 - [x] **Passo 5 — `tronco/notas.py`** (coluna `npp_id` + `listar_por_npp` + `ConflitoDeChave`). *commit `47abaca`*
 - [x] **Passo 6 — `tronco/validacao_retencao.py`** (confirmar/retificar, I-3/I-4). *commit `71d7449`*
 - [x] **Passo 7 — `tronco/app.py` + `templates/`** — **7a, 7b e 7c feitos**. Fluxo antigo removido.
-- [ ] **Passo 8 — `tronco/redefinicao.py`** — incluir `npps.sqlite` + `validacoes_retencao.sqlite` no reset; **preservar** `operador.sqlite`.
+- [x] **Passo 8 — `tronco/redefinicao.py`** — `npps.sqlite` + `validacoes_retencao.sqlite` entram no
+  reset (com backup datado antes, I-6); `operador.sqlite` e a configuração (contratos/regras)
+  **preservados**. Tela de redefinição lista NPPs/validações e o que não é tocado.
 
-55 testes verdes até o passo 6; 57 após o 7a; 60 após o 7b; **60 após o 7c** (−1 teste da
-heurística removido, +1 de exportação por NPP).
+55 testes verdes até o passo 6; 57 após o 7a; 60 após o 7b/7c (−1 heurística, +1 export NPP);
+**61 após o passo 8** (+1 reset NPP/validações/operador).
 
 ### Divisão do passo 7 (UI) — fazer em sessão nova (janela de contexto)
 
@@ -470,4 +472,5 @@ Cada subetapa termina com `pytest` verde e o app de pé; o fluxo antigo
     (galho_nfse) + seu teste; templates `individuais/consolidados/consolidado/importar.html`.
   - Teste novo: exportação por NPP idempotente + artefato (I-1/I-5). 60 verdes.
 
-**Falta só o passo 8** (reset).
+**Plano concluído.** ✅ Todos os passos (1–8) implementados na branch `feat/modelagem-npp`.
+A jornada por NPP substituiu o fluxo individual/consolidado de ponta a ponta.

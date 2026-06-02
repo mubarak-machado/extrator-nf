@@ -1,11 +1,11 @@
 """
 Redefinição dos dados — reset de demonstração ao estado inicial.
 
-Apaga as memórias persistentes que o sistema acumula: o registro de idempotência
-(I-1) e as marcações de material (I-4). Depois disso, todas as notas dos exemplos
-voltam a aparecer como pendentes — porque as notas em si NUNCA são apagadas: elas
-vêm do XML em `exemplos/` e são relidas a cada carga de tela. A redefinição mexe
-só no que a máquina acumulou, jamais na fonte.
+Apaga as memórias persistentes que o sistema acumula: notas importadas, o registro de
+idempotência (I-1), as marcações de material (I-4), as **NPPs** e as **validações de
+retenção** do operador (I-4). Tudo isso é dado de uso/teste, recriável; a identidade do
+operador (`operador.sqlite`) e a configuração (contratos, catálogo de regras) **não** são
+tocadas — não constam na lista de bancos a zerar.
 
 Por que isto convive com I-1 e I-4 (memórias que existem justamente para não se
 perder): a operação é de demonstração e cercada de barreiras. Como prática contra
@@ -25,15 +25,20 @@ from pathlib import Path
 from tronco.idempotencia import CAMINHO_PADRAO as BD_EXPORTACAO
 from tronco.marcacoes import CAMINHO_PADRAO as BD_MARCACOES
 from tronco.notas import CAMINHO_PADRAO as BD_NOTAS
+from tronco.npp import CAMINHO_PADRAO as BD_NPPS
+from tronco.validacao_retencao import CAMINHO_PADRAO as BD_VALIDACOES
 
 # Frase que o usuário precisa digitar para confirmar. Exigir transcrição exata é
 # uma barreira deliberada: um clique distraído não basta para apagar dados.
 FRASE_CONFIRMACAO = "REDEFINIR"
 
-# Bancos do tronco que a redefinição zera: notas importadas, registro de
-# exportação e marcações. Ordem só afeta onde fica a pasta de backup (irmã do
-# primeiro banco). Redefinir esvazia tudo; reimportar é manual depois.
-BANCOS_PADRAO: tuple[Path, ...] = (BD_NOTAS, BD_EXPORTACAO, BD_MARCACOES)
+# Bancos do tronco que a redefinição zera: notas importadas (o vínculo `npp_id` vai
+# junto), registro de exportação, marcações, NPPs e validações de retenção. Ordem só
+# afeta onde fica a pasta de backup (irmã do primeiro banco). Redefinir esvazia tudo;
+# reimportar é manual depois. NÃO inclui `operador.sqlite` (identidade da máquina,
+# decisão do humano) nem a configuração (contratos / catálogo de regras).
+BANCOS_PADRAO: tuple[Path, ...] = (BD_NOTAS, BD_EXPORTACAO, BD_MARCACOES,
+                                   BD_NPPS, BD_VALIDACOES)
 
 # Pastas cujo conteúdo é arquivado e limpo no reset. `exportacoes/` guarda os
 # artefatos de lote (CSV). Limpá-los no reset é uma decisão consciente da
