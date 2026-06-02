@@ -905,3 +905,32 @@ def test_validacao_retencao_valida_entradas(tmp_path):
         s.validar("N", "IR", "confirmado", "10.00", "   ")      # autor vazio
     assert s.atuais("N") == {}                                  # nada gravado
     s.fechar()
+
+
+# ---------- Passo 7a (UI): helpers puros da jornada NPP ----------
+
+def test_npp_competencia_valida():
+    """Competência só vale no formato AAAA-MM (01..12). Fora disso é barrada (I-6)."""
+    from tronco.app import _competencia_valida
+    assert _competencia_valida("2026-05")
+    assert _competencia_valida("2026-12")
+    assert _competencia_valida("2026-01")
+    assert not _competencia_valida("2026-13")     # mês inválido
+    assert not _competencia_valida("2026-00")
+    assert not _competencia_valida("2026-5")      # sem zero à esquerda
+    assert not _competencia_valida("05/2026")     # formato humano, não ISO
+    assert not _competencia_valida("")
+
+
+def test_npp_divergencia_cnpj_e_visivel():
+    """CNPJ da nota × prestador do contrato divergente é sinalizado (I-6), nunca
+    bloqueia nem decide nada; contrato ausente/sem documento não gera ruído."""
+    from tronco.app import _divergencias_cnpj
+    from tronco.contratos import Contrato
+    from tronco.ingestao import ingerir
+    res = ingerir(EXEMPLOS / "nfe_exemplo.xml")     # NF-e: confere pelo emit_cnpj
+    igual = Contrato(prest_documento=res.registro.emit_cnpj)
+    diferente = Contrato(prest_documento="00000000000000")
+    assert _divergencias_cnpj([res], igual) == []
+    assert _divergencias_cnpj([res], diferente)     # lista não-vazia = aviso
+    assert _divergencias_cnpj([res], None) == []    # sem contrato → sem ruído

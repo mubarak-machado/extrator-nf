@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Operador · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head">
+  <h2>{{ 'Identidade do operador' if operador else 'Bem-vindo — cadastre o operador' }}</h2>
+  {% if operador %}
+  <p>Identidade vigente nesta máquina: <strong>{{ operador.nome }} ({{ operador.iniciais }})</strong>. Salvar de novo registra uma nova identidade vigente — o histórico anterior é preservado (I-4).</p>
+  {% else %}
+  <p>Esta máquina ainda não tem operador cadastrado. As iniciais entram no número de cada NPP e o nome assina as marcações e validações, para que toda decisão seja rastreável (I-4). Fica salvo só aqui, nesta máquina.</p>
+  {% endif %}
+</div>
+
+<form method="post" action="{{ url_for('operador_salvar') }}" class="card card-b" style="max-width:32rem">
+  <label class="field">
+    <span class="lbl">Iniciais (ex.: MNM)</span>
+    <input type="text" name="iniciais" value="{{ operador.iniciais if operador else '' }}" maxlength="8" required>
+  </label>
+  <label class="field">
+    <span class="lbl">Nome do operador</span>
+    <input type="text" name="nome" value="{{ operador.nome if operador else '' }}" required>
+  </label>
+  <div class="actions">
+    <button type="submit" class="btn"><svg class="icon"><use href="#i-check"/></svg> Salvar identidade</button>
+  </div>
+</form>
+{% endblock %}

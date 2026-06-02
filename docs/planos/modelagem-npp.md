@@ -419,26 +419,29 @@ Construção de dentro para fora (dados → lógica → UI), cada passo com test
 - [x] **Passo 4 — `tronco/npp.py`** (`NPP` + `StoreNPP`, geração do `numero`). *commit `eb53349`*
 - [x] **Passo 5 — `tronco/notas.py`** (coluna `npp_id` + `listar_por_npp` + `ConflitoDeChave`). *commit `47abaca`*
 - [x] **Passo 6 — `tronco/validacao_retencao.py`** (confirmar/retificar, I-3/I-4). *commit `71d7449`*
-- [ ] **Passo 7 — `tronco/app.py` + `templates/`** — fatiado (ver abaixo).
+- [ ] **Passo 7 — `tronco/app.py` + `templates/`** — fatiado (ver abaixo). **7a feito**; faltam 7b, 7c.
 - [ ] **Passo 8 — `tronco/redefinicao.py`** — incluir `npps.sqlite` + `validacoes_retencao.sqlite` no reset; **preservar** `operador.sqlite`.
 
-55 testes verdes até o passo 6.
+55 testes verdes até o passo 6; **57 após o 7a**.
 
 ### Divisão do passo 7 (UI) — fazer em sessão nova (janela de contexto)
 
 Cada subetapa termina com `pytest` verde e o app de pé; o fluxo antigo
 (individual/consolidado) só é removido na 7c.
 
-- **7a — Fundação da jornada (app segue funcionando, nada removido):**
-  - *Bootstrap do operador:* sem cadastro local → tela `operador_form.html` (`StoreOperador`);
-    substitui o `criada_por="operador"` fixo pela identidade real.
-  - *CRUD da NPP:* `GET /npps`, `GET /npps/nova`, `POST /npps`, `GET /npp/<id>/editar`,
-    `POST /npp/<id>`, `POST /npp/<id>/remover`; templates `npps.html`, `npp_form.html`.
-    Form: contrato (`StoreContratos`) + competência + rótulo; `StoreNPP.criar` usa as
-    iniciais do operador.
+- [x] **7a — Fundação da jornada (app segue funcionando, nada removido):** **FEITO** (57 testes).
+  - *Bootstrap do operador:* sem cadastro local → `before_request` desvia para
+    `operador_form.html` (`StoreOperador`); `criada_por`/`autor` usam a identidade real.
+    Identidade exibida no rodapé (`base.html`, via context processor).
+  - *CRUD da NPP:* `GET /npps`, `GET /npps/nova`, `POST /npps`, `GET /npp/<id>`,
+    `GET /npp/<id>/editar`, `POST /npp/<id>`, `POST /npp/<id>/remover`; templates
+    `npps.html`, `npp_form.html`, `npp.html` (detalhe enxuto: cabeçalho + Documentos de
+    origem + importação; "Grupos de impostos" fica para o 7b). Nav ganhou "NPPs".
+    Remover só NPP vazia (I-6). Contrato/numero imutáveis na edição.
   - *Importação escopada à NPP:* `POST /npp/<id>/importar/arquivo|pasta|exemplos`;
-    `_persistir` recebe `npp_id`; tratar `ConflitoDeChave` ("já consta na NPP nº X");
-    validar CNPJ × prestador do contrato (I-6).
+    `_persistir(resultados, npp_id)` trata `ConflitoDeChave` ("já consta na NPP nº X")
+    e `_divergencias_cnpj` sinaliza CNPJ × prestador do contrato (I-6, não bloqueia).
+  - *Verificado:* `uv run pytest` 57 verdes + smoke ponta-a-ponta das 11 etapas do fluxo.
 - **7b — Detalhe da NPP (duas seções) + validar/retificar:**
   - `GET /npp/<id>`: cabeçalho derivado (tabela do §3) + Seção 1 (Documentos de origem)
     + Seção 2 (Grupos de impostos), seções empilhadas.

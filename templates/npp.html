@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ npp.numero }} · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<p class="breadcrumb"><a href="{{ url_for('npps') }}">NPPs</a> › {{ npp.numero }}</p>
+
+<div class="page-head row">
+  <div>
+    <h2>{{ npp.numero }}</h2>
+    <p>{{ contrato_rotulo }}{% if npp.rotulo %} · {{ npp.rotulo }}{% endif %}</p>
+  </div>
+  <a class="btn ghost" href="{{ url_for('npp_editar', id_=npp.id) }}" style="margin-left:auto">Editar NPP</a>
+  {% if not itens %}
+  <form method="post" action="{{ url_for('npp_remover', id_=npp.id) }}" onsubmit="return confirm('Remover esta NPP vazia?');">
+    <button type="submit" class="btn ghost">Remover</button>
+  </form>
+  {% endif %}
+</div>
+
+<section class="card card-b" aria-label="Cabeçalho da NPP">
+  <dl class="grid zebra">
+    <dt>Contrato</dt><dd>{{ contrato_rotulo }}</dd>
+    {% if contrato and contrato.objeto %}<dt>Objeto</dt><dd>{{ contrato.objeto }}</dd>{% endif %}
+    {% if contrato %}<dt>Credor (prestador)</dt><dd>{{ contrato.prest_identificacao }} · <span class="mono">{{ contrato.prest_documento | cnpj }}</span></dd>{% endif %}
+    <dt>Competência</dt><dd>{{ npp.competencia | competencia }}</dd>
+    <dt>Total dos documentos (bruto)</dt><dd class="num">{{ total_bruto | moeda }}</dd>
+    {% if npp.observacoes %}<dt>Observações</dt><dd>{{ npp.observacoes }}</dd>{% endif %}
+    <dt>Responsável</dt><dd>{{ npp.criada_por }} · criada em {{ npp.criada_em | datahora }}</dd>
+  </dl>
+</section>
+
+<section class="section" aria-label="Documentos de origem">
+  <h3>Documentos de origem</h3>
+  {% if not itens %}
+  <p class="muted">Nenhuma nota nesta NPP ainda. Importe abaixo para começar.</p>
+  {% else %}
+  <div class="table-wrap dense stick">
+    <table>
+      <caption>Uma linha por nota da NPP. Toque no número para abrir a nota.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Nº</th>
+          <th scope="col">Tipo</th>
+          <th scope="col">Emissão</th>
+          <th scope="col" class="num">Valor</th>
+          <th scope="col" class="nowrap">Situação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in itens %}{% set r = it.reg %}
+        <tr>
+          <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.numero or '—' }}</a></td>
+          <td>{{ 'NF-e' if it.tipo == 'NFE' else 'NFS-e' }}</td>
+          <td>{{ r.data_emissao | data }}</td>
+          <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
+          <td class="nowrap">{{ 'exportada' if it.ja_exportada else 'inédita' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>Total ({{ itens|length }})</td><td></td><td></td>
+          <td class="num">{{ total_bruto | moeda }}</td><td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endif %}
+  <p class="note">A conferência das retenções (“Grupos de impostos”: destaque do emitente, sugestão e validação do operador) entra na próxima etapa.</p>
+</section>
+
+<section class="section" aria-label="Importar notas para esta NPP">
+  <h3>Importar notas para esta NPP</h3>
+  <div class="cards-2 import-grid">
+    <div class="card import-card">
+      <div class="import-top">
+        <span class="mod-icon"><svg class="icon"><use href="#i-doc"/></svg></span>
+        <div><h3>Uma nota</h3><p class="mod-desc">Envie um único arquivo XML (NF-e ou NFS-e).</p></div>
+      </div>
+      <form method="post" action="{{ url_for('npp_importar_arquivo', id_=npp.id) }}" enctype="multipart/form-data" class="import-form">
+        <label class="field">
+          <span class="lbl">Arquivo XML</span>
+          <input type="file" name="arquivo" accept=".xml,application/xml,text/xml" required>
+        </label>
+        <div class="actions"><button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar esta nota</button></div>
+      </form>
+    </div>
+
+    <div class="card import-card">
+      <div class="import-top">
+        <span class="mod-icon"><svg class="icon"><use href="#i-servico"/></svg></span>
+        <div><h3>Uma pasta</h3><p class="mod-desc">Selecione uma pasta inteira; lê todos os .xml dela de uma vez.</p></div>
+      </div>
+      <form method="post" action="{{ url_for('npp_importar_pasta', id_=npp.id) }}" enctype="multipart/form-data" class="import-form" data-form-pasta>
+        <label class="field">
+          <span class="lbl">Pasta com os XML</span>
+          <input type="file" name="arquivos" id="seletor-pasta" webkitdirectory directory multiple required hidden>
+          <span class="seletor-pasta-row">
+            <button type="button" class="btn ghost" data-abrir-seletor="seletor-pasta"><svg class="icon"><use href="#i-doc"/></svg> Selecionar pasta…</button>
+            <span class="seletor-pasta-info" data-info-seletor="seletor-pasta">Nenhuma pasta selecionada</span>
+          </span>
+        </label>
+        <div class="actions"><button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar pasta selecionada</button></div>
+      </form>
+      <form method="post" action="{{ url_for('npp_importar_exemplos', id_=npp.id) }}" class="import-exemplos">
+        <button type="submit" class="link-inline">ou usar a pasta de exemplos do projeto</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Nova NPP' if novo else 'Editar NPP' }} · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<p class="breadcrumb"><a href="{{ url_for('npps') }}">NPPs</a> › {{ 'Nova NPP' if novo else npp.numero }}</p>
+
+<div class="page-head">
+  <h2>{{ 'Nova NPP' if novo else 'Editar NPP' }}</h2>
+  <p>A NPP pertence a um contrato e uma competência. O número é gerado na criação, com as suas iniciais, e não muda depois.</p>
+</div>
+
+{% if novo and not contratos %}
+<div class="card empty-banner">
+  <svg class="icon" aria-hidden="true"><use href="#i-doc"/></svg>
+  <div>
+    <h3>Nenhum contrato cadastrado</h3>
+    <p>Cadastre um contrato antes de criar a NPP — é dele que vêm o credor e o enquadramento das retenções.</p>
+  </div>
+  <a class="btn" href="{{ url_for('contrato_novo') }}">Novo contrato</a>
+</div>
+{% else %}
+<form method="post" action="{{ url_for('npp_criar') if novo else url_for('npp_salvar', id_=npp.id) }}" class="card card-b" style="max-width:40rem">
+  <div class="field">
+    <span class="lbl">Contrato</span>
+    {% if novo %}
+    <select name="contrato_id" required>
+      <option value="">Selecione…</option>
+      {% for c in contratos %}<option value="{{ c.id }}" {{ 'selected' if npp.contrato_id == c.id }}>{{ rotulos[c.id] }}</option>{% endfor %}
+    </select>
+    {% else %}
+    <input type="text" value="{{ rotulos.get(npp.contrato_id, '(contrato removido)') }}" disabled>
+    <p class="note">O contrato da NPP não muda após a criação.</p>
+    {% endif %}
+  </div>
+  <label class="field">
+    <span class="lbl">Competência (AAAA-MM)</span>
+    <input type="month" name="competencia" value="{{ npp.competencia }}" required>
+  </label>
+  <label class="field">
+    <span class="lbl">Rótulo (opcional)</span>
+    <input type="text" name="rotulo" value="{{ npp.rotulo or '' }}" placeholder="ex.: medição de maio">
+  </label>
+  <label class="field">
+    <span class="lbl">Observações (opcional)</span>
+    <textarea name="observacoes" rows="3">{{ npp.observacoes or '' }}</textarea>
+  </label>
+  <div class="actions">
+    <button type="submit" class="btn"><svg class="icon"><use href="#i-check"/></svg> {{ 'Criar NPP' if novo else 'Salvar' }}</button>
+    <a class="btn ghost" href="{{ url_for('npps') if novo else url_for('npp_detalhe', id_=npp.id) }}">Cancelar</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

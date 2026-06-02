@@ -68,6 +68,7 @@
 
     <nav class="nav" aria-label="Módulos">
       <a href="{{ url_for('hub') }}"{{ ' class=on' if request.endpoint == 'hub' }}>Início</a>
+      <a href="{{ url_for('npps') }}"{{ ' class=on' if request.endpoint in ['npps', 'npp_nova', 'npp_criar', 'npp_detalhe', 'npp_editar', 'npp_salvar'] }}>NPPs</a>
       <details class="dropdown nav-dropdown">
         <summary class="nav-parent{{ ' on' if request.endpoint in ['individuais', 'consolidados', 'consolidado'] }}">Notas Fiscais <svg class="icon chev"><use href="#i-chevron"/></svg></summary>
         <div class="dropdown-panel" role="menu" aria-label="Notas Fiscais">
@@ -142,6 +143,7 @@
 
   <footer class="rodape">
     <span class="tag">POC de demonstração</span>
+    {% if operador_atual %}<a class="link-redefinir" href="{{ url_for('operador_cadastro') }}"{{ ' aria-current=page' if request.endpoint in ['operador_cadastro', 'operador_salvar'] }}>Operador: {{ operador_atual.nome }} ({{ operador_atual.iniciais }})</a>{% endif %}
     <a class="link-redefinir" href="{{ url_for('redefinir') }}"{{ ' aria-current=page' if request.endpoint in ['redefinir', 'redefinir_executar'] }}>Redefinir dados da demonstração</a>
   </footer>
 </body>

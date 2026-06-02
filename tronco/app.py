@@ -11,6 +11,7 @@ Rodar:  uv run python -m tronco.app
 """
 from __future__ import annotations
 
+import re
 import tempfile
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -23,7 +24,9 @@ from werkzeug.utils import secure_filename
 from tronco.ingestao import ingerir, ingerir_pasta
 from tronco.idempotencia import RegistroDeExportacao
 from tronco.marcacoes import StoreMarcacoes
-from tronco.notas import StoreNotas, reconstruir
+from tronco.notas import StoreNotas, reconstruir, ConflitoDeChave
+from tronco.operador import StoreOperador, Operador
+from tronco.npp import StoreNPP, NPP
 from tronco.contratos import (StoreContratos, Contrato,
                               NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS,
                               IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL)
@@ -50,6 +53,32 @@ for nome in ("moeda", "numero", "data", "datahora", "competencia",
 
 # Teste Jinja: `{{ valor is ezero }}` atenua (não esconde) valores zerados.
 app.jinja_env.tests["ezero"] = formato.ezero
+
+
+# ---------- Identidade do operador (bootstrap; I-4) ----------
+# A app roda local, sem autenticação, mas o I-4 exige autoria rastreável. Na 1ª
+# execução, sem cadastro local, toda navegação é desviada para a tela de cadastro.
+
+def _operador_atual():
+    op = StoreOperador(); atual = op.atual(); op.fechar()
+    return atual
+
+
+@app.before_request
+def _exige_operador():
+    """Sem operador cadastrado, só as rotas de cadastro (e estáticos) respondem —
+    o resto é desviado. Garante que nada seja criado sem autoria (I-4)."""
+    if request.endpoint in {"operador_cadastro", "operador_salvar", "static"}:
+        return
+    if _operador_atual() is None:
+        return redirect(url_for("operador_cadastro"))
+
+
+@app.context_processor
+def _ctx_operador():
+    """Disponibiliza a identidade vigente para o rodapé (transparência de quem
+    assina os registros) em todas as telas."""
+    return {"operador_atual": _operador_atual()}
 
 
 def _soma(regs, attr):
@@ -440,20 +469,27 @@ def exportar_grupo(prest_cnpj, competencia):
     return redirect(url_for("consolidado", prest_cnpj=prest_cnpj, competencia=competencia))
 
 
-def _persistir(resultados):
-    """Grava no banco os resultados de ingestão que viraram registro com chave.
-    Devolve (importadas, [origens com erro]). Não decide nada: só transcreve o
-    que a ingestão extraiu (I-2). Reimportar não duplica — chave é PK (I-1)."""
+def _persistir(resultados, npp_id=None):
+    """Grava no banco os resultados de ingestão que viraram registro com chave,
+    vinculando-os à NPP `npp_id` (ou soltos, no fluxo antigo). Devolve
+    (importadas, [origens com erro], [(origem, npp_id_existente) em conflito]).
+    Não decide nada: só transcreve o que a ingestão extraiu (I-2). Reimportar a
+    mesma chave na MESMA NPP não duplica — chave é PK (I-1); em OUTRA NPP é
+    conflito exibido, nunca sobrescrito em silêncio (I-1/I-6)."""
     notas = StoreNotas()
-    importadas, erros = 0, []
+    importadas, erros, conflitos = 0, [], []
     for r in resultados:
         if r.registro and r.registro.chave and not r.erro:
-            notas.salvar(r.registro.chave, r.tipo, r.registro.to_dict(), r.origem)
-            importadas += 1
+            try:
+                notas.salvar(r.registro.chave, r.tipo, r.registro.to_dict(),
+                             r.origem, npp_id)
+                importadas += 1
+            except ConflitoDeChave as c:
+                conflitos.append((r.origem or "(sem nome)", c.npp_id_existente))
         else:
             erros.append(r.origem or "(sem nome)")
     notas.fechar()
-    return importadas, erros
+    return importadas, erros, conflitos
 
 
 def _ingerir_uploads(arquivos):
@@ -498,7 +534,7 @@ def importar_arquivo():
         caminho = Path(d) / nome
         arquivo.save(str(caminho))
         resultado = ingerir(caminho)          # leitura única, como na pasta
-    importadas, _ = _persistir([resultado])
+    importadas, _, _ = _persistir([resultado])
     if importadas:
         flash(f"Nota '{nome}' importada e gravada no banco.", "ok")
     else:
@@ -519,7 +555,7 @@ def importar_pasta():
     if not resultados:
         flash("A pasta selecionada não tem arquivos .xml. Nada foi importado.", "erro")
         return redirect(url_for("importar"))
-    importadas, erros = _persistir(resultados)
+    importadas, erros, _ = _persistir(resultados)
     msg = f"Importação concluída: {importadas} nota(s) gravada(s) no banco."
     if erros:
         msg += (f" {len(erros)} arquivo(s) não reconhecido(s), ignorado(s): "
@@ -532,7 +568,7 @@ def importar_pasta():
 def importar_exemplos():
     """Atalho de demonstração: importa a pasta de exemplos que acompanha o
     projeto (caminho conhecido no servidor), sem o usuário ter de localizá-la."""
-    importadas, erros = _persistir(ingerir_pasta(PASTA_EXEMPLOS))
+    importadas, erros, _ = _persistir(ingerir_pasta(PASTA_EXEMPLOS))
     flash(f"Exemplos do projeto importados: {importadas} nota(s) gravada(s).",
           "ok" if importadas else "erro")
     return redirect(url_for("hub"))
@@ -812,6 +848,305 @@ def contrato_remover(id_):
     store = StoreContratos(); store.remover(id_); store.fechar()
     flash("Contrato removido.", "ok")
     return redirect(url_for("contratos"))
+
+
+# ---------- Cadastro do operador (bootstrap; I-4) ----------
+
+@app.route("/operador", methods=["GET"])
+def operador_cadastro():
+    """Tela de identidade do operador. Na 1ª execução é o destino do desvio; depois,
+    acessível pelo rodapé para reidentificar a máquina."""
+    return render_template("operador_form.html", operador=_operador_atual())
+
+
+@app.route("/operador", methods=["POST"])
+def operador_salvar():
+    """Grava a identidade (iniciais + nome). Entradas inválidas são barradas com
+    mensagem (I-6) — nunca se inventa identidade."""
+    iniciais = request.form.get("iniciais", "")
+    nome = request.form.get("nome", "")
+    op = StoreOperador()
+    try:
+        salvo = op.salvar(iniciais, nome)
+    except ValueError as exc:
+        op.fechar()
+        flash(f"Não foi possível salvar a identidade: {exc}. Nada foi gravado.", "erro")
+        return render_template("operador_form.html",
+                               operador=Operador(iniciais=iniciais, nome=nome))
+    op.fechar()
+    flash(f"Identidade registrada: {salvo.nome} ({salvo.iniciais}).", "ok")
+    return redirect(url_for("hub"))
+
+
+# ---------- NPP — Nota de Pré-Pagamento (jornada nova) ----------
+# Cada pagamento é uma NPP (um contrato, uma competência, 1+ notas). A importação
+# acontece DENTRO da NPP; não existe nota solta neste fluxo. O fluxo antigo
+# (individual/consolidado) segue de pé até a etapa 7c.
+
+def _itens_da_npp(npp_id):
+    """Notas vinculadas à NPP, já reconstruídas, com valor (por tipo) e situação de
+    exportação. Base das seções da tela e dos totais derivados."""
+    notas = StoreNotas(); persistidas = notas.listar_por_npp(npp_id); notas.fechar()
+    registro = RegistroDeExportacao()
+    itens = []
+    for n in persistidas:
+        reg = reconstruir(n["tipo"], n["dados"])
+        itens.append({"reg": reg, "tipo": n["tipo"], "origem": n["origem"],
+                      "ja_exportada": registro.ja_exportada(reg.chave),
+                      "valor": reg.valor_total if n["tipo"] == "NFE" else reg.valor_servicos})
+    registro.fechar()
+    return itens
+
+
+def _npp_status(itens):
+    """Status derivado das notas (não armazenado): vazia / aberta (tem inédita) /
+    exportada (todas já saíram em lote)."""
+    if not itens:
+        return "vazia"
+    return "exportada" if all(i["ja_exportada"] for i in itens) else "aberta"
+
+
+def _competencia_valida(s):
+    return bool(re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", (s or "").strip()))
+
+
+def _rotulos_contratos(contratos):
+    return {c.id: retencao.rotulo_contrato(c) for c in contratos}
+
+
+@app.route("/npps")
+def npps():
+    """Lista de NPPs (abertas, vazias e exportadas), com contrato, competência,
+    contagem e valor bruto."""
+    store = StoreNPP(); lista = store.listar(); store.fechar()
+    cstore = StoreContratos()
+    por_id = {c.id: c for c in cstore.listar()}
+    cstore.fechar()
+    cards = []
+    for npp in lista:
+        itens = _itens_da_npp(npp.id)
+        c = por_id.get(npp.contrato_id)
+        cards.append({
+            "npp": npp,
+            "contrato_rotulo": retencao.rotulo_contrato(c) if c else "(contrato removido)",
+            "n": len(itens),
+            "novas": sum(1 for i in itens if not i["ja_exportada"]),
+            "total": _bruto(itens),
+            "status": _npp_status(itens),
+        })
+    return render_template("npps.html", cards=cards)
+
+
+@app.route("/npps/nova")
+def npp_nova():
+    cstore = StoreContratos(); contratos = cstore.listar(); cstore.fechar()
+    return render_template("npp_form.html", npp=NPP(), contratos=contratos,
+                           rotulos=_rotulos_contratos(contratos), novo=True)
+
+
+@app.route("/npps", methods=["POST"])
+def npp_criar():
+    """Cria a NPP (contrato + competência + rótulo/observações). O `numero` é gerado
+    com as iniciais do operador (I-4). Sem contrato ou competência válida → barrado (I-6)."""
+    try:
+        contrato_id = int(request.form.get("contrato_id") or 0)
+    except ValueError:
+        contrato_id = 0
+    competencia = (request.form.get("competencia") or "").strip()
+    rotulo = (request.form.get("rotulo") or "").strip() or None
+    observacoes = (request.form.get("observacoes") or "").strip() or None
+    cstore = StoreContratos()
+    contrato = cstore.obter(contrato_id) if contrato_id else None
+    erro = None
+    if not contrato:
+        erro = "Escolha um contrato para a NPP."
+    elif not _competencia_valida(competencia):
+        erro = "Informe a competência no formato AAAA-MM."
+    if erro:
+        contratos = cstore.listar(); cstore.fechar()
+        flash(erro + " Nada foi criado.", "erro")
+        return render_template("npp_form.html",
+                               npp=NPP(contrato_id=contrato_id, competencia=competencia,
+                                       rotulo=rotulo, observacoes=observacoes),
+                               contratos=contratos,
+                               rotulos=_rotulos_contratos(contratos), novo=True)
+    cstore.fechar()
+    op = _operador_atual()
+    store = StoreNPP()
+    try:
+        npp = store.criar(contrato_id=contrato.id, competencia=competencia,
+                          iniciais=op.iniciais, autor=op.nome,
+                          rotulo=rotulo, observacoes=observacoes)
+    finally:
+        store.fechar()
+    flash(f"NPP {npp.numero} criada. Importe as notas dentro dela.", "ok")
+    return redirect(url_for("npp_detalhe", id_=npp.id))
+
+
+def _obter_npp(id_):
+    store = StoreNPP(); npp = store.obter(id_); store.fechar()
+    return npp
+
+
+@app.route("/npp/<int:id_>")
+def npp_detalhe(id_):
+    """Detalhe da NPP: cabeçalho derivado + documentos de origem + importação
+    escopada. Os 'Grupos de impostos' (conferência/validação) entram na etapa 7b."""
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
+    itens = _itens_da_npp(id_)
+    return render_template(
+        "npp.html", npp=npp, contrato=contrato,
+        contrato_rotulo=retencao.rotulo_contrato(contrato) if contrato else "(contrato removido)",
+        itens=itens, total_bruto=_bruto(itens), status=_npp_status(itens),
+        n_novas=sum(1 for i in itens if not i["ja_exportada"]))
+
+
+@app.route("/npp/<int:id_>/editar")
+def npp_editar(id_):
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    cstore = StoreContratos(); contratos = cstore.listar(); cstore.fechar()
+    return render_template("npp_form.html", npp=npp, contratos=contratos,
+                           rotulos=_rotulos_contratos(contratos), novo=False)
+
+
+@app.route("/npp/<int:id_>", methods=["POST"])
+def npp_salvar(id_):
+    """Atualiza competência/rótulo/observações. O `numero` e o contrato são imutáveis
+    após a criação (identidade da NPP)."""
+    store = StoreNPP(); npp = store.obter(id_)
+    if not npp:
+        store.fechar()
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    competencia = (request.form.get("competencia") or "").strip()
+    if not _competencia_valida(competencia):
+        store.fechar()
+        flash("Informe a competência no formato AAAA-MM. Nada foi salvo.", "erro")
+        return redirect(url_for("npp_editar", id_=id_))
+    npp.competencia = competencia
+    npp.rotulo = (request.form.get("rotulo") or "").strip() or None
+    npp.observacoes = (request.form.get("observacoes") or "").strip() or None
+    store.salvar(npp); store.fechar()
+    flash(f"NPP {npp.numero} atualizada.", "ok")
+    return redirect(url_for("npp_detalhe", id_=id_))
+
+
+@app.route("/npp/<int:id_>/remover", methods=["POST"])
+def npp_remover(id_):
+    """Remove a NPP — só se estiver vazia. Com notas vinculadas, barra com mensagem
+    (I-6): não deixa nota órfã nem apaga nota em silêncio."""
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    itens = _itens_da_npp(id_)
+    if itens:
+        flash(f"A NPP {npp.numero} tem {len(itens)} nota(s) vinculada(s); ela não pode "
+              "ser removida com notas dentro. Nada foi removido.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    store = StoreNPP(); store.remover(id_); store.fechar()
+    flash(f"NPP {npp.numero} removida.", "ok")
+    return redirect(url_for("npps"))
+
+
+def _divergencias_cnpj(resultados, contrato):
+    """Origens cujo CNPJ (prestador da NFS-e / emitente da NF-e) diverge do prestador
+    do contrato da NPP. Heads-up visível (I-6) — não bloqueia a importação."""
+    if not contrato:
+        return []
+    doc_c = formato._digitos(contrato.prest_documento)
+    if not doc_c:
+        return []
+    out = []
+    for r in resultados:
+        reg = r.registro
+        if not reg or r.erro:
+            continue
+        doc_n = formato._digitos(reg.prest_cnpj if r.tipo == "NFSE" else reg.emit_cnpj)
+        if doc_n and doc_n != doc_c:
+            out.append(r.origem or getattr(reg, "numero", None) or "(sem nome)")
+    return out
+
+
+def _persistir_na_npp(resultados, npp):
+    """Grava os resultados na NPP e monta o feedback: importadas, conflitos de chave
+    com outra NPP (I-1/I-6), divergências de CNPJ (I-6) e arquivos não reconhecidos."""
+    cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
+    importadas, erros, conflitos = _persistir(resultados, npp.id)
+    divergentes = _divergencias_cnpj(resultados, contrato)
+    partes = []
+    if importadas:
+        partes.append(f"{importadas} nota(s) importada(s) na NPP {npp.numero}.")
+    if conflitos:
+        det = "; ".join(f"{o} (já consta na NPP nº {nid})" for o, nid in conflitos)
+        partes.append(f"{len(conflitos)} nota(s) já constam em outra NPP, não movidas: {det}.")
+    if divergentes:
+        partes.append("Atenção — CNPJ diverge do prestador do contrato em: "
+                      + ", ".join(divergentes) + " (confira o vínculo).")
+    if erros:
+        partes.append(f"{len(erros)} arquivo(s) não reconhecido(s): {', '.join(erros)}.")
+    if not partes:
+        flash("Nada foi importado.", "erro")
+        return
+    cat = "erro" if (conflitos or erros) else ("ok" if importadas else "info")
+    flash(" ".join(partes), cat)
+
+
+@app.route("/npp/<int:id_>/importar/arquivo", methods=["POST"])
+def npp_importar_arquivo(id_):
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    arquivo = request.files.get("arquivo")
+    if not arquivo or not arquivo.filename:
+        flash("Selecione um arquivo XML para importar. Nada foi importado.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    nome = secure_filename(Path(arquivo.filename).name) or "nota.xml"
+    if not nome.lower().endswith(".xml"):
+        flash(f"'{arquivo.filename}' não é um arquivo .xml. Nada foi importado.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    with tempfile.TemporaryDirectory() as d:
+        caminho = Path(d) / nome
+        arquivo.save(str(caminho))
+        resultado = ingerir(caminho)
+    _persistir_na_npp([resultado], npp)
+    return redirect(url_for("npp_detalhe", id_=id_))
+
+
+@app.route("/npp/<int:id_>/importar/pasta", methods=["POST"])
+def npp_importar_pasta(id_):
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    arquivos = [f for f in request.files.getlist("arquivos") if f and f.filename]
+    if not arquivos:
+        flash("Selecione uma pasta com arquivos XML. Nada foi importado.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    resultados = _ingerir_uploads(arquivos)
+    if not resultados:
+        flash("A pasta selecionada não tem arquivos .xml. Nada foi importado.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_))
+    _persistir_na_npp(resultados, npp)
+    return redirect(url_for("npp_detalhe", id_=id_))
+
+
+@app.route("/npp/<int:id_>/importar/exemplos", methods=["POST"])
+def npp_importar_exemplos(id_):
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    _persistir_na_npp(list(ingerir_pasta(PASTA_EXEMPLOS)), npp)
+    return redirect(url_for("npp_detalhe", id_=id_))
 
 
 if __name__ == "__main__":

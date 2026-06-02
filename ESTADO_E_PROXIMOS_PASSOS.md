@@ -28,10 +28,11 @@ Modelagem por NPP em construção (de dentro para fora; ver
 commitados** (módulo federal comum, conferência federal da NF-e, identidade do operador,
 `StoreNPP`, vínculo `npp_id`, validação de retenção). **55 testes verdes.**
 
-**Próximo: passo 7 (UI) — começar em sessão nova** (janela de contexto), fatiado em
-**7a** (bootstrap do operador + CRUD da NPP + importação escopada), **7b** (detalhe em duas
-seções + validar/retificar), **7c** (exportação por NPP + remoção do fluxo
-individual/consolidado). Depois o **passo 8** (reset). Detalhe no plano.
+Passo 7 (UI) fatiado em **7a** (bootstrap do operador + CRUD da NPP + importação escopada),
+**7b** (detalhe em duas seções + validar/retificar), **7c** (exportação por NPP + remoção do
+fluxo individual/consolidado). **7a feito** (rotas de operador/NPP, templates `operador_form`/
+`npps`/`npp_form`/`npp`, nav "NPPs", importação escopada com conflito/divergência visíveis;
+**57 testes verdes**). **Próximo: 7b.** Depois o **passo 8** (reset). Detalhe no plano.
 
 ## Mudança de fase — 2026-06-02
 
