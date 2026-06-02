@@ -59,15 +59,20 @@ Detalhe em `docs/planos/modelagem-npp.md` (§5–§6). Memórias: `fase2-validac
    validados pelo operador** (não destaque cru), o que tira a tensão com o I-2.
 4. **Destino de exportação:** quando e como plugar o Google Sheets real (OAuth,
    conta de serviço?).
-5. **Como a tela é entregue** em produção (app local por servidor — confirmado; backup e
-   sincronização entre máquinas ficam para depois).
+5. ~~**Como a tela é entregue / backup e sincronização**~~ → **RESOLVIDO**: app local por
+   máquina (confirmado); backup e sincronização entre máquinas via **snapshot JSON no Google
+   Drive** — **backup pessoal por operador** (config compartilhada, trabalho restaurável) e
+   **transporte manual** na Fase A (API só na Fase B, junto da #4). Detalhe em
+   `docs/planos/backup-e-sincronizacao.md`.
 6. **Lista final de campos** por tipo — refinar contra XMLs reais.
 7. ~~**NF-e e valor líquido**~~ → **RESOLVIDO**: NF-e tem retenção **federal**
    (IR/CSLL/COFINS/PIS, IN 1234/2012) quando o fornecedor **não** é optante do Simples;
    optante → dispensa, líquido = bruto. INSS/ISS **não se aplicam** à NF-e. Mesmo fluxo de
    validação da NFS-e, só muda o conjunto de tributos.
-8. ~~**Reset apaga o cadastro do operador?**~~ → **RESOLVIDO**: **não apaga**; detalhes
-   (preservação/portabilidade) ficam para a etapa de backup e sincronização.
+8. ~~**Reset apaga o cadastro do operador?**~~ → **RESOLVIDO**: **não apaga**;
+   preservação/portabilidade do operador definidas na etapa de backup e sincronização — o
+   `operador.sqlite` fica fora do pacote da equipe e só entra no escopo `pessoal`. Detalhe em
+   `docs/planos/backup-e-sincronizacao.md`.
 9. ~~**Suporte federal da NF-e — compartilhar ou espelhar?**~~ → **RESOLVIDO**: NF-e tem
    **paridade total** com a NFS-e (sugestão + validação). A regra federal (IN 1234/2012)
    vira módulo **comum** `tronco/retencao_federal.py`, chamado pelos dois galhos — comum =
@@ -85,7 +90,9 @@ Detalhe em `docs/planos/modelagem-npp.md` (§5–§6). Memórias: `fase2-validac
 ### A. Endurecimento para dado real
 - [ ] Trocar `ExportadorCsvLocal` por exportador Google Sheets (planilha nova). *(toca I-5)*
 - [ ] Tirar `secret_key` fixa e `debug=True`; configuração via ambiente.
-- [ ] Definir onde mora o SQLite e política de backup. *(toca I-1, I-4)*
+- [ ] Definir onde mora o SQLite e política de backup. *(toca I-1, I-4)* — política de
+      backup/sincronização planejada em `docs/planos/backup-e-sincronizacao.md` (snapshot
+      JSON por operador); falta decidir o **local de moradia** do SQLite em produção.
 - [ ] Ingestão de XML real: validar contra os bindings, varrer campos que rendam objeto. *(toca I-2, I-6)*
 
 ### B. NFS-e e variações
