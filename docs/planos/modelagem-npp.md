@@ -407,3 +407,51 @@ e sincronização**, em etapa futura.
 - Função de backup da aplicação (que levará o cadastro do operador) — desenho futuro.
 - Geração automática da NPP a partir de notas soltas (a jornada é criar-NPP-primeiro).
 - INSS/ISS no catálogo de enquadramento (trabalho anterior; segue como está).
+
+## Ordem de implementação (status — branch `feat/modelagem-npp`)
+
+Construção de dentro para fora (dados → lógica → UI), cada passo com testes e
+`uv run pytest` verde; a UI (acoplada) fica por último. Estado em 2026-06-02:
+
+- [x] **Passo 1 — `tronco/retencao_federal.py`** (refactor do bloco federal comum). *commit `9fb2bfe`*
+- [x] **Passo 2 — `galho_nfe/retencao.py`** (conferência federal da NF-e + tipos comuns no tronco). *commit `0f926d7`*
+- [x] **Passo 3 — `tronco/operador.py`** (identidade local do operador, I-4). *commit `aff4662`*
+- [x] **Passo 4 — `tronco/npp.py`** (`NPP` + `StoreNPP`, geração do `numero`). *commit `eb53349`*
+- [x] **Passo 5 — `tronco/notas.py`** (coluna `npp_id` + `listar_por_npp` + `ConflitoDeChave`). *commit `47abaca`*
+- [x] **Passo 6 — `tronco/validacao_retencao.py`** (confirmar/retificar, I-3/I-4). *commit `71d7449`*
+- [ ] **Passo 7 — `tronco/app.py` + `templates/`** — fatiado (ver abaixo).
+- [ ] **Passo 8 — `tronco/redefinicao.py`** — incluir `npps.sqlite` + `validacoes_retencao.sqlite` no reset; **preservar** `operador.sqlite`.
+
+55 testes verdes até o passo 6.
+
+### Divisão do passo 7 (UI) — fazer em sessão nova (janela de contexto)
+
+Cada subetapa termina com `pytest` verde e o app de pé; o fluxo antigo
+(individual/consolidado) só é removido na 7c.
+
+- **7a — Fundação da jornada (app segue funcionando, nada removido):**
+  - *Bootstrap do operador:* sem cadastro local → tela `operador_form.html` (`StoreOperador`);
+    substitui o `criada_por="operador"` fixo pela identidade real.
+  - *CRUD da NPP:* `GET /npps`, `GET /npps/nova`, `POST /npps`, `GET /npp/<id>/editar`,
+    `POST /npp/<id>`, `POST /npp/<id>/remover`; templates `npps.html`, `npp_form.html`.
+    Form: contrato (`StoreContratos`) + competência + rótulo; `StoreNPP.criar` usa as
+    iniciais do operador.
+  - *Importação escopada à NPP:* `POST /npp/<id>/importar/arquivo|pasta|exemplos`;
+    `_persistir` recebe `npp_id`; tratar `ConflitoDeChave` ("já consta na NPP nº X");
+    validar CNPJ × prestador do contrato (I-6).
+- **7b — Detalhe da NPP (duas seções) + validar/retificar:**
+  - `GET /npp/<id>`: cabeçalho derivado (tabela do §3) + Seção 1 (Documentos de origem)
+    + Seção 2 (Grupos de impostos), seções empilhadas.
+  - `_conferencia` despacha por tipo: NFS-e → `galho_nfse`, NF-e → `galho_nfe` (contrato da NPP).
+  - Validar/retificar: `POST /npp/<id>/validar/<chave>/<tributo>` → `StoreValidacaoRetencao`;
+    toggle confirmar / campo retificar — **nunca** pré-preencher com o `esperado` (linha vermelha).
+  - Total retido / líquido derivados das validações.
+- **7c — Exportação por NPP + remoção do fluxo antigo:**
+  - `POST /npp/<id>/exportar` (reusa `_exportar` + `RegistroDeExportacao`); NPP mista
+    exporta cada tipo com suas colunas.
+  - Hub/nav: `hub.html` → NPPs abertas + Histórico; `base.html` → "NPPs"; `historico.html`
+    mostra a NPP de origem.
+  - **Remover:** rotas `individuais`/`consolidados`/`consolidado`/`exportar`/`exportar_grupo`/
+    `importar` global; funções `_grupos`/`_resumo_consolidacoes`/`_chaves_consolidadas`; uso
+    de `casar_contratos` no fluxo; templates `individuais/consolidados/consolidado.html`.
+    Remover testes da heurística; (se viável) adicionar testes de rota da NPP.

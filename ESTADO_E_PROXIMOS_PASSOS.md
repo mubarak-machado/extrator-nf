@@ -21,6 +21,18 @@ Resumo: exportador é CSV local (não Sheets real), XMLs são sintéticos, sem a
 `debug=True` e `secret_key` fixa, SQLite no repo. Nada disso pode ir a dado real
 sem revisão.
 
+## Implementação em andamento — branch `feat/modelagem-npp` (2026-06-02)
+
+Modelagem por NPP em construção (de dentro para fora; ver
+`docs/planos/modelagem-npp.md` § "Ordem de implementação"). **Passos 1–6 prontos e
+commitados** (módulo federal comum, conferência federal da NF-e, identidade do operador,
+`StoreNPP`, vínculo `npp_id`, validação de retenção). **55 testes verdes.**
+
+**Próximo: passo 7 (UI) — começar em sessão nova** (janela de contexto), fatiado em
+**7a** (bootstrap do operador + CRUD da NPP + importação escopada), **7b** (detalhe em duas
+seções + validar/retificar), **7c** (exportação por NPP + remoção do fluxo
+individual/consolidado). Depois o **passo 8** (reset). Detalhe no plano.
+
 ## Mudança de fase — 2026-06-02
 
 O projeto **cruzou para a Fase 2**, mas só na metade de **validação/aprovação humana**
