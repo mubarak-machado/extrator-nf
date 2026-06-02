@@ -670,3 +670,45 @@ def test_contrato_persiste_codigo_e_override_federal(tmp_path):
     assert rel.ret_federal_justificativa == "Aquisição de combustível — alíquota específica."
     assert rel.ret_federal_ajustado_por == "operador"
     store.fechar()
+
+
+# ---------- Identidade do operador (tronco) — fonte de autoria, I-4 ----------
+
+def test_operador_cadastro_e_atual(tmp_path):
+    """Antes do cadastro não há operador; após salvar, `atual` devolve a identidade
+    vigente com data de cadastro (fonte de criada_por/autor — I-4)."""
+    from tronco.operador import StoreOperador
+    s = StoreOperador(tmp_path / "operador.sqlite")
+    assert s.existe() is False and s.atual() is None
+    op = s.salvar("mnm", "Mubarak Nunes Machado")
+    assert op.iniciais == "MNM" and op.nome == "Mubarak Nunes Machado"
+    assert op.cadastrado_em is not None
+    lido = s.atual()
+    assert lido.iniciais == "MNM" and lido.nome == "Mubarak Nunes Machado"
+    assert s.existe() is True
+    s.fechar()
+
+
+def test_operador_iniciais_normalizadas_e_validadas(tmp_path):
+    """Iniciais viram caixa alta sem símbolos/espaços (entram no numero da NPP sem
+    quebrá-lo); iniciais ou nome vazios são erro (I-6, não inventa identidade)."""
+    from tronco.operador import StoreOperador
+    s = StoreOperador(tmp_path / "operador.sqlite")
+    assert s.salvar("m.n.m ", "Fulano").iniciais == "MNM"
+    with pytest.raises(ValueError):
+        s.salvar("", "Sem Iniciais")
+    with pytest.raises(ValueError):
+        s.salvar(".-/", "Só Símbolos")
+    with pytest.raises(ValueError):
+        s.salvar("MNM", "   ")
+    s.fechar()
+
+
+def test_operador_edicao_mantem_historico_e_vigente(tmp_path):
+    """Reeditar a identidade não apaga a anterior (append, I-4); `atual` é a última."""
+    from tronco.operador import StoreOperador
+    s = StoreOperador(tmp_path / "operador.sqlite")
+    s.salvar("ABC", "Antiga")
+    s.salvar("XYZ", "Nova")
+    assert s.atual().iniciais == "XYZ" and s.atual().nome == "Nova"
+    s.fechar()
