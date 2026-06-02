@@ -33,7 +33,6 @@ from tronco.contratos import (StoreContratos, Contrato,
                               IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL)
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
 from tronco import formato, redefinicao
-from galho_nfse.modelo import RegistroNFSe
 from galho_nfse.material import sugerir_material
 from galho_nfse import retencao, enquadramento
 from galho_nfse.enquadramento import RegraEnquadramento
@@ -82,32 +81,6 @@ def _ctx_operador():
     return {"operador_atual": _operador_atual()}
 
 
-def _soma(regs, attr):
-    """Soma um atributo numérico (apresentação). NÃO é apuração: é só o
-    somatório dos valores transcritos do XML."""
-    total = Decimal("0"); achou = False
-    for r in regs:
-        v = getattr(r, attr, None)
-        if v in (None, ""):
-            continue
-        try:
-            total += Decimal(str(v)); achou = True
-        except (InvalidOperation, ValueError):
-            continue
-    return f"{total:.2f}" if achou else None
-
-
-def _com_atencao(item) -> bool:
-    r = item["reg"]
-    if not r:
-        return bool(item["erro"])
-    if getattr(r, "campos_faltantes", None):
-        return True
-    if item["tipo"] == "NFSE" and not item["marcacao"]:
-        return True
-    return False
-
-
 def _carregar():
     """Carrega as notas JÁ IMPORTADAS do banco (nunca lê XML ao vivo). A pasta de
     exemplos só é lida na importação manual (rota /importar). Lista vazia = nada
@@ -121,6 +94,7 @@ def _carregar():
     for n in persistidas:
         reg = reconstruir(n["tipo"], n["dados"])
         item = {"origem": n["origem"], "tipo": n["tipo"], "erro": None, "reg": reg,
+                "npp_id": n["npp_id"],
                 "ja_exportada": registro.ja_exportada(reg.chave),
                 "marcacao": None,
                 "valor": reg.valor_total if n["tipo"] == "NFE" else reg.valor_servicos}
@@ -129,33 +103,6 @@ def _carregar():
         linhas.append(item)
     registro.fechar(); marc.fechar()
     return linhas
-
-
-def _grupos(linhas):
-    """Agrupa NFS-e por (prestador, competência). Grupos com >1 nota são
-    'consolidações sugeridas' (serviço continuado em vários municípios).
-
-    ATENÇÃO: o vínculo real é o CONTRATO, que não vem no XML. Isto é uma
-    heurística (mesmo prestador + mesma competência) exibida para o humano
-    conferir — nunca tratada como verdade contratual."""
-    g = defaultdict(list)
-    for it in linhas:
-        r = it["reg"]
-        if it["tipo"] == "NFSE" and r and r.prest_cnpj and r.competencia:
-            g[(r.prest_cnpj, r.competencia)].append(it)
-    return g
-
-
-def _chaves_consolidadas(linhas):
-    """Chaves das notas que caem num grupo de consolidação (>1 nota). Tudo que
-    não está aqui é tratado como nota individual/avulsa. Nunca misturamos
-    contratos diferentes: cada grupo é um pagamento; as avulsas são lançadas
-    uma a uma."""
-    chaves = set()
-    for its in _grupos(linhas).values():
-        if len(its) > 1:
-            chaves.update(it["reg"].chave for it in its)
-    return chaves
 
 
 def _bruto(itens):
@@ -168,90 +115,41 @@ def _bruto(itens):
     return f"{total:.2f}"
 
 
-def _resumo_consolidacoes(linhas, so_pendentes=True):
-    """Cartões de consolidação (1 por contrato sugerido). Por padrão lista só os
-    grupos que ainda têm nota inédita — o que já foi exportado vive no Histórico."""
-    out = []
-    for (cnpj, comp), its in _grupos(linhas).items():
-        if len(its) <= 1:
-            continue
-        novas = sum(1 for i in its if not i["ja_exportada"])
-        if so_pendentes and not novas:
-            continue
-        out.append({"prest_cnpj": cnpj, "competencia": comp,
-                    "prest_nome": its[0]["reg"].prest_nome, "n": len(its),
-                    "novas": novas,
-                    "total": _soma([i["reg"] for i in its], "valor_servicos")})
-    out.sort(key=lambda c: (c["prest_nome"] or "", c["competencia"] or ""))
-    return out
-
-
 @app.route("/")
 def hub():
-    """Entrada: hub com os três módulos. Não despeja a lista de notas —
-    mostra contagem e valor pendente de cada módulo, e o usuário entra no que
-    for trabalhar (avulsa ou consolidado) ou consulta o histórico."""
-    linhas = _carregar()
-    cons_chaves = _chaves_consolidadas(linhas)
-    individuais = [it for it in linhas
-                   if it["erro"] or (it["reg"] and it["reg"].chave not in cons_chaves)]
-    ind_pend = [it for it in individuais if it["reg"] and not it["ja_exportada"]]
-    consolidacoes = _resumo_consolidacoes(linhas)
-    registro = RegistroDeExportacao()
-    exportadas = registro.listar()
-    registro.fechar()
+    """Entrada: hub orientado às NPPs. Mostra as NPPs abertas (com nota inédita) e
+    seu valor pendente, e o Histórico do que já foi exportado. Sem NPP nenhuma,
+    convida a criar a primeira."""
+    store = StoreNPP(); npps_lista = store.listar(); store.fechar()
+    abertas = vazias = 0
+    total_aberto = Decimal("0")
+    for npp in npps_lista:
+        itens = _itens_da_npp(npp.id)
+        st = _npp_status(itens)
+        if st == "aberta":
+            abertas += 1
+            total_aberto += Decimal(_bruto([i for i in itens if not i["ja_exportada"]]))
+        elif st == "vazia":
+            vazias += 1
+    registro = RegistroDeExportacao(); exportadas = registro.listar(); registro.fechar()
     cards = {
-        "ind_pend": len(ind_pend),
-        "ind_atencao": sum(1 for it in individuais if _com_atencao(it)),
-        "ind_valor": _bruto(ind_pend),
-        "cons_contratos": len(consolidacoes),
-        "cons_novas": sum(c["novas"] for c in consolidacoes),
-        "cons_valor": _soma([i["reg"] for c in consolidacoes
-                             for i in _grupos(linhas)[(c["prest_cnpj"], c["competencia"])]
-                             if not i["ja_exportada"]], "valor_servicos"),
+        "npp_total": len(npps_lista),
+        "npp_abertas": abertas,
+        "npp_vazias": vazias,
+        "npp_valor": f"{total_aberto:.2f}",
         "hist_total": len(exportadas),
-        "sem_notas": not linhas,
+        "sem_npps": not npps_lista,
     }
     return render_template("hub.html", cards=cards)
-
-
-@app.route("/individuais")
-def individuais():
-    """Notas avulsas pendentes (NF-e + NFS-e fora de consolidação). Triagem por
-    atenção, busca e ordenação. As já exportadas saem daqui e vão ao Histórico."""
-    linhas = _carregar()
-    cons_chaves = _chaves_consolidadas(linhas)
-    itens = [it for it in linhas
-             if it["erro"] or (it["reg"] and it["reg"].chave not in cons_chaves
-                               and not it["ja_exportada"])]
-    pendentes = [it for it in itens if it["reg"]]
-    kpis = {
-        "ineditas": len(pendentes),
-        "prontas": sum(1 for it in pendentes if not _com_atencao(it)),
-        "atencao": sum(1 for it in itens if _com_atencao(it)),
-        "valor_inedito": _bruto(pendentes),
-    }
-    return render_template("individuais.html", linhas=itens, kpis=kpis)
-
-
-@app.route("/consolidados")
-def consolidados():
-    """Lista de pagamentos consolidados pendentes (1 cartão por contrato sugerido)."""
-    linhas = _carregar()
-    consolidacoes = _resumo_consolidacoes(linhas)
-    total = _soma([i["reg"] for c in consolidacoes
-                   for i in _grupos(linhas)[(c["prest_cnpj"], c["competencia"])]
-                   if not i["ja_exportada"]], "valor_servicos")
-    return render_template("consolidados.html", consolidacoes=consolidacoes,
-                           total_pendente=total)
 
 
 @app.route("/historico")
 def historico():
     """Notas já exportadas (registro de idempotência), agrupadas por lote. É o
     'feito': consulta, não some, e impede pagamento em duplicidade (I-1)."""
-    linhas = _carregar()
-    por_chave = {it["reg"].chave: it for it in linhas if it["reg"]}
+    por_chave = {it["reg"].chave: it for it in _carregar() if it["reg"]}
+    npps_store = StoreNPP(); npp_por_id = {n.id: n for n in npps_store.listar()}
+    npps_store.fechar()
     registro = RegistroDeExportacao()
     exportadas = registro.listar()
     registro.fechar()
@@ -259,9 +157,12 @@ def historico():
     for e in exportadas:
         it = por_chave.get(e["chave"])
         r = it["reg"] if it else None
+        npp = npp_por_id.get(it["npp_id"]) if it and it.get("npp_id") else None
         lotes[e["lote_id"]].append({
             "chave": e["chave"], "tipo": e["tipo"], "exportado_em": e["exportado_em"],
             "numero": getattr(r, "numero", None),
+            "npp_id": npp.id if npp else None,
+            "npp_numero": npp.numero if npp else None,
             "nome": (getattr(r, "emit_nome", None) if e["tipo"] == "NFE"
                      else getattr(r, "prest_nome", None)) if r else None,
             "valor": (getattr(r, "valor_total", None) if e["tipo"] == "NFE"
@@ -274,25 +175,6 @@ def historico():
     return render_template("historico.html", blocos=blocos, total=len(exportadas))
 
 
-@app.route("/consolidado/<prest_cnpj>/<competencia>")
-def consolidado(prest_cnpj, competencia):
-    linhas = _carregar()
-    itens = _grupos(linhas).get((prest_cnpj, competencia), [])
-    if not itens:
-        flash("Consolidação não encontrada.", "erro")
-        return redirect(url_for("consolidados"))
-    regs = [it["reg"] for it in itens]
-    totais = {a: _soma(regs, a) for a in (
-        "valor_servicos", "iss_valor_destaque_emitente", "ir_destaque_emitente",
-        "pis_destaque_emitente", "cofins_destaque_emitente",
-        "csll_destaque_emitente", "inss_destaque_emitente", "valor_liquido")}
-    novas = sum(1 for it in itens if not it["ja_exportada"])
-    return render_template("consolidado.html", itens=itens, regs=regs,
-                           prest_cnpj=prest_cnpj, competencia=competencia,
-                           prest_nome=regs[0].prest_nome, totais=totais, novas=novas)
-    # nota: a navegação "voltar" deste detalhe é o módulo Consolidados.
-
-
 @app.route("/nota/<chave>")
 def detalhe(chave):
     for item in _carregar():
@@ -302,26 +184,29 @@ def detalhe(chave):
             sugestao = (sugerir_material(item["reg"].discriminacao)
                         if item["tipo"] == "NFSE" else None)
             conf = _conferencia(item) if item["tipo"] == "NFSE" else None
-            return render_template("detalhe.html", item=item, sugestao=sugestao, conf=conf)
+            npp = _obter_npp(item["npp_id"]) if item.get("npp_id") else None
+            return render_template("detalhe.html", item=item, sugestao=sugestao,
+                                   conf=conf, npp=npp)
     flash("Nota não encontrada.", "erro")
     return redirect(url_for("hub"))
 
 
 def _conferencia(item):
-    """Confere a NFS-e contra a regra do contrato casado por CNPJ (Fase 2 — sugestão,
-    nunca decisão; I-3). Devolve o estado para a tela tratar 0/1/vários contratos
-    (I-6). Read-only: não grava nada."""
-    store = StoreContratos()
-    casados = retencao.casar_contratos(item["reg"], store.listar())
-    store.fechar()
-    if not casados:
+    """Confere a nota contra a regra do contrato da SUA NPP (vínculo explícito, não
+    mais heurística por CNPJ). Read-only, sugestão (I-3); o contrato é sempre único
+    (some o estado 'varios'). Despacha por tipo (galhos independentes)."""
+    npp_id = item.get("npp_id")
+    if not npp_id:
+        return {"estado": "sem_npp"}
+    npp = _obter_npp(npp_id)
+    if not npp:
+        return {"estado": "sem_npp"}
+    store = StoreContratos(); contrato = store.obter(npp.contrato_id); store.fechar()
+    if not contrato:
         return {"estado": "sem_contrato"}
-    if len(casados) > 1:
-        return {"estado": "varios",
-                "rotulos": [retencao.rotulo_contrato(c) for c in casados]}
-    marcado = item["marcacao"].valor if item["marcacao"] else None
-    contrato = casados[0]
-    resultado = retencao.conferir_retencao(item["reg"], contrato, marcado)
+    marc = item["marcacao"]
+    marcado = marc.get("valor") if marc else None
+    resultado = _conferir_por_tipo(item["reg"], item["tipo"], contrato, marcado)
     return {"estado": "ok", "resultado": resultado,
             "federal_origem": contrato.ret_federal_origem,
             "federal_codigo": contrato.ret_federal_regra_codigo,
@@ -425,14 +310,6 @@ def _linha_individual(reg, marc) -> dict:
     return d
 
 
-def _linha_consolidada(reg, marc) -> dict:
-    """Dict de uma NFS-e para o CSV consolidado (espelha a tabela da tela) + o
-    valor de material validado pelo operador injetado."""
-    d = reg.to_dict()
-    _, d["valor_material"] = _material_validado(reg, marc)
-    return d
-
-
 def _exportar_com_spec(cands, spec, sufixo, builder):
     """Escritor genérico: monta os dicts (builder) e grava o CSV com a `spec`."""
     def escritor(regs, lote):
@@ -443,31 +320,6 @@ def _exportar_com_spec(cands, spec, sufixo, builder):
             marc.fechar()
         return ExportadorCsvLocal(PASTA_SAIDA).exportar(dicts, spec, lote, sufixo)
     return _exportar(cands, escritor)
-
-
-@app.route("/exportar", methods=["POST"])
-def exportar():
-    """Padrão INDIVIDUAL: notas avulsas inéditas (não as de consolidação — cada
-    contrato é exportado pelo seu próprio botão, para nunca misturar contratos)."""
-    linhas = _carregar()
-    cons_chaves = _chaves_consolidadas(linhas)
-    cands = [it["reg"] for it in linhas
-             if it["reg"] and not it["ja_exportada"] and not it["erro"]
-             and it["reg"].chave not in cons_chaves]
-    flash(*_exportar_com_spec(cands, SPEC_INDIVIDUAL, "individual", _linha_individual))
-    return redirect(url_for("individuais"))
-
-
-@app.route("/exportar_grupo/<prest_cnpj>/<competencia>", methods=["POST"])
-def exportar_grupo(prest_cnpj, competencia):
-    """Padrão CONSOLIDADO: uma linha por NFS-e do contrato, espelhando a tabela da
-    tela + o valor de material validado."""
-    linhas = _carregar()
-    itens = _grupos(linhas).get((prest_cnpj, competencia), [])
-    cands = [it["reg"] for it in itens if not it["ja_exportada"] and not it["erro"]]
-    flash(*_exportar_com_spec(cands, RegistroNFSe.EXPORT_SPEC_CONSOLIDADO,
-                              "consolidado", _linha_consolidada))
-    return redirect(url_for("consolidado", prest_cnpj=prest_cnpj, competencia=competencia))
 
 
 def _persistir(resultados, npp_id=None):
@@ -509,72 +361,6 @@ def _ingerir_uploads(arquivos):
     return resultados
 
 
-@app.route("/importar", methods=["GET"])
-def importar():
-    """Tela de importação manual, com duas opções: uma nota (upload de um XML) ou
-    uma pasta inteira. O app nunca importa sozinho — a leitura de XML só acontece
-    quando o usuário aciona aqui."""
-    notas = StoreNotas(); n = notas.contar(); notas.fechar()
-    return render_template("importar.html", n_notas=n,
-                           pasta_padrao=str(PASTA_EXEMPLOS))
-
-
-@app.route("/importar/arquivo", methods=["POST"])
-def importar_arquivo():
-    """Importação individual: recebe um XML enviado pelo usuário, lê uma vez e
-    grava. Falha de reconhecimento é exibida com a mensagem da ingestão (I-6)."""
-    arquivo = request.files.get("arquivo")
-    if not arquivo or not arquivo.filename:
-        flash("Selecione um arquivo XML para importar. Nada foi importado.", "erro")
-        return redirect(url_for("importar"))
-    nome = secure_filename(Path(arquivo.filename).name) or "nota.xml"
-    if not nome.lower().endswith(".xml"):
-        flash(f"'{arquivo.filename}' não é um arquivo .xml. Nada foi importado.", "erro")
-        return redirect(url_for("importar"))
-    with tempfile.TemporaryDirectory() as d:
-        caminho = Path(d) / nome
-        arquivo.save(str(caminho))
-        resultado = ingerir(caminho)          # leitura única, como na pasta
-    importadas, _, _ = _persistir([resultado])
-    if importadas:
-        flash(f"Nota '{nome}' importada e gravada no banco.", "ok")
-    else:
-        flash(f"'{nome}' não foi importada: {resultado.erro or 'não reconhecida'}.", "erro")
-    return redirect(url_for("hub"))
-
-
-@app.route("/importar/pasta", methods=["POST"])
-def importar_pasta():
-    """Importação em lote: recebe os arquivos da pasta escolhida no seletor do
-    navegador, lê cada XML uma vez e grava. Não-XML e arquivos não reconhecidos
-    são reportados, não engolidos (I-6)."""
-    arquivos = [f for f in request.files.getlist("arquivos") if f and f.filename]
-    if not arquivos:
-        flash("Selecione uma pasta com arquivos XML. Nada foi importado.", "erro")
-        return redirect(url_for("importar"))
-    resultados = _ingerir_uploads(arquivos)
-    if not resultados:
-        flash("A pasta selecionada não tem arquivos .xml. Nada foi importado.", "erro")
-        return redirect(url_for("importar"))
-    importadas, erros, _ = _persistir(resultados)
-    msg = f"Importação concluída: {importadas} nota(s) gravada(s) no banco."
-    if erros:
-        msg += (f" {len(erros)} arquivo(s) não reconhecido(s), ignorado(s): "
-                f"{', '.join(erros)}.")
-    flash(msg, "ok" if importadas else "erro")
-    return redirect(url_for("hub"))
-
-
-@app.route("/importar/exemplos", methods=["POST"])
-def importar_exemplos():
-    """Atalho de demonstração: importa a pasta de exemplos que acompanha o
-    projeto (caminho conhecido no servidor), sem o usuário ter de localizá-la."""
-    importadas, erros, _ = _persistir(ingerir_pasta(PASTA_EXEMPLOS))
-    flash(f"Exemplos do projeto importados: {importadas} nota(s) gravada(s).",
-          "ok" if importadas else "erro")
-    return redirect(url_for("hub"))
-
-
 @app.route("/redefinir", methods=["GET"])
 def redefinir():
     """Tela de confirmação da redefinição de dados (reset de demonstração).
@@ -610,7 +396,7 @@ def redefinir_executar():
                  if resumo["artefatos_limpos"] else "")
         flash("Dados redefinidos: notas, memória de exportação e marcações apagadas "
               f"({', '.join(resumo['apagados'])}).{artef} Backup salvo em {resumo['backup']}. "
-              "A lista está vazia — use Importar para carregar as notas de novo.", "ok")
+              "A lista está vazia — crie uma NPP e importe as notas dentro dela.", "ok")
     else:
         flash("Não havia dados a redefinir — o banco já estava vazio.", "info")
     return redirect(url_for("hub"))
@@ -1310,6 +1096,22 @@ def npp_importar_exemplos(id_):
         flash("NPP não encontrada.", "erro")
         return redirect(url_for("npps"))
     _persistir_na_npp(list(ingerir_pasta(PASTA_EXEMPLOS)), npp)
+    return redirect(url_for("npp_detalhe", id_=id_))
+
+
+@app.route("/npp/<int:id_>/exportar", methods=["POST"])
+def npp_exportar(id_):
+    """Exporta as notas INÉDITAS da NPP num lote (I-1: idempotência por chave via
+    RegistroDeExportacao; I-5: artefato novo append-only). Reusa o SPEC_INDIVIDUAL,
+    que já cobre NF-e e NFS-e na mesma tabela — uma NPP mista exporta os dois tipos
+    no mesmo artefato, cada nota com as colunas do seu tipo. Valores rotulados
+    'destaque do emitente' (I-2); a validação humana é exibida na tela da NPP."""
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    cands = [it["reg"] for it in _itens_da_npp(id_) if not it["ja_exportada"]]
+    flash(*_exportar_com_spec(cands, SPEC_INDIVIDUAL, npp.numero, _linha_individual))
     return redirect(url_for("npp_detalhe", id_=id_))
 
 

@@ -22,6 +22,7 @@
             <th scope="col">Tipo</th>
             <th scope="col" class="num">Número</th>
             <th scope="col">Fornecedor</th>
+            <th scope="col">NPP</th>
             <th scope="col" class="num">Valor</th>
             <th scope="col"></th>
           </tr>
@@ -32,6 +33,7 @@
             <td><span class="badge {{ it.tipo|lower }}">{{ it.tipo }}</span></td>
             <td class="num">{{ it.numero or '—' }}</td>
             <td>{{ it.nome or '—' }}{% if not it.disponivel %}<span class="sub muted">arquivo de origem não está mais na pasta</span>{% endif %}</td>
+            <td>{% if it.npp_id %}<a class="row-link" href="{{ url_for('npp_detalhe', id_=it.npp_id) }}">{{ it.npp_numero }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
             <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
             <td>{% if it.disponivel %}<a class="row-link" href="{{ url_for('detalhe', chave=it.chave) }}">ver <svg class="icon"><use href="#i-seta"/></svg></a>{% endif %}</td>
           </tr>
@@ -42,6 +44,6 @@
   </div>
   {% endfor %}
 {% else %}
-  <p class="empty-msg">Nada exportado ainda. Quando você exportar um lote (em Individuais ou Consolidados), ele aparece aqui.</p>
+  <p class="empty-msg">Nada exportado ainda. Quando você exportar uma NPP, o lote aparece aqui.</p>
 {% endif %}
 {% endblock %}

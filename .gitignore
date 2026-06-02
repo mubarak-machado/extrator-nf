@@ -11,3 +11,7 @@ backups/
 
 # SO
 .DS_Store
+
+# segredo gerado em runtime / artefatos do harness
+secret.key
+.claude/

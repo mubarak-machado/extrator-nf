@@ -4,7 +4,7 @@
 {% set r = item.reg %}
 {% set nfe = item.tipo == 'NFE' %}
 
-<p class="breadcrumb"><a href="{{ url_for('hub') }}">Início</a> › Nota {{ r.numero or '(sem número)' }}</p>
+<p class="breadcrumb"><a href="{{ url_for('hub') }}">Início</a> › {% if npp %}<a href="{{ url_for('npp_detalhe', id_=npp.id) }}">{{ npp.numero }}</a> › {% endif %}Nota {{ r.numero or '(sem número)' }}</p>
 
 <div class="page-head row">
   <h2>Nota {{ r.numero or '(sem número)' }}</h2>
@@ -155,10 +155,10 @@
 
   {# ---------- Conferência contra o contrato (Fase 2 — sugestão, não decide) ---------- #}
   <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-check"/></svg> Conferência contra o contrato</h3></div><div class="card-b">
-    {% if not conf or conf.estado == 'sem_contrato' %}
-      <p class="muted small">Sem contrato cadastrado para este prestador (CNPJ {{ r.prest_cnpj | cnpj }}). Cadastre em <a href="{{ url_for('contratos') }}">Contratos</a> para conferir as retenções.</p>
-    {% elif conf.estado == 'varios' %}
-      <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> Há <strong>{{ conf.rotulos|length }} contratos</strong> cadastrados para este prestador ({{ conf.rotulos|join(', ') }}). O sistema não escolhe sozinho qual se aplica — defina o contrato para conferir.</p></div>
+    {% if not conf or conf.estado == 'sem_npp' %}
+      <p class="muted small">Esta nota não está vinculada a uma NPP. A conferência usa o contrato da NPP — importe a nota dentro de uma NPP para conferir as retenções.</p>
+    {% elif conf.estado == 'sem_contrato' %}
+      <p class="muted small">A NPP desta nota não tem contrato associado. Cadastre/edite em <a href="{{ url_for('contratos') }}">Contratos</a> para conferir as retenções.</p>
     {% else %}
       {% set res = conf.resultado %}
       <p class="note"><span class="chip">contrato {{ res.contrato_rotulo }}</span> Comparação da regra declarada com o destaque do emitente. É <strong>sugestão para conferência</strong> — nada é aplicado (Fase 2).</p>

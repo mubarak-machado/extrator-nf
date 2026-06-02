@@ -4,49 +4,34 @@
 
 <div class="page-head">
   <h2>O que você vai lançar?</h2>
-  <p>Escolha um módulo. Notas avulsas e pagamentos consolidados não se misturam — cada um tem seu fluxo. O que já foi exportado fica no Histórico.</p>
+  <p>Cada pagamento é uma NPP — um contrato, uma competência, uma ou mais notas. Crie a NPP, importe as notas dentro dela e confira as retenções. O que já foi exportado fica no Histórico.</p>
 </div>
 
-{% if cards.sem_notas %}
+{% if cards.sem_npps %}
 <div class="card empty-banner">
   <svg class="icon" aria-hidden="true"><use href="#i-doc"/></svg>
   <div>
-    <h3>Nenhuma nota no banco</h3>
-    <p>O aplicativo não importa sozinho. Carregue as notas quando quiser para começar a conferir.</p>
+    <h3>Nenhuma NPP ainda</h3>
+    <p>Comece criando uma NPP: escolha o contrato e a competência, e importe as notas dentro dela.</p>
   </div>
-  <a class="btn" href="{{ url_for('importar') }}"><svg class="icon"><use href="#i-exportar"/></svg> Importar notas</a>
+  <a class="btn" href="{{ url_for('npp_nova') }}"><svg class="icon"><use href="#i-doc"/></svg> Nova NPP</a>
 </div>
 {% endif %}
 
 <section class="modules" aria-label="Módulos">
-  <a class="module-card" href="{{ url_for('individuais') }}">
-    <div class="mod-top">
-      <span class="mod-icon"><svg class="icon"><use href="#i-doc"/></svg></span>
-      <div>
-        <h3>Notas individuais</h3>
-        <p class="mod-desc">NF-e e NFS-e avulsas, lançadas uma a uma.</p>
-      </div>
-    </div>
-    <div class="mod-figs">
-      <span class="mod-big{{ ' zero' if cards.ind_valor is ezero else '' }}">{{ cards.ind_valor | moeda }}</span>
-      <span class="mod-sub">{{ cards.ind_pend }} a conferir{% if cards.ind_atencao %} · <span class="mod-warn"><svg class="icon"><use href="#i-alerta"/></svg> {{ cards.ind_atencao }} com atenção</span>{% endif %}</span>
-    </div>
-    <span class="mod-go">Abrir módulo <svg class="icon"><use href="#i-seta"/></svg></span>
-  </a>
-
-  <a class="module-card" href="{{ url_for('consolidados') }}">
+  <a class="module-card" href="{{ url_for('npps') }}">
     <div class="mod-top">
       <span class="mod-icon"><svg class="icon"><use href="#i-servico"/></svg></span>
       <div>
-        <h3>Pagamentos consolidados</h3>
-        <p class="mod-desc">Conjuntos do mesmo contrato (sugeridos por prestador + competência).</p>
+        <h3>NPPs abertas</h3>
+        <p class="mod-desc">Pagamentos com nota inédita, aguardando conferência ou exportação.</p>
       </div>
     </div>
     <div class="mod-figs">
-      <span class="mod-big{{ ' zero' if cards.cons_valor is ezero else '' }}">{{ cards.cons_valor | moeda }}</span>
-      <span class="mod-sub">{{ cards.cons_contratos }} contrato(s) · {{ cards.cons_novas }} inéditas</span>
+      <span class="mod-big{{ ' zero' if cards.npp_valor is ezero else '' }}">{{ cards.npp_valor | moeda }}</span>
+      <span class="mod-sub">{{ cards.npp_abertas }} aberta(s){% if cards.npp_vazias %} · {{ cards.npp_vazias }} vazia(s){% endif %}</span>
     </div>
-    <span class="mod-go">Abrir módulo <svg class="icon"><use href="#i-seta"/></svg></span>
+    <span class="mod-go">Abrir NPPs <svg class="icon"><use href="#i-seta"/></svg></span>
   </a>
 
   <a class="module-card" href="{{ url_for('historico') }}">
@@ -54,7 +39,7 @@
       <span class="mod-icon"><svg class="icon"><use href="#i-check"/></svg></span>
       <div>
         <h3>Histórico</h3>
-        <p class="mod-desc">Notas já exportadas, por lote. Consulta — impede pagamento em duplicidade.</p>
+        <p class="mod-desc">Notas já exportadas, por lote e por NPP. Consulta — impede pagamento em duplicidade.</p>
       </div>
     </div>
     <div class="mod-figs">
@@ -64,4 +49,10 @@
     <span class="mod-go">Ver histórico <svg class="icon"><use href="#i-seta"/></svg></span>
   </a>
 </section>
+
+{% if not cards.sem_npps %}
+<div class="actions" style="margin-top:var(--sp-4)">
+  <a class="btn" href="{{ url_for('npp_nova') }}"><svg class="icon"><use href="#i-doc"/></svg> Nova NPP</a>
+</div>
+{% endif %}
 {% endblock %}

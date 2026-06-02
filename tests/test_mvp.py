@@ -429,19 +429,6 @@ def test_conferencia_ir_indefinido_sem_marcacao_de_material():
     assert ir2.esperado == "48.00" and ir2.situacao == "confere"
 
 
-def test_conferencia_casa_por_cnpj_e_trata_ambiguidade():
-    """casar_contratos casa por CNPJ e devolve TODOS — 0, 1 ou vários. A escolha
-    entre vários é do humano (I-6), a função não decide."""
-    from galho_nfse import retencao
-    reg = _reg_nfse()
-    c1 = _contrato(numero="07")
-    c2 = _contrato(numero="08")
-    outro = _contrato(prest_documento="99999999000100", numero="09")
-    assert retencao.casar_contratos(reg, []) == []                 # nenhum
-    assert len(retencao.casar_contratos(reg, [c1, outro])) == 1    # um
-    assert len(retencao.casar_contratos(reg, [c1, c2, outro])) == 2  # vários (ambíguo)
-
-
 def test_conferencia_nao_grava_nada():
     """Conferência é read-only: não persiste marcação nem registro (I-3/I-5).
     Rodar não cria nenhum arquivo .sqlite no diretório de trabalho temporário."""
@@ -996,3 +983,49 @@ def test_npp_grupos_impostos_camadas_e_total_retido(tmp_path):
     fed = next(g for g in grupos if g["label"] == "Tributos federais")
     assert next(r for r in fed["rows"] if r["tributo"] == "IR")["validacao"]["acao"] == "confirmado"
     vs.fechar(); ms.fechar()
+
+
+# ---------- Passo 7c (UI): exportação por NPP + idempotência ----------
+
+def test_npp_exportar_idempotente_e_artefato(tmp_path):
+    """Exportação por NPP: as notas inéditas da NPP entram num lote, registradas por
+    chave (I-1), gerando um artefato novo (I-5); reexportar não duplica."""
+    import tronco.app as A
+    from tronco.operador import StoreOperador
+    from tronco.npp import StoreNPP
+    from tronco.notas import StoreNotas
+    from tronco.contratos import StoreContratos
+    from tronco.idempotencia import RegistroDeExportacao
+    from tronco.marcacoes import StoreMarcacoes
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+
+    A.StoreOperador = lambda *a, **k: StoreOperador(tmp_path / "op.sqlite")
+    A.StoreNPP = lambda *a, **k: StoreNPP(tmp_path / "npp.sqlite")
+    A.StoreNotas = lambda *a, **k: StoreNotas(tmp_path / "notas.sqlite")
+    A.StoreContratos = lambda *a, **k: StoreContratos(tmp_path / "contr.sqlite")
+    A.RegistroDeExportacao = lambda *a, **k: RegistroDeExportacao(tmp_path / "exp.sqlite")
+    A.StoreMarcacoes = lambda *a, **k: StoreMarcacoes(tmp_path / "marc.sqlite")
+    A.StoreValidacaoRetencao = lambda *a, **k: StoreValidacaoRetencao(tmp_path / "val.sqlite")
+    A.PASTA_SAIDA = tmp_path / "exportacoes"
+    A.app.config.update(TESTING=True)
+    cli = A.app.test_client()
+
+    cli.post("/operador", data={"iniciais": "op", "nome": "Op"})
+    cs = StoreContratos(tmp_path / "contr.sqlite"); cid = cs.salvar(_contrato()); cs.fechar()
+    cli.post("/npps", data={"contrato_id": str(cid), "competencia": "2026-05"})
+    nid = StoreNPP(tmp_path / "npp.sqlite").listar()[0].id
+    cli.post(f"/npp/{nid}/importar/exemplos")
+    n = len(StoreNotas(tmp_path / "notas.sqlite").listar_por_npp(nid))
+    assert n > 0
+
+    r = cli.post(f"/npp/{nid}/exportar", follow_redirects=True)
+    assert r.status_code == 200
+    reg = RegistroDeExportacao(tmp_path / "exp.sqlite")
+    assert len(reg.listar()) == n                       # I-1: todas registradas por chave
+    reg.fechar()
+    assert len(list((tmp_path / "exportacoes").glob("*.csv"))) == 1   # I-5: artefato novo
+
+    cli.post(f"/npp/{nid}/exportar", follow_redirects=True)            # reexportar
+    reg = RegistroDeExportacao(tmp_path / "exp.sqlite")
+    assert len(reg.listar()) == n                       # idempotência: nada duplicado
+    reg.fechar()

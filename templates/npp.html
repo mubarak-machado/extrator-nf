@@ -9,8 +9,15 @@
     <h2>{{ npp.numero }}</h2>
     <p>{{ contrato_rotulo }}{% if npp.rotulo %} · {{ npp.rotulo }}{% endif %}</p>
   </div>
+  {% if itens %}
+  <form method="post" action="{{ url_for('npp_exportar', id_=npp.id) }}" style="margin-left:auto">
+    <button type="submit" class="btn"{% if not n_novas %} disabled title="Todas as notas desta NPP já foram exportadas"{% endif %}>
+      <svg class="icon"><use href="#i-exportar"/></svg> Exportar NPP{% if n_novas %} ({{ n_novas }} inédita{{ 's' if n_novas != 1 }}){% else %} (tudo exportado){% endif %}
+    </button>
+  </form>
+  <a class="btn ghost" href="{{ url_for('npp_editar', id_=npp.id) }}">Editar NPP</a>
+  {% else %}
   <a class="btn ghost" href="{{ url_for('npp_editar', id_=npp.id) }}" style="margin-left:auto">Editar NPP</a>
-  {% if not itens %}
   <form method="post" action="{{ url_for('npp_remover', id_=npp.id) }}" onsubmit="return confirm('Remover esta NPP vazia?');">
     <button type="submit" class="btn ghost">Remover</button>
   </form>

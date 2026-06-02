@@ -419,10 +419,11 @@ Construção de dentro para fora (dados → lógica → UI), cada passo com test
 - [x] **Passo 4 — `tronco/npp.py`** (`NPP` + `StoreNPP`, geração do `numero`). *commit `eb53349`*
 - [x] **Passo 5 — `tronco/notas.py`** (coluna `npp_id` + `listar_por_npp` + `ConflitoDeChave`). *commit `47abaca`*
 - [x] **Passo 6 — `tronco/validacao_retencao.py`** (confirmar/retificar, I-3/I-4). *commit `71d7449`*
-- [ ] **Passo 7 — `tronco/app.py` + `templates/`** — fatiado (ver abaixo). **7a e 7b feitos**; falta 7c.
+- [x] **Passo 7 — `tronco/app.py` + `templates/`** — **7a, 7b e 7c feitos**. Fluxo antigo removido.
 - [ ] **Passo 8 — `tronco/redefinicao.py`** — incluir `npps.sqlite` + `validacoes_retencao.sqlite` no reset; **preservar** `operador.sqlite`.
 
-55 testes verdes até o passo 6; 57 após o 7a; **60 após o 7b**.
+55 testes verdes até o passo 6; 57 após o 7a; 60 após o 7b; **60 após o 7c** (−1 teste da
+heurística removido, +1 de exportação por NPP).
 
 ### Divisão do passo 7 (UI) — fazer em sessão nova (janela de contexto)
 
@@ -453,12 +454,20 @@ Cada subetapa termina com `pytest` verde e o app de pé; o fluxo antigo
     **nasce vazio**, nunca pré-preenchido com o `esperado` (linha vermelha I-3, verificada em teste).
   - Total retido = Σ validados; líquido = bruto − retido, marcado **provisório** enquanto
     houver tributo aplicável não validado (I-6). Parcial `templates/_validar_controles.html`.
-- **7c — Exportação por NPP + remoção do fluxo antigo:**
-  - `POST /npp/<id>/exportar` (reusa `_exportar` + `RegistroDeExportacao`); NPP mista
-    exporta cada tipo com suas colunas.
-  - Hub/nav: `hub.html` → NPPs abertas + Histórico; `base.html` → "NPPs"; `historico.html`
-    mostra a NPP de origem.
-  - **Remover:** rotas `individuais`/`consolidados`/`consolidado`/`exportar`/`exportar_grupo`/
-    `importar` global; funções `_grupos`/`_resumo_consolidacoes`/`_chaves_consolidadas`; uso
-    de `casar_contratos` no fluxo; templates `individuais/consolidados/consolidado.html`.
-    Remover testes da heurística; (se viável) adicionar testes de rota da NPP.
+- [x] **7c — Exportação por NPP + remoção do fluxo antigo:** **FEITO** (60 testes).
+  - `POST /npp/<id>/exportar` reusa `_exportar` + `RegistroDeExportacao` (I-1) e o
+    `SPEC_INDIVIDUAL`, que já cobre NF-e e NFS-e na mesma tabela — NPP mista exporta os
+    dois tipos no mesmo artefato, cada nota com as colunas do seu tipo (I-5). Botão na
+    `npp.html` (desabilitado quando tudo já exportado). *Nota:* a exportação segue
+    rotulada "destaque do emitente" (I-2); enriquecer o CSV com a retenção **validada** é
+    follow-up junto do exportador Sheets real (decisão #4, fora de escopo).
+  - Hub/nav: `hub.html` → NPPs abertas + Histórico (CTA Nova NPP); `base.html` → só "NPPs"
+    (saiu o dropdown Notas Fiscais e o "Importar" global); `historico.html` mostra a NPP de
+    origem; `detalhe.html` ganhou breadcrumb da NPP e confere via contrato da NPP.
+  - **Removidos:** rotas `individuais`/`consolidados`/`consolidado`/`exportar`/`exportar_grupo`/
+    `importar`(+`/arquivo`/`/pasta`/`/exemplos`) global; funções `_grupos`/`_chaves_consolidadas`/
+    `_resumo_consolidacoes`/`_soma`/`_com_atencao`/`_linha_consolidada`; `casar_contratos`
+    (galho_nfse) + seu teste; templates `individuais/consolidados/consolidado/importar.html`.
+  - Teste novo: exportação por NPP idempotente + artefato (I-1/I-5). 60 verdes.
+
+**Falta só o passo 8** (reset).

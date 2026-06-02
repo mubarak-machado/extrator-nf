@@ -18,31 +18,21 @@ Fronteira de invariante (00_PRINCIPIOS) — leia antes de mexer:
 - I-2: só **lê** o registro; não toca a extração.
 - I-4: usa como input a **marcação de material** já persistida (autor/data) — é o
   que o 00 prevê para a Fase 2. Não cria marcação nova.
-- I-6: sem contrato, contrato ambíguo (vários p/ o mesmo prestador) ou material não
-  conferido → estado **indefinido visível**, nunca chute.
+- I-6: sem contrato ou material não conferido → estado **indefinido visível**, nunca chute.
 
-O vínculo nota↔contrato é a heurística por CNPJ (decisão #2 segue aberta):
-`casar_contratos` devolve TODAS as correspondências; quem chama trata 0/1/vários.
+O vínculo nota↔contrato é **explícito** via NPP (nota → NPP → contrato, escolhido pelo
+operador) — a antiga heurística por CNPJ (`casar_contratos`) foi removida com a modelagem
+por NPP. `conferir_retencao` recebe o contrato já resolvido; só confere, não escolhe.
 """
 from __future__ import annotations
 
 from decimal import Decimal
 
-from tronco import formato
 # ResultadoConferencia e rotulo_contrato são re-exportados do tronco (comuns aos 2 galhos).
 from tronco.retencao_federal import (
     Achado, ResultadoConferencia, achados_federais, comparar, fmt, num, pct_txt,
     rotulo_contrato,
 )
-
-
-def casar_contratos(reg, contratos):
-    """Contratos cujo documento do prestador casa com o CNPJ da nota. Devolve todos
-    (0, 1 ou vários); a escolha entre vários é do humano (I-6), não daqui."""
-    doc = formato._digitos(reg.prest_cnpj)
-    if not doc:
-        return []
-    return [c for c in contratos if formato._digitos(c.prest_documento) == doc]
 
 
 def conferir_retencao(reg, contrato, material_marcado=None) -> ResultadoConferencia:
