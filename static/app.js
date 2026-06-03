@@ -149,3 +149,114 @@
     });
   });
 })();
+
+/* Validação inline da NPP (Fase 2): confirmar/retificar sem recarregar a página.
+   Progressive enhancement — sem JS, os <form> seguem como POST normal (redirect+flash).
+   O SERVIDOR continua recomputando o destaque (I-2), gravando com autor+data (I-4) e
+   renderizando os fragmentos; este código só troca innerHTML e alterna flags — nunca
+   faz aritmética nem formatação de valor. Erros voltam como JSON e são exibidos (I-6). */
+(function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    var secao = document.querySelector('[aria-label="Grupos de impostos"]');
+    if (!secao) return;
+
+    function acharLinha(chave, tributo) {
+      var trs = secao.querySelectorAll("tr[data-chave]");
+      for (var i = 0; i < trs.length; i++) {
+        if (trs[i].getAttribute("data-chave") === chave &&
+            trs[i].getAttribute("data-tributo") === tributo) return trs[i];
+      }
+      return null;
+    }
+
+    function limparErro(cel) {
+      var e = cel.querySelector(".erro-inline");
+      if (e) e.remove();
+    }
+
+    function mostrarErro(cel, msg) {
+      limparErro(cel);
+      var p = document.createElement("p");
+      p.className = "erro-inline";
+      p.setAttribute("role", "alert");
+      p.textContent = msg;
+      cel.insertBefore(p, cel.firstChild);
+    }
+
+    function setVal(id, txt) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var v = el.querySelector("[data-val]");
+      if (v) v.textContent = txt;
+    }
+
+    function toggle(id, seletor, mostrar) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var alvo = el.querySelector(seletor);
+      if (alvo) alvo.hidden = !mostrar;
+    }
+
+    function atualizarLote(n) {
+      var bloco = document.getElementById("bloco-confirmar-lote");
+      if (!bloco) return;
+      var span = bloco.querySelector("[data-n-pendentes]");
+      if (span) span.textContent = n;
+      bloco.hidden = (n === 0);
+    }
+
+    function realce(row) {
+      row.classList.add("linha-validada");
+      setTimeout(function () { row.classList.remove("linha-validada"); }, 1500);
+    }
+
+    function aplicar(data) {
+      var row = acharLinha(data.chave, data.tributo);
+      if (row) {
+        var celV = row.querySelector(".cel-validar");
+        var celS = row.querySelector(".cel-situacao");
+        if (celV) celV.innerHTML = data.cel_validar;
+        if (celS) celS.innerHTML = data.cel_situacao;
+        realce(row);
+      }
+      var prog = document.getElementById("bloco-progresso");
+      if (prog) prog.innerHTML = data.progresso;
+      var tabela = secao.querySelector('table[data-grupo="' + data.grupo_key + '"]');
+      var gt = tabela ? tabela.querySelector("[data-grupo-total]") : null;
+      if (gt) gt.textContent = data.grupo_total;
+      setVal("dd-total-retido", data.total_retido);
+      setVal("dd-liquido", data.liquido);
+      toggle("dd-total-retido", "[data-parcial]", data.liquido_provisorio);
+      toggle("dd-liquido", "[data-provisorio]", data.liquido_provisorio);
+      atualizarLote(data.n_pendentes);
+    }
+
+    // Delegação: pega o submit de qualquer form de validação, inclusive os que entram
+    // depois via innerHTML (Revalidar). A validação nativa (required) roda antes daqui.
+    secao.addEventListener("submit", function (e) {
+      var form = e.target;
+      var cel = form.closest && form.closest(".cel-validar");
+      if (!cel) return;                 // não é form de validação inline
+      e.preventDefault();
+      limparErro(cel);
+      var botoes = form.querySelectorAll("button");
+      botoes.forEach(function (b) { b.disabled = true; });
+      fetch(form.action, {
+        method: "POST",
+        headers: { "X-Requested-With": "fetch" },
+        body: new FormData(form)
+      }).then(function (resp) {
+        return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
+      }).then(function (res) {
+        if (!res.ok || !res.data || !res.data.ok) {
+          mostrarErro(cel, (res.data && res.data.mensagem) || "Não foi possível validar.");
+          botoes.forEach(function (b) { b.disabled = false; });
+          return;
+        }
+        aplicar(res.data);              // troca a célula (botões somem junto)
+      }).catch(function () {
+        form.submit();                  // sem rede: degrada para o POST normal
+      });
+    });
+  });
+})();

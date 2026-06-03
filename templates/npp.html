@@ -31,8 +31,8 @@
     {% if contrato %}<dt>Credor (prestador)</dt><dd>{{ contrato.prest_identificacao }} · <span class="mono">{{ contrato.prest_documento | cnpj }}</span></dd>{% endif %}
     <dt>Competência</dt><dd>{{ npp.competencia | competencia }}</dd>
     <dt>Total dos documentos (bruto)</dt><dd class="num">{{ total_bruto | moeda }}</dd>
-    <dt>Total retido (validado pelo operador)</dt><dd class="num">{{ total_retido | moeda }}{% if liquido_provisorio %} <span class="sub">parcial — há tributo a validar</span>{% endif %}</dd>
-    <dt>Valor líquido</dt><dd class="num">{{ liquido | moeda }}{% if liquido_provisorio %} <span class="chip">provisório</span>{% endif %}</dd>
+    <dt>Total retido (validado pelo operador)</dt><dd class="num" id="dd-total-retido"><span data-val>{{ total_retido | moeda }}</span><span class="sub" data-parcial{% if not liquido_provisorio %} hidden{% endif %}> parcial — há tributo a validar</span></dd>
+    <dt>Valor líquido</dt><dd class="num" id="dd-liquido"><span data-val>{{ liquido | moeda }}</span> <span class="chip" data-provisorio{% if not liquido_provisorio %} hidden{% endif %}>provisório</span></dd>
     {% if npp.observacoes %}<dt>Observações</dt><dd>{{ npp.observacoes }}</dd>{% endif %}
     <dt>Responsável</dt><dd>{{ npp.criada_por }} · criada em {{ npp.criada_em | datahora }}</dd>
   </dl>
@@ -87,22 +87,14 @@
 <section class="section" aria-label="Grupos de impostos">
   <h3>Grupos de impostos</h3>
 
-  {% if validavel %}
-  <div class="progress-wrap mb-3">
-    <div class="progress-top">
-      <span>Validação das retenções</span>
-      <span><b>{{ validados }}</b> de <b>{{ validavel }}</b> tributo(s){% if not n_pendentes %} · concluída{% endif %}</span>
-    </div>
-    <div class="progress"><i style="width:{{ (100 * validados / validavel) | round }}%"></i></div>
-  </div>
-  {% endif %}
+  <div id="bloco-progresso">{% include "_progresso_validacao.html" %}</div>
 
-  {% if n_pendentes %}
-  <form method="post" action="{{ url_for('npp_confirmar_destaques', id_=npp.id) }}" class="mb-3"
-        onsubmit="return confirm('Confirmar o destaque do emitente para os {{ n_pendentes }} tributo(s) pendentes que têm valor destacado? Cada um é gravado em seu nome; você pode retificar individualmente depois.');">
-    <button type="submit" class="btn ghost"><svg class="icon"><use href="#i-check"/></svg> Confirmar destaques pendentes ({{ n_pendentes }})</button>
+  <div id="bloco-confirmar-lote" class="mb-3"{% if not n_pendentes %} hidden{% endif %}>
+  <form method="post" action="{{ url_for('npp_confirmar_destaques', id_=npp.id) }}"
+        onsubmit="return confirm('Confirmar o destaque do emitente para os tributo(s) pendentes que têm valor destacado? Cada um é gravado em seu nome; você pode retificar individualmente depois.');">
+    <button type="submit" class="btn ghost"><svg class="icon"><use href="#i-check"/></svg> Confirmar destaques pendentes (<span data-n-pendentes>{{ n_pendentes }}</span>)</button>
   </form>
-  {% endif %}
+  </div>
 
   {% if material_pendente %}
   <div class="atencao mb-3">
@@ -124,7 +116,7 @@
   <p class="muted">Nenhum tributo desta categoria se aplica às notas desta NPP.</p>
   {% else %}
   <div class="table-wrap dense">
-    <table>
+    <table data-grupo="{{ grupo.key }}">
       <thead>
         <tr>
           <th scope="col">Nota</th>
@@ -137,34 +129,20 @@
       </thead>
       <tbody>
         {% for r in grupo.rows %}
-        <tr>
+        <tr data-chave="{{ r.chave }}" data-tributo="{{ r.tributo }}">
           <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if r.tipo == 'NFE' else 'NFS-e' }}</span></td>
           <td>{{ r.tributo }}<span class="sub">{{ r.regra }}</span></td>
           <td class="num{{ ' zero' if r.destaque is ezero else '' }}">{{ r.destaque | moeda if r.destaque is not none else '—' }}</td>
           <td class="num">{% if r.esperado is not none %}<span class="chip">sugestão</span> {{ r.esperado | moeda }}{% else %}<span class="muted">—</span>{% endif %}</td>
-          <td>
-            {% if r.validacao %}
-            <strong>{{ r.validacao.valor | moeda }}</strong> <span class="sub">{{ r.validacao.acao }} · {{ r.validacao.autor }} · {{ r.validacao.validado_em | datahora }}</span>
-            <details class="revalidar">
-              <summary>Revalidar</summary>
-              {% include "_validar_controles.html" %}
-            </details>
-            {% else %}
-            {% include "_validar_controles.html" %}
-            {% endif %}
-          </td>
-          <td class="nowrap">
-            {% if r.validacao %}<span class="ok-chip">validado</span>
-            {% elif r.pendente %}<span class="warn">a validar</span>
-            {% else %}<span class="muted">não incide</span>{% endif %}
-          </td>
+          <td class="cel-validar">{% include "_validar_celula.html" %}</td>
+          <td class="nowrap cel-situacao">{% include "_situacao_celula.html" %}</td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot>
         <tr>
           <td colspan="4">Total validado nesta categoria</td>
-          <td class="num">{{ grupo.total_validado | moeda }}</td>
+          <td class="num" data-grupo-total>{{ grupo.total_validado | moeda }}</td>
           <td></td>
         </tr>
       </tfoot>

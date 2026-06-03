@@ -1,0 +1,5 @@
+{# Chip de situação de uma linha de tributo. Contexto: `r`. Partial isolado para ser
+   reusado como fragmento na validação inline (resposta JSON). #}
+{% if r.validacao %}<span class="ok-chip">validado</span>
+{% elif r.pendente %}<span class="warn">a validar</span>
+{% else %}<span class="muted">não incide</span>{% endif %}

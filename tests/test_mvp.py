@@ -1202,3 +1202,83 @@ def test_npp_confirmar_destaques_em_lote(tmp_path, monkeypatch):
     total2 = sum(len(v.atuais(it["reg"].chave)) for it in A._itens_da_npp(nid))
     v.fechar()
     assert total2 == esperado
+
+
+def test_npp_validar_inline_json(tmp_path, monkeypatch):
+    """Validação inline (fetch): a rota responde JSON com fragmentos renderizados pelo
+    servidor. I-2: 'confirmado' grava o destaque recomputado no servidor (o cliente não
+    envia valor). I-4: gravado com autor. I-6: valor inválido volta ok:false (422), nada
+    gravado. Sem o header de fetch, o caminho antigo (redirect) segue intacto."""
+    import tronco.app as A
+    from tronco import formato
+    from tronco.operador import StoreOperador
+    from tronco.npp import StoreNPP
+    from tronco.notas import StoreNotas
+    from tronco.contratos import StoreContratos
+    from tronco.idempotencia import RegistroDeExportacao
+    from tronco.marcacoes import StoreMarcacoes
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+
+    monkeypatch.setattr(A, "StoreOperador", lambda *a, **k: StoreOperador(tmp_path / "op.sqlite"))
+    monkeypatch.setattr(A, "StoreNPP", lambda *a, **k: StoreNPP(tmp_path / "npp.sqlite"))
+    monkeypatch.setattr(A, "StoreNotas", lambda *a, **k: StoreNotas(tmp_path / "notas.sqlite"))
+    monkeypatch.setattr(A, "StoreContratos", lambda *a, **k: StoreContratos(tmp_path / "contr.sqlite"))
+    monkeypatch.setattr(A, "RegistroDeExportacao", lambda *a, **k: RegistroDeExportacao(tmp_path / "exp.sqlite"))
+    monkeypatch.setattr(A, "StoreMarcacoes", lambda *a, **k: StoreMarcacoes(tmp_path / "marc.sqlite"))
+    monkeypatch.setattr(A, "StoreValidacaoRetencao", lambda *a, **k: StoreValidacaoRetencao(tmp_path / "val.sqlite"))
+    A.app.config.update(TESTING=True)
+    cli = A.app.test_client()
+    FETCH = {"X-Requested-With": "fetch"}
+
+    cli.post("/operador", data={"iniciais": "op", "nome": "Op"})
+    cs = StoreContratos(tmp_path / "contr.sqlite")
+    cid = cs.salvar(_contrato(iss_retido_tomador=True, iss_aliquota="5",
+                              ret_federal_sujeito=True, ret_federal_ir_pct="4.8")); cs.fechar()
+    cli.post("/npps", data={"contrato_id": str(cid), "competencia": "2026-05"})
+    nid = StoreNPP(tmp_path / "npp.sqlite").listar()[0].id
+    cli.post(f"/npp/{nid}/importar/exemplos")
+
+    # acha uma (nota, tributo) pendente COM destaque do emitente
+    contrato = StoreContratos(tmp_path / "contr.sqlite").obter(cid)
+    chave = tributo = destaque = None
+    for it in A._itens_da_npp(nid):
+        mat = it["marcacao"]["valor"] if it["marcacao"] else None
+        for a in A._conferir_por_tipo(it["reg"], it["tipo"], contrato, mat).achados:
+            if A._pendente_validacao(a, None) and a.destaque_emitente is not None:
+                chave, tributo, destaque = it["reg"].chave, a.tributo, a.destaque_emitente
+                break
+        if chave:
+            break
+    assert chave, "esperava ao menos um tributo com destaque para validar"
+    url = f"/npp/{nid}/validar/{chave}/{tributo}"
+
+    # I-6: valor inválido → 422 ok:false, nada gravado (antes de qualquer validação)
+    r = cli.post(url, data={"acao": "retificado", "valor": "abc"}, headers=FETCH)
+    assert r.status_code == 422 and r.is_json and r.get_json()["ok"] is False
+    assert r.get_json()["mensagem"]
+    v = StoreValidacaoRetencao(tmp_path / "val.sqlite")
+    assert tributo not in v.atuais(chave); v.fechar()
+
+    # I-2/I-4: confirmar (sem enviar valor) grava o destaque recomputado, com autor
+    r = cli.post(url, data={"acao": "confirmado"}, headers=FETCH)
+    assert r.status_code == 200 and r.is_json
+    data = r.get_json()
+    assert data["ok"] is True and data["chave"] == chave and data["tributo"] == tributo
+    assert "validado" in data["cel_situacao"] and "Revalidar" in data["cel_validar"]
+    for campo in ("progresso", "total_retido", "liquido", "grupo_total", "n_pendentes"):
+        assert campo in data
+    v = StoreValidacaoRetencao(tmp_path / "val.sqlite")
+    atual = v.atuais(chave)[tributo]; v.fechar()
+    assert atual["acao"] == "confirmado" and atual["autor"] == "Op"
+    assert atual["valor"] == formato.parse_valor(destaque)   # I-2: valor do servidor
+
+    # retificar inline (append): vigente passa a ser o valor digitado pelo operador
+    r = cli.post(url, data={"acao": "retificado", "valor": "9,99"}, headers=FETCH)
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    v = StoreValidacaoRetencao(tmp_path / "val.sqlite")
+    atual = v.atuais(chave)[tributo]; v.fechar()
+    assert atual["acao"] == "retificado" and atual["valor"] == formato.parse_valor("9,99")
+
+    # sem o header de fetch: caminho antigo intacto (redirect, não JSON)
+    r = cli.post(url, data={"acao": "confirmado"})
+    assert r.status_code == 302 and not r.is_json

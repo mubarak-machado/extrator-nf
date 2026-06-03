@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.utils import secure_filename
 
 from tronco.ingestao import ingerir, ingerir_pasta
@@ -805,7 +805,8 @@ def _grupos_impostos(itens, contrato, val_store=None, marc=None):
                         tot += Decimal(r["validacao"]["valor"])
                     except (InvalidOperation, ValueError):
                         pass
-            grupos.append({"label": label, "rows": rows, "total_validado": f"{tot:.2f}"})
+            grupos.append({"label": label, "key": key, "rows": rows,
+                           "total_validado": f"{tot:.2f}"})
         return grupos, f"{total_retido:.2f}", ha_pendente
     finally:
         if fechar_v:
@@ -902,16 +903,10 @@ def _liquido_npp(total_bruto, total_retido):
         return None
 
 
-@app.route("/npp/<int:id_>")
-def npp_detalhe(id_):
-    """Detalhe da NPP: cabeçalho derivado + Documentos de origem (Seção 1) + Grupos de
-    impostos (Seção 2: destaque fiel I-2 + sugestão I-3 + validação humana I-4)."""
-    npp = _obter_npp(id_)
-    if not npp:
-        flash("NPP não encontrada.", "erro")
-        return redirect(url_for("npps"))
-    cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
-    itens = _itens_da_npp(id_)
+def _contexto_validacao(itens, contrato):
+    """Recalcula a Seção 2 (grupos de impostos) e os derivados de validação a partir do
+    estado persistido — única fonte de verdade (I-2). Usado tanto na renderização da
+    página quanto na resposta JSON da validação inline, para não divergirem."""
     total_bruto = _bruto(itens)
     grupos, total_retido, liquido_provisorio = _grupos_impostos(itens, contrato)
     # Progresso de validação (I-6: dar fim claro à tarefa). Denominador = tributos que
@@ -922,16 +917,31 @@ def npp_detalhe(id_):
     n_pendentes = sum(1 for r in rows if r["pendente"])
     material_pendente = sum(1 for it in itens
                             if it["tipo"] == "NFSE" and not it["marcacao"])
+    return {
+        "total_bruto": total_bruto, "grupos": grupos, "total_retido": total_retido,
+        "liquido": _liquido_npp(total_bruto, total_retido),
+        "liquido_provisorio": liquido_provisorio,
+        "validados": n_validados, "validavel": n_validados + n_pendentes,
+        "n_pendentes": n_pendentes, "material_pendente": material_pendente,
+    }
+
+
+@app.route("/npp/<int:id_>")
+def npp_detalhe(id_):
+    """Detalhe da NPP: cabeçalho derivado + Documentos de origem (Seção 1) + Grupos de
+    impostos (Seção 2: destaque fiel I-2 + sugestão I-3 + validação humana I-4)."""
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
+    itens = _itens_da_npp(id_)
+    ctx = _contexto_validacao(itens, contrato)
     return render_template(
         "npp.html", npp=npp, contrato=contrato,
         contrato_rotulo=retencao.rotulo_contrato(contrato) if contrato else "(contrato removido)",
-        itens=itens, total_bruto=total_bruto, status=_npp_status(itens),
-        n_novas=sum(1 for i in itens if not i["ja_exportada"]),
-        grupos=grupos, total_retido=total_retido,
-        liquido=_liquido_npp(total_bruto, total_retido),
-        liquido_provisorio=liquido_provisorio,
-        validados=n_validados, validavel=n_validados + n_pendentes,
-        n_pendentes=n_pendentes, material_pendente=material_pendente)
+        itens=itens, status=_npp_status(itens),
+        n_novas=sum(1 for i in itens if not i["ja_exportada"]), **ctx)
 
 
 @app.route("/npp/<int:id_>/editar")
@@ -1075,24 +1085,63 @@ def _nota_item_da_npp(id_, chave):
     return None
 
 
+def _quer_json():
+    """A validação inline (fetch) pede JSON via header; o POST de formulário sem JS não.
+    Progressive enhancement: o servidor decide o formato pela requisição, não a UI."""
+    return request.headers.get("X-Requested-With") == "fetch"
+
+
+def _resposta_validacao_json(id_, npp, contrato, chave, tributo, mensagem):
+    """Monta a resposta JSON da validação inline: fragmentos renderizados pelo SERVIDOR
+    (sem lógica de apresentação no cliente) + totais já formatados (I-2 — o JS nunca faz
+    aritmética nem formatação monetária). O cliente apenas troca innerHTML e alterna flags."""
+    itens = _itens_da_npp(id_)
+    ctx = _contexto_validacao(itens, contrato)
+    grupo = next((g for g in ctx["grupos"]
+                  if any(r["chave"] == chave and r["tributo"] == tributo for r in g["rows"])),
+                 None)
+    r = next((r for r in grupo["rows"] if r["chave"] == chave and r["tributo"] == tributo),
+             None) if grupo else None
+    return jsonify(
+        ok=True, mensagem=mensagem, categoria="ok",
+        chave=chave, tributo=tributo,
+        cel_validar=render_template("_validar_celula.html", r=r, npp=npp),
+        cel_situacao=render_template("_situacao_celula.html", r=r),
+        progresso=render_template("_progresso_validacao.html", **ctx),
+        grupo_key=grupo["key"], grupo_total=formato.moeda(grupo["total_validado"]),
+        total_retido=formato.moeda(ctx["total_retido"]),
+        liquido=formato.moeda(ctx["liquido"]),
+        liquido_provisorio=ctx["liquido_provisorio"],
+        n_pendentes=ctx["n_pendentes"])
+
+
+def _erro_validacao(mensagem, fallback_endpoint, **kw):
+    """Falha de validação visível (I-6): JSON ok:false p/ exibição inline quando fetch,
+    ou flash + redirect no caminho sem JS. Nada é gravado em nenhum dos dois."""
+    if _quer_json():
+        return jsonify(ok=False, mensagem=mensagem, categoria="erro"), 422
+    flash(mensagem, "erro")
+    return redirect(url_for(fallback_endpoint, **kw))
+
+
 @app.route("/npp/<int:id_>/validar/<chave>/<tributo>", methods=["POST"])
 def npp_validar(id_, chave, tributo):
     """Grava a validação de retenção do operador para um tributo de uma nota (Fase 2,
     validação humana; I-3/I-4). *Confirmar* atesta o destaque do emitente (recomputado
     no servidor, nunca o valor da tela). *Retificar* usa o valor digitado pelo operador —
-    o sistema NUNCA pré-preenche esse campo com a sugestão da regra (linha vermelha I-3)."""
+    o sistema NUNCA pré-preenche esse campo com a sugestão da regra (linha vermelha I-3).
+    Responde JSON p/ a validação inline (fetch) ou flash+redirect sem JS — mesmo caminho
+    de persistência nos dois (I-4)."""
     npp = _obter_npp(id_)
     if not npp:
-        flash("NPP não encontrada.", "erro")
-        return redirect(url_for("npps"))
+        return _erro_validacao("NPP não encontrada.", "npps")
     item = _nota_item_da_npp(id_, chave)
     if not item:
-        flash("Nota não encontrada nesta NPP.", "erro")
-        return redirect(url_for("npp_detalhe", id_=id_))
+        return _erro_validacao("Nota não encontrada nesta NPP.", "npp_detalhe", id_=id_)
     cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
     if not contrato:
-        flash("A NPP não tem contrato — não há regra para validar.", "erro")
-        return redirect(url_for("npp_detalhe", id_=id_))
+        return _erro_validacao("A NPP não tem contrato — não há regra para validar.",
+                               "npp_detalhe", id_=id_)
     marc = StoreMarcacoes()
     material = _material_marcado(chave, item["tipo"], marc)
     marc.fechar()
@@ -1100,30 +1149,34 @@ def npp_validar(id_, chave, tributo):
                for a in _conferir_por_tipo(item["reg"], item["tipo"], contrato, material).achados}
     achado = achados.get(tributo)
     if achado is None:
-        flash(f"O tributo {tributo} não se aplica a esta nota — nada a validar (I-6).", "erro")
-        return redirect(url_for("npp_detalhe", id_=id_))
+        return _erro_validacao(
+            f"O tributo {tributo} não se aplica a esta nota — nada a validar (I-6).",
+            "npp_detalhe", id_=id_)
     acao = request.form.get("acao")
     if acao == "confirmado":
         valor = achado.destaque_emitente
         if valor is None:
-            flash(f"{tributo}: a nota não traz destaque para confirmar — use Retificar e "
-                  "informe o valor.", "erro")
-            return redirect(url_for("npp_detalhe", id_=id_))
+            return _erro_validacao(
+                f"{tributo}: a nota não traz destaque para confirmar — use Retificar e "
+                "informe o valor.", "npp_detalhe", id_=id_)
     elif acao == "retificado":
         valor = request.form.get("valor")
     else:
-        flash("Ação inválida (use confirmar ou retificar).", "erro")
-        return redirect(url_for("npp_detalhe", id_=id_))
+        return _erro_validacao("Ação inválida (use confirmar ou retificar).",
+                               "npp_detalhe", id_=id_)
     op = _operador_atual()
     store = StoreValidacaoRetencao()
     try:
         reg_val = store.validar(chave, tributo, acao, valor, op.nome)
     except ValueError as exc:
         store.fechar()
-        flash(f"Não foi possível validar {tributo}: {exc}. Nada foi gravado.", "erro")
-        return redirect(url_for("npp_detalhe", id_=id_))
+        return _erro_validacao(f"Não foi possível validar {tributo}: {exc}. Nada foi gravado.",
+                               "npp_detalhe", id_=id_)
     store.fechar()
-    flash(f"{tributo} {acao}: {formato.moeda(reg_val['valor'])} (por {op.nome}).", "ok")
+    mensagem = f"{tributo} {acao}: {formato.moeda(reg_val['valor'])} (por {op.nome})."
+    if _quer_json():
+        return _resposta_validacao_json(id_, npp, contrato, chave, tributo, mensagem)
+    flash(mensagem, "ok")
     return redirect(url_for("npp_detalhe", id_=id_))
 
 

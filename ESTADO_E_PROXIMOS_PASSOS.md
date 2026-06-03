@@ -68,12 +68,17 @@ Roadmap em 4 fases:
   no servidor I-2; autor+data I-4; divergências/sem-destaque reportados I-6). Barra de
   progresso "validados X de Y" na NPP. Coluna Material + aviso de material não conferido.
   Teste de ponta a ponta da rota de lote. **65 testes verdes.**
-- **Fase 2 — Validação inline: PENDENTE (próximo).** Gravar confirmar/retificar sem recarregar
-  a página (fetch), atualizando só a linha e o "Total retido"/progresso. **Progressive
-  enhancement**: sem JS, continua o POST atual. **Guardas:** o servidor segue recomputando o
-  destaque (I-2) e gravando com autor (I-4); o campo de retificar **nunca** nasce preenchido
-  com a sugestão (I-3); erros visíveis (I-6). Pontos de partida: `templates/_validar_controles.html`,
-  rota `npp_validar` em `tronco/app.py`, e o `app.js` (novo IIFE de envio assíncrono).
+- **Fase 2 — Validação inline: FEITA.** Confirmar/retificar grava sem recarregar a página:
+  `npp_validar` responde JSON (fragmentos renderizados pelo SERVIDOR) quando chamada via fetch
+  (`X-Requested-With: fetch`), ou mantém flash+redirect sem JS — mesmo caminho de gravação.
+  IIFE em `app.js` intercepta por delegação (pega até os forms de "Revalidar" que entram via
+  innerHTML) e troca só a linha, o progresso, o total do grupo, o "Total retido"/líquido e o
+  contador do lote; sem rede, degrada para o POST normal. Partials reusados como fragmentos:
+  `_validar_celula.html`, `_situacao_celula.html`, `_progresso_validacao.html`; helper
+  `_contexto_validacao` unifica o recálculo da página e do JSON. **Guardas mantidas:** destaque
+  recomputado no servidor (I-2 — o "confirmar" não envia valor); gravação com autor+data (I-4);
+  campo de retificar nasce vazio (I-3); erro inválido volta `422 ok:false` exibido inline e o
+  caminho sem-JS segue intacto (I-6). Teste de rota cobre os quatro casos. **66 testes verdes.**
 - **Fase 3 — Painel + IA: PENDENTE.** Hub vira dashboard (líquido pendente, tributos a validar
   somando NPPs, NPPs prontas p/ exportar); grupo "Configuração" na nav (abriga Contratos,
   Regras e o futuro Backup/Sync); filtro/busca na lista de NPPs (reaproveitar o padrão de

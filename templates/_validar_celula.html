@@ -1,0 +1,12 @@
+{# Conteúdo da célula "Validar / retificar" de uma linha de tributo (Fase 2, I-3/I-4).
+   Contexto: `r` (linha) e `npp`. Renderizado tanto na página quanto como fragmento da
+   validação inline (resposta JSON) — por isso é um partial isolado, sem o <td>. #}
+{% if r.validacao %}
+<strong>{{ r.validacao.valor | moeda }}</strong> <span class="sub">{{ r.validacao.acao }} · {{ r.validacao.autor }} · {{ r.validacao.validado_em | datahora }}</span>
+<details class="revalidar">
+  <summary>Revalidar</summary>
+  {% include "_validar_controles.html" %}
+</details>
+{% else %}
+{% include "_validar_controles.html" %}
+{% endif %}

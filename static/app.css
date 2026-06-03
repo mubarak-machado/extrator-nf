@@ -505,6 +505,21 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .progress > i { display: block; height: 100%; border-radius: 999px; background: var(--ok); transition: width .4s ease; }
 @media (prefers-reduced-motion: reduce) { .progress > i { transition: none; } }
 
+/* validação inline (Fase 2): erro visível na própria célula (I-6) e realce sutil da
+   linha recém-validada para confirmar a ação sem recarregar a página. */
+.erro-inline {
+  margin: 0 0 var(--sp-2); font-size: .8rem; line-height: 1.4;
+  color: var(--danger-ink); background: var(--danger-bg);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3);
+}
+@keyframes realce-linha {
+  from { background: color-mix(in srgb, var(--ok) 20%, transparent); }
+  to { background: transparent; }
+}
+.linha-validada > td { animation: realce-linha 1.4s ease; }
+@media (prefers-reduced-motion: reduce) { .linha-validada > td { animation: none; } }
+
 .empty-msg { padding: var(--sp-5) var(--sp-4); text-align: center; color: var(--ink-3); font-size: .9rem; }
 
 /* primeira coluna fixa na rolagem horizontal (consolidado) */

@@ -1,0 +1,11 @@
+{# Barra de progresso "validados X de Y" (I-6). Contexto: `validados`, `validavel`,
+   `n_pendentes`. Partial isolado para ser reusado como fragmento na validação inline. #}
+{% if validavel %}
+<div class="progress-wrap mb-3">
+  <div class="progress-top">
+    <span>Validação das retenções</span>
+    <span><b>{{ validados }}</b> de <b>{{ validavel }}</b> tributo(s){% if not n_pendentes %} · concluída{% endif %}</span>
+  </div>
+  <div class="progress"><i style="width:{{ (100 * validados / validavel) | round }}%"></i></div>
+</div>
+{% endif %}
