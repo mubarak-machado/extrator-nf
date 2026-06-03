@@ -9,7 +9,7 @@
 <div class="page-head row">
   <h2>Nota {{ r.numero or '(sem número)' }}</h2>
   <span class="badge {{ item.tipo|lower }}">{{ item.tipo }}</span>
-  {% if item.ja_exportada %}<span class="pill ja">já exportada</span>{% else %}<span class="pill nova">inédita</span>{% endif %}
+  {% if item.ja_exportada %}<span class="pill ja">já exportada</span>{% else %}<span class="pill nova">nova</span>{% endif %}
 </div>
 
 {# ---------- herói: tudo para a decisão de lançamento ---------- #}
@@ -34,7 +34,7 @@
   <div class="hero-aside">
     <div class="progress-wrap">
       <div class="progress-top"><span>{{ 'Destinatário (órgão)' if nfe else 'Tomador (órgão)' }}</span></div>
-      <p class="figure small nome">{{ (r.dest_nome if nfe else r.toma_nome) or '—' }}</p>
+      <p class="figure small nome">{{ (r.dest_cnpj | orgao if nfe else r.toma_cnpj | orgao) or (r.dest_nome if nfe else r.toma_nome) or '—' }}</p>
       <p class="mono muted small">
         {% set odoc = r.dest_cnpj if nfe else r.toma_cnpj %}
         {% if odoc %}{{ odoc | cnpj }}{% else %}<span class="falta">— (confira o CNPJ)</span>{% endif %}
@@ -115,7 +115,7 @@
       <div class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-pessoas"/></svg> Tomador (órgão)</h3></div><div class="card-b">
         <dl class="grid">
           <dt>CNPJ</dt><dd class="num">{{ r.toma_cnpj | cnpj }}</dd>
-          <dt>Nome</dt><dd>{{ r.toma_nome or '—' }}</dd>
+          <dt>Nome</dt><dd>{{ (r.toma_cnpj | orgao) or r.toma_nome or '—' }}</dd>
         </dl>
       </div></div>
     </div>
@@ -124,8 +124,8 @@
   <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-doc"/></svg> Serviço</h3></div><div class="card-b">
     <dl class="grid">
       <dt>Código (LC 116)</dt><dd class="num">{{ r.codigo_servico or '—' }}</dd>
-      <dt>Local da prestação</dt><dd class="num">{{ r.local_prestacao or '—' }}</dd>
-      <dt>Local do prestador</dt><dd class="num">{{ r.local_prestador or '—' }}</dd>
+      <dt>Local da prestação</dt><dd>{{ r.municipio_nome or r.local_prestacao or '—' }}</dd>
+      <dt>Local do prestador</dt><dd>{{ r.prest_municipio or r.local_prestador or '—' }}</dd>
     </dl>
     <p class="discr-label">Discriminação (texto livre do emitente):</p>
     <div class="discr">{{ r.discriminacao or '— (sem discriminação)' }}</div>
@@ -190,7 +190,6 @@
   </div></section>
 
   <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-alerta"/></svg> Material aplicado — conferência humana</h3></div><div class="card-b">
-    <div class="atencao mb-3"><p class="note">{{ r.material_aviso }}</p></div>
     {% if item.marcacao %}
       <p class="muted small">Marcação vigente: <strong>{{ item.marcacao.valor|upper }}</strong>{% if item.marcacao.valor_material %} — material {{ item.marcacao.valor_material | moeda }}{% endif %} — por {{ item.marcacao.autor }} em {{ item.marcacao.marcado_em | datahora }}.</p>
     {% else %}

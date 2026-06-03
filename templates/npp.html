@@ -12,7 +12,7 @@
   {% if itens %}
   <form method="post" action="{{ url_for('npp_exportar', id_=npp.id) }}" class="ml-auto">
     <button type="submit" class="btn"{% if not n_novas %} disabled title="Todas as notas desta NPP já foram exportadas"{% endif %}>
-      <svg class="icon"><use href="#i-exportar"/></svg> Exportar NPP{% if n_novas %} ({{ n_novas }} inédita{{ 's' if n_novas != 1 }}){% else %} (tudo exportado){% endif %}
+      <svg class="icon"><use href="#i-exportar"/></svg> Exportar NPP{% if n_novas %} ({{ n_novas }} nova{{ 's' if n_novas != 1 }}){% else %} (tudo exportado){% endif %}
     </button>
   </form>
   <a class="btn ghost" href="{{ url_for('npp_editar', id_=npp.id) }}">Editar NPP</a>
@@ -59,6 +59,7 @@
         <caption>Uma linha por nota da NPP. Toque no número para abrir a nota.</caption>
         <thead>
           <tr>
+            <th scope="col">Município</th>
             <th scope="col">Nº</th>
             <th scope="col">Tipo</th>
             <th scope="col">Emissão</th>
@@ -69,7 +70,9 @@
         </thead>
         <tbody>
           {% for it in itens %}{% set r = it.reg %}
+          {% set municipio = r.municipio_nome if it.tipo == 'NFSE' else r.emit_municipio %}
           <tr>
+            <td class="nowrap">{{ municipio or '—' }}</td>
             <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.numero or '—' }}</a></td>
             <td>{{ 'NF-e' if it.tipo == 'NFE' else 'NFS-e' }}</td>
             <td>{{ r.data_emissao | data }}</td>
@@ -79,13 +82,13 @@
                 {% if it.marcacao %}{{ it.marcacao.valor|upper }}{% else %}<a class="falta" href="{{ url_for('detalhe', chave=r.chave) }}">não conferido</a>{% endif %}
               {% else %}<span class="muted">—</span>{% endif %}
             </td>
-            <td class="nowrap">{{ 'exportada' if it.ja_exportada else 'inédita' }}</td>
+            <td class="nowrap">{{ 'exportada' if it.ja_exportada else 'nova' }}</td>
           </tr>
           {% endfor %}
         </tbody>
         <tfoot>
           <tr>
-            <td>Total ({{ itens|length }})</td><td></td><td></td>
+            <td>Total ({{ itens|length }})</td><td></td><td></td><td></td>
             <td class="num">{{ total_bruto | moeda }}</td><td></td><td></td>
           </tr>
         </tfoot>
@@ -181,19 +184,26 @@
         {% endif %}
 
         {% if grupo.key == 'federal' %}
-        {# Tributos federais: AGREGADO por código (estilo "TRIB FED" do Cosmos); expande p/ validar #}
+        {# Tributos federais: uma linha agregada POR NOTA (código + alíquota agregada). Fechada,
+           mostra o botão "Confirmar agregado"; ao tocar, expande o detalhamento dos tributos
+           para retificar cada um (#7). Divergência destaque≠sugestão realça a linha (#2/I-6). #}
         {% if not grupo.agregados %}
         <p class="muted">Nenhum tributo federal se aplica às notas desta NPP.</p>
         {% else %}
         {% for ag in grupo.agregados %}
-        <details class="fed-agregado"{% if ag.n_pendentes %} open{% endif %} data-federal-codigo="{{ ag.codigo or '' }}">
+        <details class="fed-agregado{% if ag.divergente %} fed-diverge{% endif %}" data-federal-chave="{{ ag.chave }}"{% if ag.divergente %} title="Confira os valores destacados nesta nota — há divergência entre o destaque do emitente e a sugestão da regra em pelo menos um tributo."{% endif %}>
           <summary class="fed-resumo">{% include "_federal_agregado_resumo.html" %}</summary>
+          {% if ag.tem_destaque and ag.n_pendentes %}
+          {# Form do botão "Confirmar agregado" (referenciado por form= no <summary>) — vive
+             aqui no corpo porque <form> não é conteúdo válido dentro de <summary>. #}
+          <form id="fed-conf-{{ ag.chave }}" method="post" hidden
+                action="{{ url_for('npp_confirmar_agregado', id_=npp.id, chave=ag.chave) }}"
+                onsubmit="return confirm('Confirmar os tributo(s) federal(is) pendentes desta nota pelo destaque do emitente? Cada um é gravado em seu nome; você pode expandir e retificar individualmente depois.');"></form>
+          {% endif %}
           <div class="table-wrap dense">
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Município</th>
-                  <th scope="col">Nota</th>
                   <th scope="col">Tributo</th>
                   <th scope="col" class="num">Destacado pelo emitente</th>
                   <th scope="col" class="num">Sugerido pela regra</th>
@@ -202,7 +212,7 @@
                 </tr>
               </thead>
               <tbody>
-                {% for r in ag.rows %}{% include "_linha_tributo.html" %}{% endfor %}
+                {% for r in ag.rows %}{% include "_linha_tributo_federal.html" %}{% endfor %}
               </tbody>
             </table>
           </div>

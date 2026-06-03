@@ -225,10 +225,17 @@
       var grupo = secao.querySelector('[data-grupo="' + data.grupo_key + '"]');
       var gt = grupo ? grupo.querySelector("[data-grupo-total]") : null;
       if (gt) gt.textContent = data.grupo_total;
-      // federal é agregado por código: troca o resumo (headline) do código afetado
-      if (data.federal_resumo != null && data.federal_codigo != null) {
-        var det = secao.querySelector('details[data-federal-codigo="' + data.federal_codigo + '"] .fed-resumo');
-        if (det) det.innerHTML = data.federal_resumo;
+      // federal é agregado por nota: troca o resumo (headline) da nota afetada e
+      // realça/limpa a linha conforme a divergência destaque≠sugestão persista ou não.
+      if (data.federal_resumo != null && data.federal_chave != null) {
+        var fed = secao.querySelector('details[data-federal-chave="' + data.federal_chave + '"]');
+        if (fed) {
+          var res = fed.querySelector(".fed-resumo");
+          if (res) res.innerHTML = data.federal_resumo;
+          fed.classList.toggle("fed-diverge", !!data.federal_divergente);
+          if (data.federal_divergente) fed.setAttribute("title", data.federal_tooltip || "");
+          else fed.removeAttribute("title");
+        }
       }
       setVal("dd-total-retido", data.total_retido);
       setVal("dd-liquido", data.liquido);

@@ -91,7 +91,33 @@ Roadmap em 4 fases:
      (não encosta em I-2) — é só encontrabilidade quando muitas NPPs se acumulam no mês.
      Reaproveitar o padrão de triagem acessível removido na Fase 0 (`aria-selected`/`aria-sort`).
 
-## Redesenho da NPP — abas + federal agregado por código: FEITA (2026-06-03)
+## Ajustes de UI + horário local + federal por nota: FEITO (2026-06-03)
+
+Lote de ajustes pedido pelo humano (só Fase 1/apresentação e UX da validação Fase 2;
+nenhum invariante tocado). **71 testes verdes.**
+
+- **Horário da máquina do operador:** novo helper `tronco/util.agora()`
+  (`datetime.now().astimezone()` — fuso local com offset). Todos os registros
+  (marcações, validações, NPP, exportações, contratos, idempotência, operador, catálogo)
+  passaram de UTC para o relógio local que o operador lê (I-4 segue auditável).
+- **Tela de detalhes:** "Local da prestação"/"Local do prestador" exibem o **nome** do
+  município (`xLocPrestacao`/`xLocEmi` do próprio XML), não o código; aviso de material
+  removido da seção de conferência; razão social canônica do tomador por CNPJ via novo
+  `tronco/orgaos.py` + filtro Jinja `orgao` (ex.: `26.989.715/0016-99` →
+  "Procuradoria da República de Minas Gerais") — **só exibição, extração fiel intacta (I-2)**;
+  cards `dl.grid` ganharam **zebra** ligando rótulo↔valor.
+- **Etiqueta "inédita" → "nova"** em toda a UI (e comentários de código).
+- **Guia Documentos de origem:** **município** como 1ª coluna; situação "nova".
+- **Tributos federais reorganizados POR NOTA (substitui o "por código" abaixo):** cada nota
+  é **uma linha** com código + alíquota agregada (`6190 · 9,45%`), Σ destacado, Σ sugerido,
+  ação e situação. Fechada → botão **"Confirmar agregado"** (confirma os tributos federais
+  pendentes da nota pelo destaque do emitente, gravando **cada um individualmente** — I-4;
+  rota `npp_confirmar_agregado`); aberta → retificar tributo a tributo (campo nunca
+  pré-preenchido, I-3). Divergência destaque≠sugestão em qualquer tributo **realça a linha**
+  e mostra **tooltip** de conferência (I-6). `_agregar_federal` agrupa por `chave`; partial
+  novo `_linha_tributo_federal.html`; swap inline por nota (`data-federal-chave`).
+
+## Redesenho da NPP — abas + federal agregado por código: FEITA (2026-06-03) — federal superado pelo "por nota" acima
 
 Referência: tela "Grupo de Imposto" do Cosmos MPU. Detalhe da NPP reorganizado em
 **cabeçalho de identificação** (sempre visível) + **duas abas**: "Documentos de origem"

@@ -17,10 +17,10 @@ Tributos: IR/CSLL/COFINS/PIS (federal), INSS, ISS — os mesmos do `Achado` da c
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 
 from tronco import formato
+from tronco.util import agora as agora_maquina
 
 CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "validacoes_retencao.sqlite"
 
@@ -61,7 +61,7 @@ class StoreValidacaoRetencao:
         autor = (autor or "").strip()
         if not autor:
             raise ValueError("autor da validação é obrigatório (I-4)")
-        agora = datetime.now(timezone.utc).isoformat()
+        agora = agora_maquina().isoformat()
         self._conn.execute(
             "INSERT INTO validacoes_retencao (chave, tributo, acao, valor, autor, validado_em) "
             "VALUES (?, ?, ?, ?, ?, ?)",

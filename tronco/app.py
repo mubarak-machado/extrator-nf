@@ -15,7 +15,6 @@ import os
 import re
 import tempfile
 from collections import defaultdict
-from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -33,7 +32,8 @@ from tronco.contratos import (StoreContratos, Contrato,
                               NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS,
                               IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL)
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
-from tronco import formato, redefinicao
+from tronco import formato, redefinicao, orgaos
+from tronco.util import agora as agora_maquina
 from galho_nfse.material import sugerir_material
 from galho_nfse import retencao, enquadramento, tabela_in1234
 from galho_nfse.enquadramento import RegraEnquadramento
@@ -51,6 +51,10 @@ app.secret_key = "mvp-poc-extrator-nf"
 for nome in ("moeda", "numero", "data", "datahora", "competencia",
              "cnpj", "percent", "chave", "simnao"):
     app.jinja_env.filters[nome] = getattr(formato, nome)
+
+# Razão social canônica de um órgão tomador conhecido (por CNPJ) — só exibição,
+# não toca a extração fiel (I-2). `{{ cnpj | orgao }}` devolve o nome ou None.
+app.jinja_env.filters["orgao"] = orgaos.nome
 
 # Teste Jinja: `{{ valor is ezero }}` atenua (não esconde) valores zerados.
 app.jinja_env.tests["ezero"] = formato.ezero
@@ -118,7 +122,7 @@ def _bruto(itens):
 
 @app.route("/")
 def hub():
-    """Entrada: hub orientado às NPPs. Mostra as NPPs abertas (com nota inédita) e
+    """Entrada: hub orientado às NPPs. Mostra as NPPs abertas (com nota nova) e
     seu valor pendente, e o Histórico do que já foi exportado. Sem NPP nenhuma,
     convida a criar a primeira."""
     store = StoreNPP(); npps_lista = store.listar(); store.fechar()
@@ -488,7 +492,7 @@ def _aplicar_enquadramento_federal(c, form):
                            "Nada foi salvo.")
         c.ret_federal_origem = "ajustado"
         c.ret_federal_ajustado_por = "operador"
-        c.ret_federal_ajustado_em = datetime.now(timezone.utc).isoformat()
+        c.ret_federal_ajustado_em = agora_maquina().isoformat()
         return True, None  # ret_federal_* já vieram do form via _contrato_do_form
     # Seleção de regra do catálogo (a tela Regras é a fonte; aqui só se escolhe).
     regra_id = (form.get("ret_federal_regra_id") or "").strip()
@@ -715,7 +719,7 @@ def _itens_da_npp(npp_id):
 
 
 def _npp_status(itens):
-    """Status derivado das notas (não armazenado): vazia / aberta (tem inédita) /
+    """Status derivado das notas (não armazenado): vazia / aberta (tem nota nova) /
     exportada (todas já saíram em lote)."""
     if not itens:
         return "vazia"
@@ -763,6 +767,12 @@ def _pendente_validacao(achado, validacao) -> bool:
         return True
 
 
+# Tooltip da linha federal agregada quando há divergência destaque≠sugestão (I-6):
+# pede conferência humana, sem decidir nada pela máquina.
+_FEDERAL_TOOLTIP = ("Confira os valores destacados nesta nota — há divergência entre o "
+                    "destaque do emitente e a sugestão da regra em pelo menos um tributo.")
+
+
 def _federal_agregada_pct(contrato):
     """Alíquota agregada do federal a partir da parametrização do contrato (IR + as
     contribuições que incidem) — mesma lógica de RegraEnquadramento.agregada_pct(),
@@ -792,39 +802,54 @@ def _soma(rows, campo):
 
 
 def _agregar_federal(rows, contrato):
-    """Agrupa as linhas federais por código de receita — APRESENTAÇÃO (soma de conferência
-    dos destaques fiéis, I-2; nada apurado). Linhas sem código (dispensado por Simples,
-    regime/material indefinido) caem num bucket visível 'a resolver' (I-6). Hoje sai um
-    grupo por código; a estrutura suporta N (forward-compatible com 2 regras por material)."""
+    """Agrupa as linhas federais POR NOTA — cada nota rende UMA linha com o código de
+    receita e a alíquota agregada (ex.: 6190 · 9,45%), a soma dos destaques dos tributos
+    federais (IR/CSLL/COFINS/PIS) e a soma das sugestões. APRESENTAÇÃO (I-2: soma de
+    conferência dos destaques fiéis; nada apurado). O detalhamento por tributo (as ≤4
+    linhas) abre ao expandir e a validação segue sendo POR TRIBUTO, gravada com autor+data
+    (I-4). Divergência destaque≠sugestão em qualquer um dos tributos realça a linha (I-6)."""
     aliq = _federal_agregada_pct(contrato)
-    por_codigo = {}
+    por_nota = {}
+    ordem = []
     for r in rows:
-        cod = r.get("codigo")
-        g = por_codigo.setdefault(cod, {"codigo": cod, "rows": [], "documentos": []})
+        ch = r["chave"]
+        if ch not in por_nota:
+            por_nota[ch] = {"chave": ch, "nota_numero": r["nota_numero"],
+                            "tipo": r["tipo"], "municipio": r.get("municipio"),
+                            "codigo": r.get("codigo"), "rows": []}
+            ordem.append(ch)
+        g = por_nota[ch]
         g["rows"].append(r)
-        doc = {"chave": r["chave"], "numero": r["nota_numero"]}
-        if doc not in g["documentos"]:
-            g["documentos"].append(doc)
+        if g["codigo"] is None and r.get("codigo"):   # 1º código não nulo vira o da nota
+            g["codigo"] = r.get("codigo")
     out = []
-    for cod, g in por_codigo.items():
+    for ch in ordem:
+        g = por_nota[ch]
         grp_rows = g["rows"]
+        cod = g["codigo"]
         n_validados = sum(1 for r in grp_rows if r["validacao"] is not None)
         n_pendentes = sum(1 for r in grp_rows if r["pendente"])
+        divergente = any(r["situacao"] == "diverge" and r["validacao"] is None
+                         for r in grp_rows)
+        tem_destaque = any(r["destaque"] is not None for r in grp_rows)
         out.append({
+            "chave": ch,
+            "nota_numero": g["nota_numero"],
+            "tipo": g["tipo"],
+            "municipio": g["municipio"],
             "codigo": cod,
             "aliquota_agregada": f"{aliq:.2f}" if (cod and aliq is not None) else None,
             "aliquota_txt": retencao.pct_txt(aliq) if (cod and aliq is not None) else None,
             "rows": grp_rows,
-            "documentos": g["documentos"],
-            "n_docs": len(g["documentos"]),
             "soma_destaque": f'{_soma(grp_rows, "destaque"):.2f}',
             "soma_esperado": f'{_soma(grp_rows, "esperado"):.2f}',
             "soma_validado": f'{_soma(grp_rows, "validacao"):.2f}',
             "n_validados": n_validados,
             "n_pendentes": n_pendentes,
             "n_validavel": n_validados + n_pendentes,
+            "divergente": divergente,
+            "tem_destaque": tem_destaque,
         })
-    out.sort(key=lambda x: (x["codigo"] is None, x["codigo"] or ""))
     return out
 
 
@@ -1178,15 +1203,17 @@ def _resposta_validacao_json(id_, npp, contrato, chave, tributo, mensagem):
                  None)
     r = next((r for r in grupo["rows"] if r["chave"] == chave and r["tributo"] == tributo),
              None) if grupo else None
-    # Federal é exibido agregado por código: devolve o resumo do código afetado para o
-    # cliente trocar só aquele headline (mesmo padrão de swap de fragmento).
-    federal_codigo = federal_resumo = None
+    # Federal é exibido agregado POR NOTA: devolve o resumo da nota afetada para o cliente
+    # trocar só aquele headline (mesmo padrão de swap de fragmento) e o flag de divergência
+    # para realçar/limpar a linha sem recarregar.
+    federal_chave = federal_resumo = None
+    federal_divergente = False
     if grupo and grupo["key"] == "federal":
-        cod = r["codigo"] if r else None
-        ag = next((a for a in grupo.get("agregados", []) if a["codigo"] == cod), None)
+        ag = next((a for a in grupo.get("agregados", []) if a["chave"] == chave), None)
         if ag is not None:
-            federal_codigo = cod or ""
+            federal_chave = chave
             federal_resumo = render_template("_federal_agregado_resumo.html", ag=ag, npp=npp)
+            federal_divergente = ag["divergente"]
     return jsonify(
         ok=True, mensagem=mensagem, categoria="ok",
         chave=chave, tributo=tributo,
@@ -1194,7 +1221,8 @@ def _resposta_validacao_json(id_, npp, contrato, chave, tributo, mensagem):
         cel_situacao=render_template("_situacao_celula.html", r=r),
         progresso=render_template("_progresso_validacao.html", **ctx),
         grupo_key=grupo["key"], grupo_total=formato.moeda(grupo["total_validado"]),
-        federal_codigo=federal_codigo, federal_resumo=federal_resumo,
+        federal_chave=federal_chave, federal_resumo=federal_resumo,
+        federal_divergente=federal_divergente, federal_tooltip=_FEDERAL_TOOLTIP,
         total_retido=formato.moeda(ctx["total_retido"]),
         liquido=formato.moeda(ctx["liquido"]),
         liquido_provisorio=ctx["liquido_provisorio"],
@@ -1381,6 +1409,44 @@ def npp_confirmar_conferem(id_, grupo):
               f"(conferiam com a sugestão; por {op.nome}). Divergências ficaram para revisão.", "ok")
     else:
         flash(f"Nada a confirmar em {rotulo}: não há pendência cujo destaque confira com a sugestão.", "info")
+    return redirect(url_for("npp_detalhe", id_=id_, aba="impostos"))
+
+
+@app.route("/npp/<int:id_>/confirmar-agregado-federal/<chave>", methods=["POST"])
+def npp_confirmar_agregado(id_, chave):
+    """Confirma DE UMA VEZ os tributos federais (IR/CSLL/COFINS/PIS) pendentes de UMA nota
+    pelo destaque do emitente — a ação do botão da linha agregada (código 6190 etc.). É
+    atestação humana em bloco dos destaques DAQUELA nota: grava cada tributo individualmente
+    (I-4: autor+data, auditável por tributo) com o valor do EMITENTE recomputado no servidor
+    (I-2), nunca o da tela. Divergências em relação à sugestão são REPORTADAS, não decididas
+    (I-3/I-6); o operador pode expandir e retificar tributo a tributo."""
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    item = _nota_item_da_npp(id_, chave)
+    if not item:
+        flash("Nota não encontrada nesta NPP.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_, aba="impostos"))
+    cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
+    if not contrato:
+        flash("A NPP não tem contrato — não há retenção para validar.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_, aba="impostos"))
+    op = _operador_atual()
+    confirmados, divergentes, sem_destaque = _confirmar_lote(
+        [item], contrato, op, lambda a: _CATEGORIA.get(a.tributo) == "federal")
+    if not confirmados:
+        flash("Nada a confirmar nesta nota: os tributos federais pendentes não têm destaque "
+              "do emitente — retifique cada um ao expandir a linha." if sem_destaque else
+              "Nada a confirmar: não há tributo federal pendente com destaque nesta nota.", "info")
+        return redirect(url_for("npp_detalhe", id_=id_, aba="impostos"))
+    partes = [f"{confirmados} tributo(s) federal(is) da nota confirmado(s) pelo destaque do "
+              f"emitente (por {op.nome})."]
+    if divergentes:
+        partes.append(f"{divergentes} divergia(m) da sugestão da regra — expanda e retifique se necessário.")
+    if sem_destaque:
+        partes.append(f"{sem_destaque} sem destaque ficaram para retificação manual.")
+    flash(" ".join(partes), "ok")
     return redirect(url_for("npp_detalhe", id_=id_, aba="impostos"))
 
 

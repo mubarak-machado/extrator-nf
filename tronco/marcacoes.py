@@ -12,8 +12,9 @@ embasou uma apuração permaneça auditável mesmo se depois for corrigida.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
+
+from tronco.util import agora as agora_maquina
 
 CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "marcacoes.sqlite"
 
@@ -51,7 +52,7 @@ class StoreMarcacoes:
             "INSERT INTO marcacoes_material (chave, valor, valor_material, autor, marcado_em) "
             "VALUES (?, ?, ?, ?, ?)",
             (chave, valor, valor_material if valor == "sim" else None,
-             autor or "desconhecido", datetime.now(timezone.utc).isoformat()),
+             autor or "desconhecido", agora_maquina().isoformat()),
         )
         self._conn.commit()
 

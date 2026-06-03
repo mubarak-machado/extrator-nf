@@ -25,8 +25,9 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, fields
-from datetime import datetime, timezone
 from pathlib import Path
+
+from tronco.util import agora as agora_maquina
 
 CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "contratos.sqlite"
 
@@ -171,7 +172,7 @@ class StoreContratos:
         """Insere (id None) ou atualiza. Mantém criado_em; atualiza atualizado_em.
         A UNIQUE(documento, número, ano) impede contrato duplicado (estoura
         IntegrityError, tratado pela rota — I-6, visível)."""
-        agora = datetime.now(timezone.utc).isoformat()
+        agora = agora_maquina().isoformat()
         c.atualizado_em = agora
         if c.id is None:
             c.criado_em = agora

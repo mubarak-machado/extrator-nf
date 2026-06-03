@@ -16,9 +16,21 @@ nota inteira nem um chute para "preencher" o buraco.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
+
+
+def agora() -> datetime:
+    """Instante atual no fuso horário da máquina do operador (timezone-aware).
+
+    Os registros do sistema (marcações, validações, criação de NPP, exportações…)
+    levam o horário local de quem opera — o relógio que o operador lê e confere —,
+    não UTC. `astimezone()` sem argumento adota o fuso configurado na máquina e
+    grava o deslocamento no ISO, então o instante segue inequívoco e auditável (I-4).
+    """
+    return datetime.now().astimezone()
 
 
 def desenum(valor: Any) -> Any:

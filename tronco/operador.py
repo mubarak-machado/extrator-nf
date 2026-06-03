@@ -16,8 +16,9 @@ from __future__ import annotations
 import re
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
+
+from tronco.util import agora as agora_maquina
 
 CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "operador.sqlite"
 
@@ -62,7 +63,7 @@ class StoreOperador:
         nome = (nome or "").strip()
         if not nome:
             raise ValueError("nome do operador é obrigatório")
-        agora = datetime.now(timezone.utc).isoformat()
+        agora = agora_maquina().isoformat()
         cur = self._conn.execute(
             "INSERT INTO operador (iniciais, nome, cadastrado_em) VALUES (?, ?, ?)",
             (ini, nome, agora),

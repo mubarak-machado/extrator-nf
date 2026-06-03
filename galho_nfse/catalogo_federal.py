@@ -19,10 +19,10 @@ Campos de lista (naturezas/categorias/materiais) são guardados como CSV; os boo
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 
 from galho_nfse.enquadramento import RegraEnquadramento
+from tronco.util import agora as agora_maquina
 
 CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "catalogo_federal.sqlite"
 
@@ -120,7 +120,7 @@ class StoreRegrasFederais:
         """Insere (id None) ou atualiza. Mantém criado_em; atualiza atualizado_em. A
         UNIQUE(codigo) impede código duplicado (estoura IntegrityError — tratado pela
         rota, I-6 visível)."""
-        agora = datetime.now(timezone.utc).isoformat()
+        agora = agora_maquina().isoformat()
         r.atualizado_em = agora
         valores = {
             "codigo": r.codigo, "descricao": r.descricao, "fundamento": r.fundamento,

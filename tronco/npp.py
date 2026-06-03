@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
+
+from tronco.util import agora as agora_maquina
 
 CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "npps.sqlite"
 
@@ -72,7 +74,7 @@ class StoreNPP:
             raise ValueError("NPP exige um contrato")
         if not (competencia or "").strip():
             raise ValueError("NPP exige a competência")
-        agora = agora or datetime.now(timezone.utc)
+        agora = agora or agora_maquina()
         numero = self._proximo_numero(iniciais, agora)
         ts = agora.isoformat()
         cur = self._conn.execute(
@@ -103,7 +105,7 @@ class StoreNPP:
         nem cria — use `criar` para nova NPP; o `numero` é imutável."""
         if npp.id is None:
             raise ValueError("use criar() para uma NPP nova; salvar() só atualiza")
-        npp.atualizada_em = datetime.now(timezone.utc).isoformat()
+        npp.atualizada_em = agora_maquina().isoformat()
         self._conn.execute(
             "UPDATE npps SET competencia = ?, rotulo = ?, observacoes = ?, atualizada_em = ? "
             "WHERE id = ?",

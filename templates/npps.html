@@ -28,7 +28,7 @@
       <span class="sub">{{ card.contrato_rotulo }}</span>
       <span class="sub">
         Competência {{ card.npp.competencia | competencia }} · {{ card.n }} nota(s) ·
-        {% if card.status == 'vazia' %}vazia{% elif card.status == 'exportada' %}exportada{% else %}{{ card.novas }} inédita(s){% endif %}
+        {% if card.status == 'vazia' %}vazia{% elif card.status == 'exportada' %}exportada{% else %}{{ card.novas }} nova(s){% endif %}
         {% if card.npp.rotulo %} · {{ card.npp.rotulo }}{% endif %}
       </span>
     </div>

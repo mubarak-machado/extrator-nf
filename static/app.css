@@ -306,17 +306,20 @@ main { max-width: 1180px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) var(-
 .card-h h3 { margin: 0; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); font-weight: 600; }
 .card-b { padding: var(--sp-4); }
 
-/* grade de definição (detalhe) — rótulo quieto, valor em destaque */
-dl.grid { display: grid; grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr); gap: var(--sp-2) var(--sp-4); margin: 0; font-size: .92rem; }
-dl.grid.zebra dt, dl.grid.zebra dd { padding: .2rem 0; }
-dl.grid dt { color: var(--ink-2); }
-dl.grid dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+/* grade de definição (detalhe) — rótulo quieto, valor em destaque. Linhas zebradas
+   ligam o rótulo (dt) ao valor (dd): cada linha alterna o fundo, então o olho não
+   perde o vínculo entre título e informação ao varrer o card (pedido do operador). */
+dl.grid { display: grid; grid-template-columns: minmax(7rem, 12rem) minmax(0, 1fr); gap: 0; margin: 0; font-size: .92rem; border-radius: var(--radius-sm); overflow: hidden; }
+dl.grid dt { color: var(--ink-2); padding: .4rem var(--sp-3); }
+dl.grid dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; padding: .4rem var(--sp-3); }
+/* zebra: o par dt+dd de cada linha ímpar recebe o fundo — cobre as duas colunas sem
+   fenda (gap 0), então rótulo e valor dividem a mesma faixa. */
+dl.grid dt:nth-of-type(odd), dl.grid dt:nth-of-type(odd) + dd { background: var(--surface-2); }
 /* em telas estreitas (e/ou fonte grande) o rótulo sobe e o valor ocupa a linha
    inteira — evita estouro horizontal da caixa */
 @media (max-width: 560px) {
-  dl.grid { grid-template-columns: 1fr; gap: 0; }
-  dl.grid dt { margin-top: var(--sp-3); }
-  dl.grid dt:first-of-type { margin-top: 0; }
+  dl.grid { grid-template-columns: 1fr; }
+  dl.grid dt { padding-top: var(--sp-3); }
 }
 dl.grid dd.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
 .falta { color: var(--warn-ink); font-style: normal; font-weight: 600; }
@@ -558,10 +561,23 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .fed-resumo:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--radius-sm); }
 .fed-resumo .fed-id { font-size: .95rem; color: var(--ink); }
 .fed-resumo .fed-id strong { font-family: var(--font-mono); }
-.fed-resumo .fed-meta b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
-.fed-resumo .chev { width: .82rem; height: .82rem; opacity: .7; margin-left: auto; transition: transform .15s ease; }
+.fed-resumo .fed-mun { font-weight: 600; color: var(--ink); }
+.fed-resumo .fed-val { display: inline-flex; align-items: baseline; gap: var(--sp-2); }
+.fed-resumo .fed-val .ov { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); }
+.fed-resumo .fed-val b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.fed-resumo .fed-acao { margin-left: auto; display: inline-flex; align-items: center; gap: var(--sp-2); }
+.fed-resumo .fed-acao .btn { padding: .35rem .7rem; font-size: .82rem; }
+.fed-resumo .chev { width: .82rem; height: .82rem; opacity: .7; margin-left: var(--sp-2); transition: transform .15s ease; }
 .fed-agregado[open] .fed-resumo .chev { transform: rotate(180deg); }
 .fed-agregado[open] .fed-resumo { border-bottom: 1px solid var(--line); }
+/* botão "Confirmar agregado": aparece só com a linha FECHADA; aberta, valida-se tributo
+   a tributo no detalhamento (#7). */
+.fed-agregado[open] .fed-resumo .fed-confirma { display: none; }
+/* linha divergente (destaque≠sugestão em algum dos tributos): realce + faixa lateral,
+   pede conferência humana sem decidir nada (I-6). O title= dá o tooltip ao passar o mouse. */
+.fed-agregado.fed-diverge { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.fed-agregado.fed-diverge > .fed-resumo { background: var(--warn-bg); box-shadow: inset 3px 0 0 var(--warn); }
+.fed-agregado.fed-diverge > .fed-resumo:hover { background: color-mix(in srgb, var(--warn-bg) 86%, var(--warn)); }
 @media (prefers-reduced-motion: reduce) { .fed-resumo .chev { transition: none; } }
 
 /* grupos de tributos colapsáveis (INSS / Tributos federais / ISS) — #3 */

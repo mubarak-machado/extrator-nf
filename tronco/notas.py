@@ -21,9 +21,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from tronco.util import agora as agora_maquina
 
 CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "notas.sqlite"
 
@@ -96,7 +97,7 @@ class StoreNotas:
             "INSERT OR REPLACE INTO notas (chave, tipo, origem, dados_json, npp_id, importado_em) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (chave, tipo, origem, json.dumps(dados, ensure_ascii=False), npp_id,
-             datetime.now(timezone.utc).isoformat()),
+             agora_maquina().isoformat()),
         )
         self._conn.commit()
 

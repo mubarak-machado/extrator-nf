@@ -231,7 +231,7 @@ def test_redefinir_faz_backup_antes_de_apagar():
         assert (backup / "registro_exportacao.sqlite").exists()
         assert (backup / "marcacoes.sqlite").exists()
         assert set(resumo["apagados"]) == {"registro_exportacao.sqlite", "marcacoes.sqlite"}
-        # e o estado volta ao inicial: nota antes exportada agora reabre como inédita
+        # e o estado volta ao inicial: nota antes exportada agora reabre como nova
         assert RegistroDeExportacao(bd_export).ja_exportada("1" * 44) is False
 
 
@@ -988,7 +988,7 @@ def test_npp_grupos_impostos_camadas_e_total_retido(tmp_path):
 # ---------- Passo 7c (UI): exportação por NPP + idempotência ----------
 
 def test_npp_exportar_idempotente_e_artefato(tmp_path):
-    """Exportação por NPP: as notas inéditas da NPP entram num lote, registradas por
+    """Exportação por NPP: as notas novas da NPP entram num lote, registradas por
     chave (I-1), gerando um artefato novo (I-5); reexportar não duplica."""
     import tronco.app as A
     from tronco.operador import StoreOperador
@@ -1284,34 +1284,39 @@ def test_npp_validar_inline_json(tmp_path, monkeypatch):
     assert r.status_code == 302 and not r.is_json
 
 
-def test_agregar_federal_por_codigo_e_bucket_sem_codigo():
-    """Agregação federal é apresentação: agrupa por código de receita, soma os destaques
-    fiéis (conferência, I-2) e conta documentos distintos. Linhas sem código (dispensado/
-    indefinido) caem num bucket visível (I-6). Alíquota agregada é derivada do contrato."""
+def test_agregar_federal_por_nota_e_alicota_agregada():
+    """Agregação federal é apresentação POR NOTA (#7): cada nota rende UMA linha com o
+    código de receita, a alíquota agregada derivada do contrato (nunca digitada) e a soma
+    de conferência dos destaques fiéis dos tributos federais (I-2). Divergência entre
+    destaque e sugestão em algum tributo marca a linha para conferência humana (I-6)."""
     from tronco.app import _agregar_federal
     c = _contrato(ret_federal_sujeito=True, ret_federal_ir_pct="4.8",
                   ret_federal_csll=True, ret_federal_cofins=True, ret_federal_pis=True)
     rows = [
-        {"chave": "A", "nota_numero": "1", "codigo": "6190", "destaque": "480.00",
-         "esperado": "480.00", "validacao": None, "pendente": True},
-        {"chave": "A", "nota_numero": "1", "codigo": "6190", "destaque": "100.00",
-         "esperado": "100.00", "validacao": None, "pendente": True},
-        {"chave": "B", "nota_numero": "2", "codigo": None, "destaque": None,
-         "esperado": None, "validacao": None, "pendente": True},
+        {"chave": "A", "nota_numero": "1", "tipo": "NFSE", "municipio": "Betim/MG",
+         "tributo": "IR", "regra": "", "codigo": "6190", "destaque": "480.00",
+         "esperado": "480.00", "situacao": "confere", "validacao": None, "pendente": True},
+        {"chave": "A", "nota_numero": "1", "tipo": "NFSE", "municipio": "Betim/MG",
+         "tributo": "CSLL", "regra": "", "codigo": "6190", "destaque": "100.00",
+         "esperado": "120.00", "situacao": "diverge", "validacao": None, "pendente": True},
+        {"chave": "B", "nota_numero": "2", "tipo": "NFE", "municipio": None,
+         "tributo": "IR", "regra": "", "codigo": "6190", "destaque": "50.00",
+         "esperado": "50.00", "situacao": "confere", "validacao": None, "pendente": True},
     ]
-    por = {a["codigo"]: a for a in _agregar_federal(rows, c)}
-    assert "6190" in por and None in por                     # grupo + bucket
-    g = por["6190"]
-    assert g["aliquota_agregada"] == "9.45" and g["aliquota_txt"] == "9,45%"  # IR4,8+1+3+0,65
-    assert g["n_docs"] == 1                                  # duas linhas, mesma nota A
-    assert g["soma_destaque"] == "580.00"                    # soma de conferência (I-2)
-    assert por[None]["aliquota_agregada"] is None            # bucket sem código, sem alíquota
+    por = {a["chave"]: a for a in _agregar_federal(rows, c)}
+    assert set(por) == {"A", "B"}                            # uma linha por nota
+    a = por["A"]
+    assert a["codigo"] == "6190"
+    assert a["aliquota_agregada"] == "9.45" and a["aliquota_txt"] == "9,45%"  # IR4,8+1+3+0,65
+    assert a["soma_destaque"] == "580.00"                    # soma de conferência (I-2)
+    assert a["divergente"] is True                           # CSLL: destaque≠sugestão
+    assert por["B"]["divergente"] is False
 
 
 def test_npp_abas_e_federal_agregado(tmp_path, monkeypatch):
     """Redesenho da NPP: duas abas (Documentos / Grupos de impostos) em progressive
     enhancement (ambos os painéis renderizados; ?aba marca o ativo) e o grupo federal
-    agregado por código (6190 · 9,45%), com o resumo do código devolvido na validação inline."""
+    agregado POR NOTA (6190 · 9,45%), com o resumo da nota devolvido na validação inline (#7)."""
     import tronco.app as A
     from tronco.operador import StoreOperador
     from tronco.npp import StoreNPP
@@ -1352,15 +1357,15 @@ def test_npp_abas_e_federal_agregado(tmp_path, monkeypatch):
     assert re.search(r'id="painel-documentos"[^>]*\bhidden', html_i)
     assert not re.search(r'id="painel-impostos"[^>]*\bhidden', html_i)
 
-    # federal agregado por código no HTML e na estrutura
-    assert '6190' in html_i and '9,45%' in html_i and 'data-federal-codigo="6190"' in html_i
+    # federal agregado por nota no HTML e na estrutura
+    assert '6190' in html_i and '9,45%' in html_i and 'data-federal-chave=' in html_i
     contrato = StoreContratos(tmp_path / "contr.sqlite").obter(cid)
     grupos, _, _ = A._grupos_impostos(A._itens_da_npp(nid), contrato)
     federal = next(g for g in grupos if g["key"] == "federal")
     ag6190 = next(a for a in federal["agregados"] if a["codigo"] == "6190")
-    assert ag6190["aliquota_txt"] == "9,45%" and ag6190["rows"]
+    assert ag6190["aliquota_txt"] == "9,45%" and ag6190["rows"] and ag6190["chave"]
 
-    # validação inline de um tributo federal devolve o resumo do código afetado
+    # validação inline de um tributo federal devolve o resumo da nota afetada
     chave = tributo = None
     for it in A._itens_da_npp(nid):
         for a in A._conferir_por_tipo(it["reg"], it["tipo"], contrato, None).achados:
@@ -1373,7 +1378,7 @@ def test_npp_abas_e_federal_agregado(tmp_path, monkeypatch):
     r = cli.post(f"/npp/{nid}/validar/{chave}/{tributo}", data={"acao": "confirmado"},
                  headers={"X-Requested-With": "fetch"})
     data = r.get_json()
-    assert data["ok"] is True and data["federal_codigo"] == "6190"
+    assert data["ok"] is True and data["federal_chave"] == chave
     assert "6190" in data["federal_resumo"]
 
 
@@ -1436,6 +1441,40 @@ def test_npp_confirmar_conferem_so_os_que_conferem(tmp_path, monkeypatch):
     assert validados == confere                     # exatamente os que conferem
     assert not (validados & diverge)                # nenhuma divergência tocada (I-3)
     assert all(_CATEGORIA.get(t) == "federal" for _, t in validados)  # só o grupo pedido
+
+
+def test_npp_confirmar_agregado_federal_de_uma_nota(tmp_path, monkeypatch):
+    """#7: o botão "Confirmar agregado" da linha federal grava de uma vez os tributos
+    federais pendentes DAQUELA nota pelo destaque do emitente (I-2), cada um individual e
+    auditável (I-4), sem tocar outras notas nem outros grupos (I-3)."""
+    from tronco.app import _CATEGORIA, _pendente_validacao
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    cli, A, nid, contrato = _seed_npp_impostos(
+        tmp_path, monkeypatch, ret_federal_sujeito=True, ret_federal_codigo_receita="6190",
+        ret_federal_ir_pct="4.8", ret_federal_csll=True, ret_federal_cofins=True,
+        ret_federal_pis=True, inss_cessao_mao_obra=True, inss_aliquota="11",
+        iss_retido_tomador=True, iss_aliquota="5")
+
+    alvo = None; esperado = set()
+    for it in A._itens_da_npp(nid):
+        fed = {a.tributo for a in A._conferir_por_tipo(it["reg"], it["tipo"], contrato, None).achados
+               if _CATEGORIA.get(a.tributo) == "federal" and _pendente_validacao(a, None)
+               and a.destaque_emitente is not None}
+        if fed:
+            alvo, esperado = it["reg"].chave, fed
+            break
+    assert alvo and len(esperado) > 1, "esperava nota com >1 federal pendente destacado"
+
+    cli.post(f"/npp/{nid}/confirmar-agregado-federal/{alvo}", follow_redirects=True)
+
+    v = StoreValidacaoRetencao(tmp_path / "val.sqlite")
+    val_alvo = set(v.atuais(alvo))
+    outras = {t for it in A._itens_da_npp(nid) if it["reg"].chave != alvo
+              for t in v.atuais(it["reg"].chave)}
+    v.fechar()
+    assert val_alvo == esperado                          # exatamente os federais pendentes da nota
+    assert all(_CATEGORIA.get(t) == "federal" for t in val_alvo)  # nada de INSS/ISS
+    assert not outras                                    # nenhuma outra nota tocada (I-3)
 
 
 def test_npp_ajustes_ui_municipio_diverge_colapsavel(tmp_path, monkeypatch):

@@ -11,17 +11,17 @@ destino — então trocar o destino não pode reintroduzir escrita em planilha v
 
 Fluxo correto (respeita I-1):
   1. filtra notas já exportadas (idempotência) ANTES de exportar;
-  2. cria o artefato novo com as notas inéditas;
+  2. cria o artefato novo com as notas novas;
   3. registra as chaves no SQLite SÓ APÓS o artefato existir.
 """
 from __future__ import annotations
 
 import csv
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
 from pathlib import Path
 
 from tronco import formato
+from tronco.util import agora as agora_maquina
 
 
 class Exportador(ABC):
@@ -64,4 +64,4 @@ class ExportadorCsvLocal(Exportador):
 
 
 def novo_lote_id() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    return agora_maquina().strftime("%Y%m%dT%H%M%S")

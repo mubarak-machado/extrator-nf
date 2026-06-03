@@ -16,8 +16,9 @@ duplicidade). Este módulo existe para torná-lo impossível por construção.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
+
+from tronco.util import agora as agora_maquina
 
 CAMINHO_PADRAO = Path(__file__).resolve().parent.parent / "registro_exportacao.sqlite"
 
@@ -75,7 +76,7 @@ class RegistroDeExportacao:
         Chamar este método é responsabilidade de quem confirmou o sucesso da
         exportação; nunca antes dela.
         """
-        agora = datetime.now(timezone.utc).isoformat()
+        agora = agora_maquina().isoformat()
         self._conn.executemany(
             "INSERT OR IGNORE INTO exportacoes (chave, tipo, lote_id, exportado_em) "
             "VALUES (?, ?, ?, ?)",
