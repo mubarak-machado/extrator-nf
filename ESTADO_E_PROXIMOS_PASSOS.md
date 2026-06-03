@@ -79,10 +79,23 @@ Roadmap em 4 fases:
   recomputado no servidor (I-2 — o "confirmar" não envia valor); gravação com autor+data (I-4);
   campo de retificar nasce vazio (I-3); erro inválido volta `422 ok:false` exibido inline e o
   caminho sem-JS segue intacto (I-6). Teste de rota cobre os quatro casos. **66 testes verdes.**
-- **Fase 3 — Painel + IA: PENDENTE.** Hub vira dashboard (líquido pendente, tributos a validar
-  somando NPPs, NPPs prontas p/ exportar); grupo "Configuração" na nav (abriga Contratos,
-  Regras e o futuro Backup/Sync); filtro/busca na lista de NPPs (reaproveitar o padrão de
-  triagem acessível que foi removido — `aria-selected`/`aria-sort`).
+- **Fase 3 — Arquitetura de informação: PENDENTE (replanejada 2026-06-03).** Duas frentes,
+  nenhuma toca invariante:
+  1. **Agrupar "Configuração" na nav.** Contratos + Regras (+ futuro Backup/Sync) saem da fila
+     plana de `base.html` para um grupo recolhido (reusar o padrão `details.dropdown` do menu
+     "Exibição"). A nav de fluxo fica enxuta: Início · NPPs · Histórico. Menor risco — começar
+     por aqui.
+  2. **Busca/filtro na lista de NPPs** (`npps.html`), por contrato/competência/situação.
+     Progressive enhancement (sem JS, a lista completa aparece); **não agrega nem soma valores**
+     (não encosta em I-2) — é só encontrabilidade quando muitas NPPs se acumulam no mês.
+     Reaproveitar o padrão de triagem acessível removido na Fase 0 (`aria-selected`/`aria-sort`).
+
+  **Hub-dashboard: descartado (decisão do humano, 2026-06-03).** A ideia original (hub vira
+  painel com líquido pendente / tributos a validar somando NPPs / NPPs prontas p/ exportar) foi
+  recusada: a jornada é **finita e fechada por NPP** (abre → importa → confere → exporta/paga),
+  sem estado de pendência acumulada entre sessões que um painel de acompanhamento resolveria; e
+  a agregação de valores entre NPPs esbarrava em I-2 (decisão #3). O hub segue orientado à ação
+  por NPP, como está.
 
 ## Decisões em aberto (resolver com o humano, não sozinho)
 
