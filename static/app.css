@@ -213,6 +213,16 @@ a:hover { color: var(--primary-hover); }
 }
 .nav a:hover { color: var(--ink); background: var(--surface-2); }
 .nav a.on { color: var(--primary); background: var(--primary-soft); }
+/* grupo "Configuração": summary e itens herdam o visual dos links da nav */
+.nav .nav-config-toggle {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  color: var(--ink-2); font-size: .88rem; font-weight: 600;
+  padding: .4rem .7rem; border-radius: var(--radius-sm); line-height: 1;
+}
+.nav .nav-config-toggle:hover { color: var(--ink); background: var(--surface-2); }
+.nav .nav-config-toggle.on { color: var(--primary); background: var(--primary-soft); }
+.nav .nav-config-panel { left: 0; min-width: 11rem; display: flex; flex-direction: column; gap: 2px; }
+.nav .nav-config-panel a { font-size: .88rem; font-weight: 600; padding: .4rem .6rem; }
 .controls { margin-left: auto; }
 .brand .logo {
   width: 36px; height: 36px; border-radius: 10px; flex: none;

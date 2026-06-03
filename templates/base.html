@@ -66,12 +66,27 @@
       </div>
     </a>
 
+    {% set ep_contratos = ['contratos', 'contrato_novo', 'contrato_editar', 'contrato_salvar'] %}
+    {% set ep_regras = ['regras', 'regra_nova', 'regra_editar', 'regra_salvar'] %}
+    {% set ep_config = ep_contratos + ep_regras %}
     <nav class="nav" aria-label="Módulos">
       <a href="{{ url_for('hub') }}"{{ ' class=on' if request.endpoint == 'hub' }}>Início</a>
       <a href="{{ url_for('npps') }}"{{ ' class=on' if request.endpoint in ['npps', 'npp_nova', 'npp_criar', 'npp_detalhe', 'npp_editar', 'npp_salvar', 'npp_validar', 'npp_exportar', 'detalhe'] }}>NPPs</a>
       <a href="{{ url_for('historico') }}"{{ ' class=on' if request.endpoint == 'historico' }}>Histórico</a>
-      <a href="{{ url_for('contratos') }}"{{ ' class=on' if request.endpoint in ['contratos', 'contrato_novo', 'contrato_editar', 'contrato_salvar'] }}>Contratos</a>
-      <a href="{{ url_for('regras') }}"{{ ' class=on' if request.endpoint in ['regras', 'regra_nova', 'regra_editar', 'regra_salvar'] }}>Regras</a>
+      {# Configuração: agrupa as telas que se ajustam uma vez e se consultam pouco
+         (Contratos, Regras, futuro Backup/Sync), deixando a nav de fluxo enxuta.
+         Disclosure nativo — abre no clique mesmo sem JS; abre por padrão quando a
+         página atual é de configuração, para o operador ver onde está. #}
+      <details class="dropdown nav-config" id="menu-config"{{ ' open' if request.endpoint in ep_config }}>
+        <summary class="nav-config-toggle{{ ' on' if request.endpoint in ep_config }}">
+          Configuração
+          <svg class="icon chev"><use href="#i-chevron"/></svg>
+        </summary>
+        <div class="dropdown-panel nav-config-panel">
+          <a href="{{ url_for('contratos') }}"{{ ' class=on' if request.endpoint in ep_contratos }}>Contratos</a>
+          <a href="{{ url_for('regras') }}"{{ ' class=on' if request.endpoint in ep_regras }}>Regras</a>
+        </div>
+      </details>
     </nav>
 
     <div class="controls">

@@ -81,11 +81,12 @@ Roadmap em 4 fases:
   caminho sem-JS segue intacto (I-6). Teste de rota cobre os quatro casos. **66 testes verdes.**
 - **Fase 3 — Arquitetura de informação: PENDENTE (replanejada 2026-06-03).** Duas frentes,
   nenhuma toca invariante:
-  1. **Agrupar "Configuração" na nav.** Contratos + Regras (+ futuro Backup/Sync) saem da fila
-     plana de `base.html` para um grupo recolhido (reusar o padrão `details.dropdown` do menu
-     "Exibição"). A nav de fluxo fica enxuta: Início · NPPs · Histórico. Menor risco — começar
-     por aqui.
-  2. **Busca/filtro na lista de NPPs** (`npps.html`), por contrato/competência/situação.
+  1. **Agrupar "Configuração" na nav: FEITA.** Contratos + Regras (+ futuro Backup/Sync) saíram
+     da fila plana de `base.html` para um `details.dropdown` recolhido ("Configuração"), reusando
+     o IIFE e o CSS do menu "Exibição" (abre no clique mesmo sem JS; abre por padrão e marca
+     `on` quando a página atual é de configuração). A nav de fluxo ficou enxuta: Início · NPPs ·
+     Histórico.
+  2. **Busca/filtro na lista de NPPs (próximo)** (`npps.html`), por contrato/competência/situação.
      Progressive enhancement (sem JS, a lista completa aparece); **não agrega nem soma valores**
      (não encosta em I-2) — é só encontrabilidade quando muitas NPPs se acumulam no mês.
      Reaproveitar o padrão de triagem acessível removido na Fase 0 (`aria-selected`/`aria-sort`).
