@@ -167,21 +167,60 @@
     </div>
 
     {% for grupo in grupos %}
-    <h4 class="group-label">{{ grupo.label }}</h4>
+    {# Cada grupo é colapsável (#3) para o operador domar a quantidade de informação #}
+    <details class="grupo-colapsavel" open>
+      <summary class="group-label">{{ grupo.label }} <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+      <div class="grupo-imposto" data-grupo="{{ grupo.key }}">
 
-    {% if grupo.key == 'federal' %}
-    {# Tributos federais: AGREGADO por código (estilo "TRIB FED" do Cosmos); expande p/ validar #}
-    <div class="grupo-imposto" data-grupo="federal">
-      {% if not grupo.agregados %}
-      <p class="muted">Nenhum tributo federal se aplica às notas desta NPP.</p>
-      {% else %}
-      {% for ag in grupo.agregados %}
-      <details class="fed-agregado"{% if ag.n_pendentes %} open{% endif %} data-federal-codigo="{{ ag.codigo or '' }}">
-        <summary class="fed-resumo">{% include "_federal_agregado_resumo.html" %}</summary>
+        {% if grupo.n_conferem %}
+        {# #4: confirma em lote só os que CONFEREM com a sugestão; divergências ficam para revisão #}
+        <form method="post" action="{{ url_for('npp_confirmar_conferem', id_=npp.id, grupo=grupo.key) }}" class="mb-3"
+              onsubmit="return confirm('Confirmar em lote os {{ grupo.n_conferem }} tributo(s) deste grupo cujo destaque do emitente confere com a sugestão? Grava o valor do emitente em seu nome; as divergências ficam para revisão individual.');">
+          <button type="submit" class="btn ghost"><svg class="icon"><use href="#i-check"/></svg> Confirmar os que conferem ({{ grupo.n_conferem }})</button>
+        </form>
+        {% endif %}
+
+        {% if grupo.key == 'federal' %}
+        {# Tributos federais: AGREGADO por código (estilo "TRIB FED" do Cosmos); expande p/ validar #}
+        {% if not grupo.agregados %}
+        <p class="muted">Nenhum tributo federal se aplica às notas desta NPP.</p>
+        {% else %}
+        {% for ag in grupo.agregados %}
+        <details class="fed-agregado"{% if ag.n_pendentes %} open{% endif %} data-federal-codigo="{{ ag.codigo or '' }}">
+          <summary class="fed-resumo">{% include "_federal_agregado_resumo.html" %}</summary>
+          <div class="table-wrap dense">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Município</th>
+                  <th scope="col">Nota</th>
+                  <th scope="col">Tributo</th>
+                  <th scope="col" class="num">Destacado pelo emitente</th>
+                  <th scope="col" class="num">Sugerido pela regra</th>
+                  <th scope="col">Validar / retificar (operador)</th>
+                  <th scope="col">Situação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in ag.rows %}{% include "_linha_tributo.html" %}{% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
+        {% endfor %}
+        {% endif %}
+        <p class="grupo-total">Total federal validado: <span class="num" data-grupo-total>{{ grupo.total_validado | moeda }}</span></p>
+
+        {% else %}
+        {# INSS e ISS: por nota (município é a 1ª coluna) #}
+        {% if not grupo.rows %}
+        <p class="muted">Nenhum tributo desta categoria se aplica às notas desta NPP.</p>
+        {% else %}
         <div class="table-wrap dense">
           <table>
             <thead>
               <tr>
+                <th scope="col">Município</th>
                 <th scope="col">Nota</th>
                 <th scope="col">Tributo</th>
                 <th scope="col" class="num">Destacado pelo emitente</th>
@@ -191,69 +230,22 @@
               </tr>
             </thead>
             <tbody>
-              {% for r in ag.rows %}
-              <tr data-chave="{{ r.chave }}" data-tributo="{{ r.tributo }}">
-                <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if r.tipo == 'NFE' else 'NFS-e' }}</span></td>
-                <td>{{ r.tributo }}<span class="sub">{{ r.regra }}</span></td>
-                <td class="num{{ ' zero' if r.destaque is ezero else '' }}">{{ r.destaque | moeda if r.destaque is not none else '—' }}</td>
-                <td class="num">{% if r.esperado is not none %}<span class="chip">sugestão</span> {{ r.esperado | moeda }}{% else %}<span class="muted">—</span>{% endif %}</td>
-                <td class="cel-validar">{% include "_validar_celula.html" %}</td>
-                <td class="nowrap cel-situacao">{% include "_situacao_celula.html" %}</td>
-              </tr>
-              {% endfor %}
+              {% for r in grupo.rows %}{% include "_linha_tributo.html" %}{% endfor %}
             </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="5">Total validado nesta categoria</td>
+                <td class="num" data-grupo-total>{{ grupo.total_validado | moeda }}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
-      </details>
-      {% endfor %}
-      {% endif %}
-      <p class="grupo-total">Total federal validado: <span class="num" data-grupo-total>{{ grupo.total_validado | moeda }}</span></p>
-    </div>
+        {% endif %}
+        {% endif %}
 
-    {% else %}
-    {# INSS e ISS: por nota (ISS mostra o município) #}
-    <div class="grupo-imposto" data-grupo="{{ grupo.key }}">
-      {% if not grupo.rows %}
-      <p class="muted">Nenhum tributo desta categoria se aplica às notas desta NPP.</p>
-      {% else %}
-      <div class="table-wrap dense">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Nota</th>
-              <th scope="col">Tributo</th>
-              {% if grupo.key == 'iss' %}<th scope="col">Município</th>{% endif %}
-              <th scope="col" class="num">Destacado pelo emitente</th>
-              <th scope="col" class="num">Sugerido pela regra</th>
-              <th scope="col">Validar / retificar (operador)</th>
-              <th scope="col">Situação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in grupo.rows %}
-            <tr data-chave="{{ r.chave }}" data-tributo="{{ r.tributo }}">
-              <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if r.tipo == 'NFE' else 'NFS-e' }}</span></td>
-              <td>{{ r.tributo }}<span class="sub">{{ r.regra }}</span></td>
-              {% if grupo.key == 'iss' %}<td class="nowrap">{{ r.municipio or '—' }}</td>{% endif %}
-              <td class="num{{ ' zero' if r.destaque is ezero else '' }}">{{ r.destaque | moeda if r.destaque is not none else '—' }}</td>
-              <td class="num">{% if r.esperado is not none %}<span class="chip">sugestão</span> {{ r.esperado | moeda }}{% else %}<span class="muted">—</span>{% endif %}</td>
-              <td class="cel-validar">{% include "_validar_celula.html" %}</td>
-              <td class="nowrap cel-situacao">{% include "_situacao_celula.html" %}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colspan="{{ 5 if grupo.key == 'iss' else 4 }}">Total validado nesta categoria</td>
-              <td class="num" data-grupo-total>{{ grupo.total_validado | moeda }}</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
       </div>
-      {% endif %}
-    </div>
-    {% endif %}
+    </details>
     {% endfor %}
 
     <p class="note-foot">

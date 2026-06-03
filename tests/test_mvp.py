@@ -1375,3 +1375,85 @@ def test_npp_abas_e_federal_agregado(tmp_path, monkeypatch):
     data = r.get_json()
     assert data["ok"] is True and data["federal_codigo"] == "6190"
     assert "6190" in data["federal_resumo"]
+
+
+def _seed_npp_impostos(tmp_path, monkeypatch, **contrato_kw):
+    """Setup comum: stores em tmp, operador, contrato, NPP com os exemplos. Devolve
+    (cli, A, nid, contrato)."""
+    import tronco.app as A
+    from tronco.operador import StoreOperador
+    from tronco.npp import StoreNPP
+    from tronco.notas import StoreNotas
+    from tronco.contratos import StoreContratos
+    from tronco.idempotencia import RegistroDeExportacao
+    from tronco.marcacoes import StoreMarcacoes
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    monkeypatch.setattr(A, "StoreOperador", lambda *a, **k: StoreOperador(tmp_path / "op.sqlite"))
+    monkeypatch.setattr(A, "StoreNPP", lambda *a, **k: StoreNPP(tmp_path / "npp.sqlite"))
+    monkeypatch.setattr(A, "StoreNotas", lambda *a, **k: StoreNotas(tmp_path / "notas.sqlite"))
+    monkeypatch.setattr(A, "StoreContratos", lambda *a, **k: StoreContratos(tmp_path / "contr.sqlite"))
+    monkeypatch.setattr(A, "RegistroDeExportacao", lambda *a, **k: RegistroDeExportacao(tmp_path / "exp.sqlite"))
+    monkeypatch.setattr(A, "StoreMarcacoes", lambda *a, **k: StoreMarcacoes(tmp_path / "marc.sqlite"))
+    monkeypatch.setattr(A, "StoreValidacaoRetencao", lambda *a, **k: StoreValidacaoRetencao(tmp_path / "val.sqlite"))
+    A.app.config.update(TESTING=True)
+    cli = A.app.test_client()
+    cli.post("/operador", data={"iniciais": "op", "nome": "Op"})
+    cs = StoreContratos(tmp_path / "contr.sqlite")
+    cid = cs.salvar(_contrato(**contrato_kw)); cs.fechar()
+    cli.post("/npps", data={"contrato_id": str(cid), "competencia": "2026-05"})
+    nid = StoreNPP(tmp_path / "npp.sqlite").listar()[0].id
+    cli.post(f"/npp/{nid}/importar/exemplos")
+    return cli, A, nid, StoreContratos(tmp_path / "contr.sqlite").obter(cid)
+
+
+def test_npp_confirmar_conferem_so_os_que_conferem(tmp_path, monkeypatch):
+    """#4: a confirmação por grupo grava SÓ os pendentes cujo destaque confere com a
+    sugestão; divergências ficam intocadas para revisão (I-3/I-6). Grava o destaque fiel
+    (I-2) com autor (I-4). Escopo: só o grupo pedido."""
+    from tronco.app import _CATEGORIA, _confere_com_sugestao, _pendente_validacao
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+    cli, A, nid, contrato = _seed_npp_impostos(
+        tmp_path, monkeypatch, ret_federal_sujeito=True, ret_federal_codigo_receita="6190",
+        ret_federal_ir_pct="4.8", ret_federal_csll=True, ret_federal_cofins=True,
+        ret_federal_pis=True, inss_cessao_mao_obra=True, inss_aliquota="11",
+        iss_retido_tomador=True, iss_aliquota="5")
+
+    confere = set(); diverge = set()
+    for it in A._itens_da_npp(nid):
+        for a in A._conferir_por_tipo(it["reg"], it["tipo"], contrato, None).achados:
+            if _CATEGORIA.get(a.tributo) != "federal" or not _pendente_validacao(a, None):
+                continue
+            (confere if _confere_com_sugestao(a) else
+             (diverge if a.situacao == "diverge" else set())).add((it["reg"].chave, a.tributo))
+    assert confere and diverge                      # exemplos têm os dois (sanidade)
+
+    cli.post(f"/npp/{nid}/confirmar-conferem/federal", follow_redirects=True)
+
+    v = StoreValidacaoRetencao(tmp_path / "val.sqlite")
+    validados = {(it["reg"].chave, t) for it in A._itens_da_npp(nid)
+                 for t in v.atuais(it["reg"].chave)}
+    v.fechar()
+    assert validados == confere                     # exatamente os que conferem
+    assert not (validados & diverge)                # nenhuma divergência tocada (I-3)
+    assert all(_CATEGORIA.get(t) == "federal" for _, t in validados)  # só o grupo pedido
+
+
+def test_npp_ajustes_ui_municipio_diverge_colapsavel(tmp_path, monkeypatch):
+    """#1 município é a 1ª coluna das tabelas de tributos; #2 linha divergente ganha
+    realce (classe); #3 os grupos são colapsáveis (<details>)."""
+    cli, A, nid, _ = _seed_npp_impostos(
+        tmp_path, monkeypatch, ret_federal_sujeito=True, ret_federal_codigo_receita="6190",
+        ret_federal_ir_pct="4.8", ret_federal_csll=True, ret_federal_cofins=True,
+        ret_federal_pis=True, inss_cessao_mao_obra=True, inss_aliquota="11",
+        iss_retido_tomador=True, iss_aliquota="5")
+    html = cli.get(f"/npp/{nid}?aba=impostos").get_data(as_text=True)
+    # #1: Município antes de Nota no cabeçalho da tabela de tributos
+    th_mun = html.find('<th scope="col">Município</th>')
+    th_nota = html.find('<th scope="col">Nota</th>')
+    assert 0 < th_mun < th_nota
+    # #2: há linha divergente realçada (exemplos divergem com este contrato)
+    assert 'class="linha-diverge"' in html
+    # #3: três grupos colapsáveis
+    assert html.count('class="grupo-colapsavel"') == 3
+    # #4: botão "Confirmar os que conferem" presente em algum grupo
+    assert 'Confirmar os que conferem' in html

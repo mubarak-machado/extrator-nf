@@ -217,6 +217,7 @@
         var celS = row.querySelector(".cel-situacao");
         if (celV) celV.innerHTML = data.cel_validar;
         if (celS) celS.innerHTML = data.cel_situacao;
+        row.classList.remove("linha-diverge");  // validada deixa de pedir revisão (#2)
         realce(row);
       }
       var prog = document.getElementById("bloco-progresso");

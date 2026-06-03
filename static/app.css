@@ -564,6 +564,24 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .fed-agregado[open] .fed-resumo { border-bottom: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { .fed-resumo .chev { transition: none; } }
 
+/* grupos de tributos colapsáveis (INSS / Tributos federais / ISS) — #3 */
+.grupo-colapsavel { margin-bottom: var(--sp-5); }
+.grupo-colapsavel > summary {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.grupo-colapsavel > summary::-webkit-details-marker { display: none; }
+.grupo-colapsavel > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-sm); }
+.grupo-colapsavel > summary .chev { width: .9rem; height: .9rem; opacity: .6; transition: transform .15s ease; }
+.grupo-colapsavel[open] > summary .chev { transform: rotate(180deg); }
+.grupo-colapsavel > summary:hover .chev { opacity: 1; }
+.grupo-colapsavel .grupo-imposto { margin-top: var(--sp-3); }
+@media (prefers-reduced-motion: reduce) { .grupo-colapsavel > summary .chev { transition: none; } }
+
+/* realce da linha divergente (destaque ≠ sugestão) — #2: facilita achar o que revisar */
+tr.linha-diverge > td { background: var(--warn-bg); }
+tr.linha-diverge > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+
 .empty-msg { padding: var(--sp-5) var(--sp-4); text-align: center; color: var(--ink-3); font-size: .9rem; }
 
 /* primeira coluna fixa na rolagem horizontal (consolidado) */

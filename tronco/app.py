@@ -873,8 +873,10 @@ def _grupos_impostos(itens, contrato, val_store=None, marc=None):
                         tot += Decimal(r["validacao"]["valor"])
                     except (InvalidOperation, ValueError):
                         pass
+            n_conferem = sum(1 for r in rows if r["pendente"] and r["situacao"] == "confere"
+                             and r["destaque"] is not None and r["esperado"] is not None)
             grupo = {"label": label, "key": key, "rows": rows,
-                     "total_validado": f"{tot:.2f}"}
+                     "total_validado": f"{tot:.2f}", "n_conferem": n_conferem}
             if key == "federal":
                 grupo["agregados"] = _agregar_federal(rows, contrato)
             grupos.append(grupo)
@@ -1274,6 +1276,47 @@ def npp_importar_exemplos(id_):
     return redirect(url_for("npp_detalhe", id_=id_))
 
 
+def _confirmar_lote(itens, contrato, op, incluir):
+    """Confirma em lote (acao=confirmado; valor = destaque do emitente RECOMPUTADO no
+    servidor, I-2; autor+data, I-4) os tributos pendentes que `incluir(achado)` aprova.
+    Nunca toca já-validados nem 'não incide'; sem destaque é reportado (I-6). Retorna
+    (confirmados, divergentes, sem_destaque)."""
+    marc = StoreMarcacoes()
+    store = StoreValidacaoRetencao()
+    confirmados = divergentes = sem_destaque = 0
+    try:
+        for it in itens:
+            material = _material_marcado(it["reg"].chave, it["tipo"], marc)
+            achados = _conferir_por_tipo(it["reg"], it["tipo"], contrato, material).achados
+            ja_validados = store.atuais(it["reg"].chave)
+            for a in achados:
+                if a.tributo in ja_validados:          # já decidido pelo operador — não mexe
+                    continue
+                if not _pendente_validacao(a, None):    # "não incide"/dispensado — nada a reter
+                    continue
+                if not incluir(a):                      # fora do filtro deste lote
+                    continue
+                if a.destaque_emitente is None:         # sem destaque → exige retificar manual
+                    sem_destaque += 1
+                    continue
+                store.validar(it["reg"].chave, a.tributo, "confirmado", a.destaque_emitente, op.nome)
+                confirmados += 1
+                try:
+                    if a.esperado is not None and Decimal(a.destaque_emitente) != Decimal(a.esperado):
+                        divergentes += 1
+                except (InvalidOperation, ValueError):
+                    pass
+    finally:
+        marc.fechar(); store.fechar()
+    return confirmados, divergentes, sem_destaque
+
+
+def _confere_com_sugestao(a) -> bool:
+    """Destaque do emitente bate com a sugestão da regra (dentro da tolerância) e há
+    destaque — o critério do 'confirmar os que conferem' por grupo (#4)."""
+    return a.destaque_emitente is not None and a.esperado is not None and a.situacao == "confere"
+
+
 @app.route("/npp/<int:id_>/confirmar-destaques", methods=["POST"])
 def npp_confirmar_destaques(id_):
     """Confirma em lote o destaque do emitente para os tributos PENDENTES que têm valor
@@ -1293,31 +1336,7 @@ def npp_confirmar_destaques(id_):
         return redirect(url_for("npp_detalhe", id_=id_))
     op = _operador_atual()
     itens = _itens_da_npp(id_)
-    marc = StoreMarcacoes()
-    store = StoreValidacaoRetencao()
-    confirmados = divergentes = sem_destaque = 0
-    try:
-        for it in itens:
-            material = _material_marcado(it["reg"].chave, it["tipo"], marc)
-            achados = _conferir_por_tipo(it["reg"], it["tipo"], contrato, material).achados
-            ja_validados = store.atuais(it["reg"].chave)
-            for a in achados:
-                if a.tributo in ja_validados:          # já decidido pelo operador — não mexe
-                    continue
-                if not _pendente_validacao(a, None):    # "não incide"/dispensado — nada a reter
-                    continue
-                if a.destaque_emitente is None:         # sem destaque → exige retificar manual
-                    sem_destaque += 1
-                    continue
-                store.validar(it["reg"].chave, a.tributo, "confirmado", a.destaque_emitente, op.nome)
-                confirmados += 1
-                try:
-                    if a.esperado is not None and Decimal(a.destaque_emitente) != Decimal(a.esperado):
-                        divergentes += 1
-                except (InvalidOperation, ValueError):
-                    pass
-    finally:
-        marc.fechar(); store.fechar()
+    confirmados, divergentes, sem_destaque = _confirmar_lote(itens, contrato, op, lambda a: True)
     if not confirmados:
         falta = (f" {sem_destaque} tributo(s) pendente(s) não têm destaque e precisam de retificação manual."
                  if sem_destaque else "")
@@ -1332,6 +1351,37 @@ def npp_confirmar_destaques(id_):
         partes.append(f"{sem_destaque} sem destaque ficaram para retificação manual.")
     flash(" ".join(partes), "ok")
     return redirect(url_for("npp_detalhe", id_=id_))
+
+
+@app.route("/npp/<int:id_>/confirmar-conferem/<grupo>", methods=["POST"])
+def npp_confirmar_conferem(id_, grupo):
+    """Confirma em lote, NUM GRUPO (prev/federal/iss), só os tributos pendentes cujo
+    destaque do emitente CONFERE com a sugestão da regra (#4). É aprovação humana em bloco
+    dos casos sem divergência: grava o valor do EMITENTE recomputado no servidor (I-2), com
+    autor+data (I-4). Divergências NÃO são tocadas — ficam para revisão individual (I-3/I-6),
+    reforçadas pelo destaque visual da linha."""
+    if grupo not in ("prev", "federal", "iss"):
+        flash("Grupo de tributo inválido.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_, aba="impostos"))
+    npp = _obter_npp(id_)
+    if not npp:
+        flash("NPP não encontrada.", "erro")
+        return redirect(url_for("npps"))
+    cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
+    if not contrato:
+        flash("A NPP não tem contrato — não há retenção para validar.", "erro")
+        return redirect(url_for("npp_detalhe", id_=id_, aba="impostos"))
+    op = _operador_atual()
+    confirmados, _, _ = _confirmar_lote(
+        _itens_da_npp(id_), contrato, op,
+        lambda a: _CATEGORIA.get(a.tributo) == grupo and _confere_com_sugestao(a))
+    rotulo = next((lbl for (lbl, k) in _GRUPOS_META if k == grupo), grupo)
+    if confirmados:
+        flash(f"{confirmados} tributo(s) de {rotulo} confirmado(s) pelo destaque do emitente "
+              f"(conferiam com a sugestão; por {op.nome}). Divergências ficaram para revisão.", "ok")
+    else:
+        flash(f"Nada a confirmar em {rotulo}: não há pendência cujo destaque confira com a sugestão.", "info")
+    return redirect(url_for("npp_detalhe", id_=id_, aba="impostos"))
 
 
 @app.route("/npp/<int:id_>/exportar", methods=["POST"])
