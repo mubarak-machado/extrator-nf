@@ -11,6 +11,7 @@ Rodar:  uv run python -m tronco.app
 """
 from __future__ import annotations
 
+import os
 import re
 import tempfile
 from collections import defaultdict
@@ -1350,4 +1351,7 @@ def npp_exportar(id_):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Porta configurável (PORT). Padrão 5001 — no macOS a 5000 é tomada pelo AirPlay
+    # Receiver (Control Center), que responde 403 e impede o Flask de subir ali.
+    porta = int(os.environ.get("PORT", "5001"))
+    app.run(debug=True, port=porta)
