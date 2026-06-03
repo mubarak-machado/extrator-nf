@@ -91,6 +91,27 @@ Roadmap em 4 fases:
      (não encosta em I-2) — é só encontrabilidade quando muitas NPPs se acumulam no mês.
      Reaproveitar o padrão de triagem acessível removido na Fase 0 (`aria-selected`/`aria-sort`).
 
+## Redesenho da NPP — abas + federal agregado por código: FEITA (2026-06-03)
+
+Referência: tela "Grupo de Imposto" do Cosmos MPU. Detalhe da NPP reorganizado em
+**cabeçalho de identificação** (sempre visível) + **duas abas**: "Documentos de origem"
+(notas + importar) e "Grupos de impostos". Na aba de impostos, três grupos rotulados —
+**INSS**, **Tributos federais**, **ISS**:
+- **Tributos federais agregados por código de receita** (linha-resumo estilo "TRIB FED":
+  `6190 · 9,45% · N docs · Σ destaque · X de Y validados`), que **expande** (`<details>`) para
+  validar IR/CSLL/COFINS/PIS por nota. Agrupamento **automático** (o sistema deriva da nota +
+  contrato; o operador não monta itens como no Cosmos).
+- **INSS e ISS por nota** (ISS com município). Validação **continua por `(chave, tributo)`**.
+Abas e federal são progressive enhancement (abas = links `?aba=`; federal = `<details>` nativo).
+**Só apresentação** — nenhum invariante tocado (somas = conferência I-2; nada adotado I-3;
+gravação inalterada I-4; dispensado/indefinido em bucket visível I-6). 68 testes verdes.
+Plano: o federal etiqueta cada achado com o código (`tronco/retencao_federal.py`); a agregação
+e a aba vivem em `tronco/app.py` (`_agregar_federal`, `_federal_agregada_pct`, `npp_detalhe`).
+
+**Próxima fase (decidida, não implementada):** operacionalização do federal por material —
+contrato com **duas regras** (6190 sem material / 6147 com material), roteando cada nota pela
+**marcação humana** de material (I-4); validação segue por `(chave, tributo)`.
+
   **Hub-dashboard: descartado (decisão do humano, 2026-06-03).** A ideia original (hub vira
   painel com líquido pendente / tributos a validar somando NPPs / NPPs prontas p/ exportar) foi
   recusada: a jornada é **finita e fechada por NPP** (abre → importa → confere → exporta/paga),

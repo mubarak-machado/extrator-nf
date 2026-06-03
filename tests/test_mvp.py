@@ -1282,3 +1282,96 @@ def test_npp_validar_inline_json(tmp_path, monkeypatch):
     # sem o header de fetch: caminho antigo intacto (redirect, não JSON)
     r = cli.post(url, data={"acao": "confirmado"})
     assert r.status_code == 302 and not r.is_json
+
+
+def test_agregar_federal_por_codigo_e_bucket_sem_codigo():
+    """Agregação federal é apresentação: agrupa por código de receita, soma os destaques
+    fiéis (conferência, I-2) e conta documentos distintos. Linhas sem código (dispensado/
+    indefinido) caem num bucket visível (I-6). Alíquota agregada é derivada do contrato."""
+    from tronco.app import _agregar_federal
+    c = _contrato(ret_federal_sujeito=True, ret_federal_ir_pct="4.8",
+                  ret_federal_csll=True, ret_federal_cofins=True, ret_federal_pis=True)
+    rows = [
+        {"chave": "A", "nota_numero": "1", "codigo": "6190", "destaque": "480.00",
+         "esperado": "480.00", "validacao": None, "pendente": True},
+        {"chave": "A", "nota_numero": "1", "codigo": "6190", "destaque": "100.00",
+         "esperado": "100.00", "validacao": None, "pendente": True},
+        {"chave": "B", "nota_numero": "2", "codigo": None, "destaque": None,
+         "esperado": None, "validacao": None, "pendente": True},
+    ]
+    por = {a["codigo"]: a for a in _agregar_federal(rows, c)}
+    assert "6190" in por and None in por                     # grupo + bucket
+    g = por["6190"]
+    assert g["aliquota_agregada"] == "9.45" and g["aliquota_txt"] == "9,45%"  # IR4,8+1+3+0,65
+    assert g["n_docs"] == 1                                  # duas linhas, mesma nota A
+    assert g["soma_destaque"] == "580.00"                    # soma de conferência (I-2)
+    assert por[None]["aliquota_agregada"] is None            # bucket sem código, sem alíquota
+
+
+def test_npp_abas_e_federal_agregado(tmp_path, monkeypatch):
+    """Redesenho da NPP: duas abas (Documentos / Grupos de impostos) em progressive
+    enhancement (ambos os painéis renderizados; ?aba marca o ativo) e o grupo federal
+    agregado por código (6190 · 9,45%), com o resumo do código devolvido na validação inline."""
+    import tronco.app as A
+    from tronco.operador import StoreOperador
+    from tronco.npp import StoreNPP
+    from tronco.notas import StoreNotas
+    from tronco.contratos import StoreContratos
+    from tronco.idempotencia import RegistroDeExportacao
+    from tronco.marcacoes import StoreMarcacoes
+    from tronco.validacao_retencao import StoreValidacaoRetencao
+
+    monkeypatch.setattr(A, "StoreOperador", lambda *a, **k: StoreOperador(tmp_path / "op.sqlite"))
+    monkeypatch.setattr(A, "StoreNPP", lambda *a, **k: StoreNPP(tmp_path / "npp.sqlite"))
+    monkeypatch.setattr(A, "StoreNotas", lambda *a, **k: StoreNotas(tmp_path / "notas.sqlite"))
+    monkeypatch.setattr(A, "StoreContratos", lambda *a, **k: StoreContratos(tmp_path / "contr.sqlite"))
+    monkeypatch.setattr(A, "RegistroDeExportacao", lambda *a, **k: RegistroDeExportacao(tmp_path / "exp.sqlite"))
+    monkeypatch.setattr(A, "StoreMarcacoes", lambda *a, **k: StoreMarcacoes(tmp_path / "marc.sqlite"))
+    monkeypatch.setattr(A, "StoreValidacaoRetencao", lambda *a, **k: StoreValidacaoRetencao(tmp_path / "val.sqlite"))
+    A.app.config.update(TESTING=True)
+    cli = A.app.test_client()
+
+    cli.post("/operador", data={"iniciais": "op", "nome": "Op"})
+    cs = StoreContratos(tmp_path / "contr.sqlite")
+    cid = cs.salvar(_contrato(ret_federal_sujeito=True, ret_federal_codigo_receita="6190",
+                              ret_federal_ir_pct="4.8", ret_federal_csll=True,
+                              ret_federal_cofins=True, ret_federal_pis=True,
+                              inss_cessao_mao_obra=True, inss_aliquota="11",
+                              iss_retido_tomador=True, iss_aliquota="5")); cs.fechar()
+    cli.post("/npps", data={"contrato_id": str(cid), "competencia": "2026-05"})
+    nid = StoreNPP(tmp_path / "npp.sqlite").listar()[0].id
+    cli.post(f"/npp/{nid}/importar/exemplos")
+
+    # abas (PE): default = documentos visível, impostos hidden; ?aba inverte; ambos no HTML
+    import re
+    html = cli.get(f"/npp/{nid}").get_data(as_text=True)
+    assert 'role="tablist"' in html
+    assert not re.search(r'id="painel-documentos"[^>]*\bhidden', html)
+    assert re.search(r'id="painel-impostos"[^>]*\bhidden', html)
+    html_i = cli.get(f"/npp/{nid}?aba=impostos").get_data(as_text=True)
+    assert re.search(r'id="painel-documentos"[^>]*\bhidden', html_i)
+    assert not re.search(r'id="painel-impostos"[^>]*\bhidden', html_i)
+
+    # federal agregado por código no HTML e na estrutura
+    assert '6190' in html_i and '9,45%' in html_i and 'data-federal-codigo="6190"' in html_i
+    contrato = StoreContratos(tmp_path / "contr.sqlite").obter(cid)
+    grupos, _, _ = A._grupos_impostos(A._itens_da_npp(nid), contrato)
+    federal = next(g for g in grupos if g["key"] == "federal")
+    ag6190 = next(a for a in federal["agregados"] if a["codigo"] == "6190")
+    assert ag6190["aliquota_txt"] == "9,45%" and ag6190["rows"]
+
+    # validação inline de um tributo federal devolve o resumo do código afetado
+    chave = tributo = None
+    for it in A._itens_da_npp(nid):
+        for a in A._conferir_por_tipo(it["reg"], it["tipo"], contrato, None).achados:
+            if a.tributo in ("IR", "CSLL", "COFINS", "PIS") and a.destaque_emitente is not None:
+                chave, tributo = it["reg"].chave, a.tributo
+                break
+        if chave:
+            break
+    assert chave, "esperava um tributo federal com destaque"
+    r = cli.post(f"/npp/{nid}/validar/{chave}/{tributo}", data={"acao": "confirmado"},
+                 headers={"X-Requested-With": "fetch"})
+    data = r.get_json()
+    assert data["ok"] is True and data["federal_codigo"] == "6190"
+    assert "6190" in data["federal_resumo"]

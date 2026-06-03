@@ -38,6 +38,7 @@ class Achado:
     esperado: str | None               # valor sugerido pela regra — SUGESTÃO, não decisão
     situacao: str                      # "confere" | "diverge" | "indefinido"
     nota: str = ""                     # observação curta (ex.: "marque o material")
+    codigo: str | None = None          # código de receita (federal); agrega a exibição
 
 
 @dataclass
@@ -71,6 +72,10 @@ def achados_federais(*, base, ir_pct, ir_codigo, ir_destaque,
     )
     for nome, taxa, ativo, destaque in contribs:
         achados.append(_achado_contrib(nome, taxa, ativo, num(destaque), b))
+    # Etiqueta cada linha federal com o código de receita já usado na conferência —
+    # apenas para a exibição agregar por código (não muda nada da apuração; I-2/I-3).
+    for a in achados:
+        a.codigo = ir_codigo
     return achados
 
 

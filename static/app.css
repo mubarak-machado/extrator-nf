@@ -530,6 +530,40 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .linha-validada > td { animation: realce-linha 1.4s ease; }
 @media (prefers-reduced-motion: reduce) { .linha-validada > td { animation: none; } }
 
+/* abas da NPP (Documentos de origem / Grupos de impostos) — reusa a linguagem da nav */
+.tabs { display: flex; gap: var(--sp-1); flex-wrap: wrap; border-bottom: 1px solid var(--line);
+        margin: var(--sp-4) 0 var(--sp-5); }
+.tabs .tab {
+  text-decoration: none; color: var(--ink-2); font-size: .9rem; font-weight: 600;
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; line-height: 1;
+}
+.tabs .tab:hover { color: var(--ink); background: var(--surface-2); }
+.tabs .tab[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); }
+.tabs .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* tributos federais — resumo agregado por código (disclosure estilo Cosmos "TRIB FED") */
+.grupo-imposto { margin-bottom: var(--sp-5); }
+.grupo-total { font-size: .82rem; color: var(--ink-2); margin: var(--sp-2) 0 0; }
+.grupo-total .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+.fed-agregado { border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: var(--sp-3); background: var(--surface); }
+.fed-agregado + .fed-agregado { margin-top: 0; }
+.fed-resumo {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: var(--sp-3) var(--sp-4); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); font-size: .85rem; color: var(--ink-2);
+}
+.fed-resumo::-webkit-details-marker { display: none; }
+.fed-resumo:hover { background: var(--surface-2); }
+.fed-resumo:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--radius-sm); }
+.fed-resumo .fed-id { font-size: .95rem; color: var(--ink); }
+.fed-resumo .fed-id strong { font-family: var(--font-mono); }
+.fed-resumo .fed-meta b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.fed-resumo .chev { width: .82rem; height: .82rem; opacity: .7; margin-left: auto; transition: transform .15s ease; }
+.fed-agregado[open] .fed-resumo .chev { transform: rotate(180deg); }
+.fed-agregado[open] .fed-resumo { border-bottom: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { .fed-resumo .chev { transition: none; } }
+
 .empty-msg { padding: var(--sp-5) var(--sp-4); text-align: center; color: var(--ink-3); font-size: .9rem; }
 
 /* primeira coluna fixa na rolagem horizontal (consolidado) */

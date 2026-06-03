@@ -730,7 +730,7 @@ def _competencia_valida(s):
 # sugestão da regra (Fase 2, só exibição) e validação humana (Fase 2, a única gravada).
 _CATEGORIA = {"INSS": "prev", "IR": "federal", "CSLL": "federal",
               "COFINS": "federal", "PIS": "federal", "ISS": "iss"}
-_GRUPOS_META = [("Contribuição previdenciária", "prev"),
+_GRUPOS_META = [("INSS", "prev"),
                 ("Tributos federais", "federal"),
                 ("ISS", "iss")]
 
@@ -760,6 +760,71 @@ def _pendente_validacao(achado, validacao) -> bool:
         return Decimal(achado.esperado) != 0
     except (InvalidOperation, ValueError):
         return True
+
+
+def _federal_agregada_pct(contrato):
+    """Alíquota agregada do federal a partir da parametrização do contrato (IR + as
+    contribuições que incidem) — mesma lógica de RegraEnquadramento.agregada_pct(),
+    derivada, nunca digitada. None se o federal não incide ou o IR não está definido."""
+    if not contrato or not contrato.ret_federal_sujeito:
+        return None
+    base = Decimal(formato.parse_valor(contrato.ret_federal_ir_pct) or "0")
+    for ativo, taxa in ((contrato.ret_federal_csll, Decimal("1")),
+                        (contrato.ret_federal_cofins, Decimal("3")),
+                        (contrato.ret_federal_pis, Decimal("0.65"))):
+        if ativo:
+            base += taxa
+    return base
+
+
+def _soma(rows, campo):
+    tot = Decimal("0")
+    for r in rows:
+        v = r[campo] if campo in r else None
+        if isinstance(v, dict):          # validacao
+            v = v.get("valor")
+        try:
+            tot += Decimal(v) if v is not None else Decimal(0)
+        except (InvalidOperation, ValueError):
+            pass
+    return tot
+
+
+def _agregar_federal(rows, contrato):
+    """Agrupa as linhas federais por código de receita — APRESENTAÇÃO (soma de conferência
+    dos destaques fiéis, I-2; nada apurado). Linhas sem código (dispensado por Simples,
+    regime/material indefinido) caem num bucket visível 'a resolver' (I-6). Hoje sai um
+    grupo por código; a estrutura suporta N (forward-compatible com 2 regras por material)."""
+    aliq = _federal_agregada_pct(contrato)
+    por_codigo = {}
+    for r in rows:
+        cod = r.get("codigo")
+        g = por_codigo.setdefault(cod, {"codigo": cod, "rows": [], "documentos": []})
+        g["rows"].append(r)
+        doc = {"chave": r["chave"], "numero": r["nota_numero"]}
+        if doc not in g["documentos"]:
+            g["documentos"].append(doc)
+    out = []
+    for cod, g in por_codigo.items():
+        grp_rows = g["rows"]
+        n_validados = sum(1 for r in grp_rows if r["validacao"] is not None)
+        n_pendentes = sum(1 for r in grp_rows if r["pendente"])
+        out.append({
+            "codigo": cod,
+            "aliquota_agregada": f"{aliq:.2f}" if (cod and aliq is not None) else None,
+            "aliquota_txt": retencao.pct_txt(aliq) if (cod and aliq is not None) else None,
+            "rows": grp_rows,
+            "documentos": g["documentos"],
+            "n_docs": len(g["documentos"]),
+            "soma_destaque": f'{_soma(grp_rows, "destaque"):.2f}',
+            "soma_esperado": f'{_soma(grp_rows, "esperado"):.2f}',
+            "soma_validado": f'{_soma(grp_rows, "validacao"):.2f}',
+            "n_validados": n_validados,
+            "n_pendentes": n_pendentes,
+            "n_validavel": n_validados + n_pendentes,
+        })
+    out.sort(key=lambda x: (x["codigo"] is None, x["codigo"] or ""))
+    return out
 
 
 def _grupos_impostos(itens, contrato, val_store=None, marc=None):
@@ -793,6 +858,8 @@ def _grupos_impostos(itens, contrato, val_store=None, marc=None):
                     "nota_numero": reg.numero, "chave": reg.chave, "tipo": tipo,
                     "tributo": a.tributo, "regra": a.regra,
                     "destaque": a.destaque_emitente, "esperado": a.esperado,
+                    "situacao": a.situacao, "codigo": getattr(a, "codigo", None),
+                    "municipio": reg.municipio_nome if tipo == "NFSE" else None,
                     "validacao": v, "pendente": pendente,
                 })
         grupos = []
@@ -805,8 +872,11 @@ def _grupos_impostos(itens, contrato, val_store=None, marc=None):
                         tot += Decimal(r["validacao"]["valor"])
                     except (InvalidOperation, ValueError):
                         pass
-            grupos.append({"label": label, "key": key, "rows": rows,
-                           "total_validado": f"{tot:.2f}"})
+            grupo = {"label": label, "key": key, "rows": rows,
+                     "total_validado": f"{tot:.2f}"}
+            if key == "federal":
+                grupo["agregados"] = _agregar_federal(rows, contrato)
+            grupos.append(grupo)
         return grupos, f"{total_retido:.2f}", ha_pendente
     finally:
         if fechar_v:
@@ -937,10 +1007,13 @@ def npp_detalhe(id_):
     cstore = StoreContratos(); contrato = cstore.obter(npp.contrato_id); cstore.fechar()
     itens = _itens_da_npp(id_)
     ctx = _contexto_validacao(itens, contrato)
+    aba = request.args.get("aba")
+    if aba not in ("documentos", "impostos"):
+        aba = "documentos"
     return render_template(
         "npp.html", npp=npp, contrato=contrato,
         contrato_rotulo=retencao.rotulo_contrato(contrato) if contrato else "(contrato removido)",
-        itens=itens, status=_npp_status(itens),
+        itens=itens, status=_npp_status(itens), aba=aba,
         n_novas=sum(1 for i in itens if not i["ja_exportada"]), **ctx)
 
 
@@ -1102,6 +1175,15 @@ def _resposta_validacao_json(id_, npp, contrato, chave, tributo, mensagem):
                  None)
     r = next((r for r in grupo["rows"] if r["chave"] == chave and r["tributo"] == tributo),
              None) if grupo else None
+    # Federal é exibido agregado por código: devolve o resumo do código afetado para o
+    # cliente trocar só aquele headline (mesmo padrão de swap de fragmento).
+    federal_codigo = federal_resumo = None
+    if grupo and grupo["key"] == "federal":
+        cod = r["codigo"] if r else None
+        ag = next((a for a in grupo.get("agregados", []) if a["codigo"] == cod), None)
+        if ag is not None:
+            federal_codigo = cod or ""
+            federal_resumo = render_template("_federal_agregado_resumo.html", ag=ag, npp=npp)
     return jsonify(
         ok=True, mensagem=mensagem, categoria="ok",
         chave=chave, tributo=tributo,
@@ -1109,6 +1191,7 @@ def _resposta_validacao_json(id_, npp, contrato, chave, tributo, mensagem):
         cel_situacao=render_template("_situacao_celula.html", r=r),
         progresso=render_template("_progresso_validacao.html", **ctx),
         grupo_key=grupo["key"], grupo_total=formato.moeda(grupo["total_validado"]),
+        federal_codigo=federal_codigo, federal_resumo=federal_resumo,
         total_retido=formato.moeda(ctx["total_retido"]),
         liquido=formato.moeda(ctx["liquido"]),
         liquido_provisorio=ctx["liquido_provisorio"],

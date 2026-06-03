@@ -24,6 +24,7 @@
   {% endif %}
 </div>
 
+{# Cabeçalho de identificação — sempre visível, acima das abas #}
 <section class="card card-b" aria-label="Cabeçalho da NPP">
   <dl class="grid zebra">
     <dt>Contrato</dt><dd>{{ contrato_rotulo }}</dd>
@@ -38,162 +39,227 @@
   </dl>
 </section>
 
-<section class="section" aria-label="Documentos de origem">
-  <h3>Documentos de origem</h3>
+{# Abas — links reais (?aba=...) que funcionam sem JS; o JS alterna sem recarregar #}
+<div class="tabs" role="tablist" aria-label="Seções da NPP" id="abas-npp">
+  <a role="tab" id="tab-documentos" class="tab" href="{{ url_for('npp_detalhe', id_=npp.id, aba='documentos') }}"
+     aria-controls="painel-documentos" aria-selected="{{ 'true' if aba == 'documentos' else 'false' }}">Documentos de origem</a>
+  <a role="tab" id="tab-impostos" class="tab" href="{{ url_for('npp_detalhe', id_=npp.id, aba='impostos') }}"
+     aria-controls="painel-impostos" aria-selected="{{ 'true' if aba == 'impostos' else 'false' }}">Grupos de impostos</a>
+</div>
+
+{# ---------------- Aba: Documentos de origem (notas + importar) ---------------- #}
+<section id="painel-documentos" role="tabpanel" aria-labelledby="tab-documentos"{% if aba != 'documentos' %} hidden{% endif %}>
+  <div class="section">
+    <h3>Documentos de origem</h3>
+    {% if not itens %}
+    <p class="muted">Nenhuma nota nesta NPP ainda. Importe abaixo para começar.</p>
+    {% else %}
+    <div class="table-wrap dense stick">
+      <table>
+        <caption>Uma linha por nota da NPP. Toque no número para abrir a nota.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Nº</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">Emissão</th>
+            <th scope="col" class="num">Valor bruto</th>
+            <th scope="col">Material</th>
+            <th scope="col" class="nowrap">Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in itens %}{% set r = it.reg %}
+          <tr>
+            <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.numero or '—' }}</a></td>
+            <td>{{ 'NF-e' if it.tipo == 'NFE' else 'NFS-e' }}</td>
+            <td>{{ r.data_emissao | data }}</td>
+            <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
+            <td class="nowrap">
+              {% if it.tipo == 'NFSE' %}
+                {% if it.marcacao %}{{ it.marcacao.valor|upper }}{% else %}<a class="falta" href="{{ url_for('detalhe', chave=r.chave) }}">não conferido</a>{% endif %}
+              {% else %}<span class="muted">—</span>{% endif %}
+            </td>
+            <td class="nowrap">{{ 'exportada' if it.ja_exportada else 'inédita' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Total ({{ itens|length }})</td><td></td><td></td>
+            <td class="num">{{ total_bruto | moeda }}</td><td></td><td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+  <section class="section" aria-label="Importar notas para esta NPP">
+    <h3>Importar notas para esta NPP</h3>
+    <div class="cards-2 import-grid">
+      <div class="card import-card">
+        <div class="import-top">
+          <span class="mod-icon"><svg class="icon"><use href="#i-doc"/></svg></span>
+          <div><h3>Uma nota</h3><p class="mod-desc">Envie um único arquivo XML (NF-e ou NFS-e).</p></div>
+        </div>
+        <form method="post" action="{{ url_for('npp_importar_arquivo', id_=npp.id) }}" enctype="multipart/form-data" class="import-form">
+          <label class="field">
+            <span class="lbl">Arquivo XML</span>
+            <input type="file" name="arquivo" accept=".xml,application/xml,text/xml" required>
+          </label>
+          <div class="actions"><button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar esta nota</button></div>
+        </form>
+      </div>
+
+      <div class="card import-card">
+        <div class="import-top">
+          <span class="mod-icon"><svg class="icon"><use href="#i-servico"/></svg></span>
+          <div><h3>Uma pasta</h3><p class="mod-desc">Selecione uma pasta inteira; lê todos os .xml dela de uma vez.</p></div>
+        </div>
+        <form method="post" action="{{ url_for('npp_importar_pasta', id_=npp.id) }}" enctype="multipart/form-data" class="import-form" data-form-pasta>
+          <label class="field">
+            <span class="lbl">Pasta com os XML</span>
+            <input type="file" name="arquivos" id="seletor-pasta" webkitdirectory directory multiple required hidden>
+            <span class="seletor-pasta-row">
+              <button type="button" class="btn ghost" data-abrir-seletor="seletor-pasta"><svg class="icon"><use href="#i-doc"/></svg> Selecionar pasta…</button>
+              <span class="seletor-pasta-info" data-info-seletor="seletor-pasta">Nenhuma pasta selecionada</span>
+            </span>
+          </label>
+          <div class="actions"><button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar pasta selecionada</button></div>
+        </form>
+        <form method="post" action="{{ url_for('npp_importar_exemplos', id_=npp.id) }}" class="import-exemplos">
+          <button type="submit" class="link-inline">ou usar a pasta de exemplos do projeto</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</section>
+
+{# ---------------- Aba: Grupos de impostos ---------------- #}
+<section id="painel-impostos" role="tabpanel" aria-labelledby="tab-impostos"{% if aba != 'impostos' %} hidden{% endif %}>
   {% if not itens %}
-  <p class="muted">Nenhuma nota nesta NPP ainda. Importe abaixo para começar.</p>
+  <p class="muted">Importe notas (aba "Documentos de origem") para ver os impostos.</p>
   {% else %}
-  <div class="table-wrap dense stick">
-    <table>
-      <caption>Uma linha por nota da NPP. Toque no número para abrir a nota.</caption>
-      <thead>
-        <tr>
-          <th scope="col">Nº</th>
-          <th scope="col">Tipo</th>
-          <th scope="col">Emissão</th>
-          <th scope="col" class="num">Valor</th>
-          <th scope="col">Material</th>
-          <th scope="col" class="nowrap">Situação</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for it in itens %}{% set r = it.reg %}
-        <tr>
-          <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.numero or '—' }}</a></td>
-          <td>{{ 'NF-e' if it.tipo == 'NFE' else 'NFS-e' }}</td>
-          <td>{{ r.data_emissao | data }}</td>
-          <td class="num{{ ' zero' if it.valor is ezero else '' }}">{{ it.valor | moeda }}</td>
-          <td class="nowrap">
-            {% if it.tipo == 'NFSE' %}
-              {% if it.marcacao %}{{ it.marcacao.valor|upper }}{% else %}<a class="falta" href="{{ url_for('detalhe', chave=r.chave) }}">não conferido</a>{% endif %}
-            {% else %}<span class="muted">—</span>{% endif %}
-          </td>
-          <td class="nowrap">{{ 'exportada' if it.ja_exportada else 'inédita' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td>Total ({{ itens|length }})</td><td></td><td></td>
-          <td class="num">{{ total_bruto | moeda }}</td><td></td><td></td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-  {% endif %}
-</section>
+  {# section interna mantém o gancho do JS de validação inline (delegação por aria-label) #}
+  <section aria-label="Grupos de impostos">
 
-{% if itens %}
-<section class="section" aria-label="Grupos de impostos">
-  <h3>Grupos de impostos</h3>
+    <div id="bloco-progresso">{% include "_progresso_validacao.html" %}</div>
 
-  <div id="bloco-progresso">{% include "_progresso_validacao.html" %}</div>
+    <div id="bloco-confirmar-lote" class="mb-3"{% if not n_pendentes %} hidden{% endif %}>
+    <form method="post" action="{{ url_for('npp_confirmar_destaques', id_=npp.id) }}"
+          onsubmit="return confirm('Confirmar o destaque do emitente para os tributo(s) pendentes que têm valor destacado? Cada um é gravado em seu nome; você pode retificar individualmente depois.');">
+      <button type="submit" class="btn ghost"><svg class="icon"><use href="#i-check"/></svg> Confirmar destaques pendentes (<span data-n-pendentes>{{ n_pendentes }}</span>)</button>
+    </form>
+    </div>
 
-  <div id="bloco-confirmar-lote" class="mb-3"{% if not n_pendentes %} hidden{% endif %}>
-  <form method="post" action="{{ url_for('npp_confirmar_destaques', id_=npp.id) }}"
-        onsubmit="return confirm('Confirmar o destaque do emitente para os tributo(s) pendentes que têm valor destacado? Cada um é gravado em seu nome; você pode retificar individualmente depois.');">
-    <button type="submit" class="btn ghost"><svg class="icon"><use href="#i-check"/></svg> Confirmar destaques pendentes (<span data-n-pendentes>{{ n_pendentes }}</span>)</button>
-  </form>
-  </div>
+    {% if material_pendente %}
+    <div class="atencao mb-3">
+      <p class="note"><svg class="icon"><use href="#i-alerta"/></svg> {{ material_pendente }} nota(s) de serviço com <strong>material não conferido</strong> — isso afeta o IR e a base do INSS. Confira na nota (aba "Documentos de origem") antes de validar esses tributos.</p>
+    </div>
+    {% endif %}
 
-  {% if material_pendente %}
-  <div class="atencao mb-3">
-    <p class="note"><svg class="icon"><use href="#i-alerta"/></svg> {{ material_pendente }} nota(s) de serviço com <strong>material não conferido</strong> — isso afeta o IR e a base do INSS. Confira na nota (coluna Material acima) antes de validar esses tributos.</p>
-  </div>
-  {% endif %}
+    <div class="declarado mb-5">
+      <p class="note">
+        Três camadas, lado a lado: <span class="chip">destaque do emitente</span> (transcrição fiel da nota, Fase 1 — nunca alterada),
+        <span class="chip">sugestão</span> da regra do contrato (Fase 2, <strong>só para você comparar</strong> — o sistema não a adota)
+        e a sua <strong>validação</strong> (confirmar o destaque ou retificar o valor). Só o valor que você valida entra no Total retido e no Líquido.
+      </p>
+    </div>
 
-  <div class="declarado mb-5">
-    <p class="note">
-      Três camadas, lado a lado: <span class="chip">destaque do emitente</span> (transcrição fiel da nota, Fase 1 — nunca alterada),
-      <span class="chip">sugestão</span> da regra do contrato (Fase 2, <strong>só para você comparar</strong> — o sistema não a adota)
-      e a sua <strong>validação</strong> (confirmar o destaque ou retificar o valor). Só o valor que você valida entra no Total retido e no Líquido.
+    {% for grupo in grupos %}
+    <h4 class="group-label">{{ grupo.label }}</h4>
+
+    {% if grupo.key == 'federal' %}
+    {# Tributos federais: AGREGADO por código (estilo "TRIB FED" do Cosmos); expande p/ validar #}
+    <div class="grupo-imposto" data-grupo="federal">
+      {% if not grupo.agregados %}
+      <p class="muted">Nenhum tributo federal se aplica às notas desta NPP.</p>
+      {% else %}
+      {% for ag in grupo.agregados %}
+      <details class="fed-agregado"{% if ag.n_pendentes %} open{% endif %} data-federal-codigo="{{ ag.codigo or '' }}">
+        <summary class="fed-resumo">{% include "_federal_agregado_resumo.html" %}</summary>
+        <div class="table-wrap dense">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Nota</th>
+                <th scope="col">Tributo</th>
+                <th scope="col" class="num">Destacado pelo emitente</th>
+                <th scope="col" class="num">Sugerido pela regra</th>
+                <th scope="col">Validar / retificar (operador)</th>
+                <th scope="col">Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in ag.rows %}
+              <tr data-chave="{{ r.chave }}" data-tributo="{{ r.tributo }}">
+                <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if r.tipo == 'NFE' else 'NFS-e' }}</span></td>
+                <td>{{ r.tributo }}<span class="sub">{{ r.regra }}</span></td>
+                <td class="num{{ ' zero' if r.destaque is ezero else '' }}">{{ r.destaque | moeda if r.destaque is not none else '—' }}</td>
+                <td class="num">{% if r.esperado is not none %}<span class="chip">sugestão</span> {{ r.esperado | moeda }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                <td class="cel-validar">{% include "_validar_celula.html" %}</td>
+                <td class="nowrap cel-situacao">{% include "_situacao_celula.html" %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endfor %}
+      {% endif %}
+      <p class="grupo-total">Total federal validado: <span class="num" data-grupo-total>{{ grupo.total_validado | moeda }}</span></p>
+    </div>
+
+    {% else %}
+    {# INSS e ISS: por nota (ISS mostra o município) #}
+    <div class="grupo-imposto" data-grupo="{{ grupo.key }}">
+      {% if not grupo.rows %}
+      <p class="muted">Nenhum tributo desta categoria se aplica às notas desta NPP.</p>
+      {% else %}
+      <div class="table-wrap dense">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Nota</th>
+              <th scope="col">Tributo</th>
+              {% if grupo.key == 'iss' %}<th scope="col">Município</th>{% endif %}
+              <th scope="col" class="num">Destacado pelo emitente</th>
+              <th scope="col" class="num">Sugerido pela regra</th>
+              <th scope="col">Validar / retificar (operador)</th>
+              <th scope="col">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in grupo.rows %}
+            <tr data-chave="{{ r.chave }}" data-tributo="{{ r.tributo }}">
+              <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if r.tipo == 'NFE' else 'NFS-e' }}</span></td>
+              <td>{{ r.tributo }}<span class="sub">{{ r.regra }}</span></td>
+              {% if grupo.key == 'iss' %}<td class="nowrap">{{ r.municipio or '—' }}</td>{% endif %}
+              <td class="num{{ ' zero' if r.destaque is ezero else '' }}">{{ r.destaque | moeda if r.destaque is not none else '—' }}</td>
+              <td class="num">{% if r.esperado is not none %}<span class="chip">sugestão</span> {{ r.esperado | moeda }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              <td class="cel-validar">{% include "_validar_celula.html" %}</td>
+              <td class="nowrap cel-situacao">{% include "_situacao_celula.html" %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="{{ 5 if grupo.key == 'iss' else 4 }}">Total validado nesta categoria</td>
+              <td class="num" data-grupo-total>{{ grupo.total_validado | moeda }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <p class="note-foot">
+      O destaque do emitente é a transcrição fiel da nota e nunca é sobrescrito (I-2). A coluna “sugerido pela regra” e as somas dos agregados são apenas referência para conferência humana — o sistema não decide retenção (I-3). O valor que você valida é gravado com seu nome e a data (I-4); enquanto houver tributo aplicável não validado, o líquido fica marcado como provisório (I-6).
     </p>
-  </div>
-
-  {% for grupo in grupos %}
-  <h4 class="group-label">{{ grupo.label }}</h4>
-  {% if not grupo.rows %}
-  <p class="muted">Nenhum tributo desta categoria se aplica às notas desta NPP.</p>
-  {% else %}
-  <div class="table-wrap dense">
-    <table data-grupo="{{ grupo.key }}">
-      <thead>
-        <tr>
-          <th scope="col">Nota</th>
-          <th scope="col">Tributo</th>
-          <th scope="col" class="num">Destacado pelo emitente</th>
-          <th scope="col" class="num">Sugerido pela regra</th>
-          <th scope="col">Validar / retificar (operador)</th>
-          <th scope="col">Situação</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in grupo.rows %}
-        <tr data-chave="{{ r.chave }}" data-tributo="{{ r.tributo }}">
-          <td class="nowrap"><a class="row-link" href="{{ url_for('detalhe', chave=r.chave) }}">{{ r.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if r.tipo == 'NFE' else 'NFS-e' }}</span></td>
-          <td>{{ r.tributo }}<span class="sub">{{ r.regra }}</span></td>
-          <td class="num{{ ' zero' if r.destaque is ezero else '' }}">{{ r.destaque | moeda if r.destaque is not none else '—' }}</td>
-          <td class="num">{% if r.esperado is not none %}<span class="chip">sugestão</span> {{ r.esperado | moeda }}{% else %}<span class="muted">—</span>{% endif %}</td>
-          <td class="cel-validar">{% include "_validar_celula.html" %}</td>
-          <td class="nowrap cel-situacao">{% include "_situacao_celula.html" %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="4">Total validado nesta categoria</td>
-          <td class="num" data-grupo-total>{{ grupo.total_validado | moeda }}</td>
-          <td></td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
+  </section>
   {% endif %}
-  {% endfor %}
-
-  <p class="note-foot">
-    O destaque do emitente é a transcrição fiel da nota e nunca é sobrescrito (I-2). A coluna “sugerido pela regra” é apenas referência para conferência humana — o sistema não decide retenção (I-3). O valor que você valida é gravado com seu nome e a data (I-4); enquanto houver tributo aplicável não validado, o líquido fica marcado como provisório (I-6).
-  </p>
-</section>
-{% endif %}
-
-<section class="section" aria-label="Importar notas para esta NPP">
-  <h3>Importar notas para esta NPP</h3>
-  <div class="cards-2 import-grid">
-    <div class="card import-card">
-      <div class="import-top">
-        <span class="mod-icon"><svg class="icon"><use href="#i-doc"/></svg></span>
-        <div><h3>Uma nota</h3><p class="mod-desc">Envie um único arquivo XML (NF-e ou NFS-e).</p></div>
-      </div>
-      <form method="post" action="{{ url_for('npp_importar_arquivo', id_=npp.id) }}" enctype="multipart/form-data" class="import-form">
-        <label class="field">
-          <span class="lbl">Arquivo XML</span>
-          <input type="file" name="arquivo" accept=".xml,application/xml,text/xml" required>
-        </label>
-        <div class="actions"><button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar esta nota</button></div>
-      </form>
-    </div>
-
-    <div class="card import-card">
-      <div class="import-top">
-        <span class="mod-icon"><svg class="icon"><use href="#i-servico"/></svg></span>
-        <div><h3>Uma pasta</h3><p class="mod-desc">Selecione uma pasta inteira; lê todos os .xml dela de uma vez.</p></div>
-      </div>
-      <form method="post" action="{{ url_for('npp_importar_pasta', id_=npp.id) }}" enctype="multipart/form-data" class="import-form" data-form-pasta>
-        <label class="field">
-          <span class="lbl">Pasta com os XML</span>
-          <input type="file" name="arquivos" id="seletor-pasta" webkitdirectory directory multiple required hidden>
-          <span class="seletor-pasta-row">
-            <button type="button" class="btn ghost" data-abrir-seletor="seletor-pasta"><svg class="icon"><use href="#i-doc"/></svg> Selecionar pasta…</button>
-            <span class="seletor-pasta-info" data-info-seletor="seletor-pasta">Nenhuma pasta selecionada</span>
-          </span>
-        </label>
-        <div class="actions"><button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar pasta selecionada</button></div>
-      </form>
-      <form method="post" action="{{ url_for('npp_importar_exemplos', id_=npp.id) }}" class="import-exemplos">
-        <button type="submit" class="link-inline">ou usar a pasta de exemplos do projeto</button>
-      </form>
-    </div>
-  </div>
 </section>
 {% endblock %}

@@ -1,0 +1,14 @@
+{# Resumo agregado de um código de receita federal — o headline que o operador lê
+   (estilo "TRIB FED" do Cosmos). Contexto: `ag` (agregado) e `npp`. Renderizado na página
+   (dentro do <summary>) e como fragmento na validação inline. A soma é de CONFERÊNCIA dos
+   destaques fiéis (I-2) — nada apurado; o valor que conta é o validado por nota no detalhe. #}
+<span class="fed-id">
+  {% if ag.codigo %}<strong>{{ ag.codigo }}</strong> · {{ ag.aliquota_txt }}{% else %}<strong>Sem código</strong> · a resolver{% endif %}
+</span>
+<span class="fed-meta">
+  {{ ag.n_docs }} doc{{ 's' if ag.n_docs != 1 }} · Σ destaque <span class="num">{{ ag.soma_destaque | moeda }}</span>
+  · <b>{{ ag.n_validados }}</b> de <b>{{ ag.n_validavel }}</b> validado{{ 's' if ag.n_validavel != 1 }}
+</span>
+{% if ag.n_validavel and not ag.n_pendentes %}<span class="ok-chip">validado</span>
+{% elif ag.n_pendentes %}<span class="warn">a validar</span>{% endif %}
+<svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>

@@ -221,9 +221,14 @@
       }
       var prog = document.getElementById("bloco-progresso");
       if (prog) prog.innerHTML = data.progresso;
-      var tabela = secao.querySelector('table[data-grupo="' + data.grupo_key + '"]');
-      var gt = tabela ? tabela.querySelector("[data-grupo-total]") : null;
+      var grupo = secao.querySelector('[data-grupo="' + data.grupo_key + '"]');
+      var gt = grupo ? grupo.querySelector("[data-grupo-total]") : null;
       if (gt) gt.textContent = data.grupo_total;
+      // federal é agregado por código: troca o resumo (headline) do código afetado
+      if (data.federal_resumo != null && data.federal_codigo != null) {
+        var det = secao.querySelector('details[data-federal-codigo="' + data.federal_codigo + '"] .fed-resumo');
+        if (det) det.innerHTML = data.federal_resumo;
+      }
       setVal("dd-total-retido", data.total_retido);
       setVal("dd-liquido", data.liquido);
       toggle("dd-total-retido", "[data-parcial]", data.liquido_provisorio);
@@ -256,6 +261,36 @@
         aplicar(res.data);              // troca a célula (botões somem junto)
       }).catch(function () {
         form.submit();                  // sem rede: degrada para o POST normal
+      });
+    });
+  });
+})();
+
+/* Abas da NPP (Documentos de origem / Grupos de impostos). Progressive enhancement:
+   as abas são links reais para ?aba=... (funcionam sem JS, recarregando). Com JS,
+   alternamos os painéis sem reload e atualizamos a URL (replaceState), sem nova entrada
+   no histórico. Os dois painéis já vêm renderizados pelo servidor. */
+(function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    var lista = document.getElementById("abas-npp");
+    if (!lista) return;
+    var abas = Array.prototype.slice.call(lista.querySelectorAll('[role="tab"]'));
+
+    function mostrar(aba) {
+      abas.forEach(function (t) {
+        var ativo = (t.id === "tab-" + aba);
+        t.setAttribute("aria-selected", ativo ? "true" : "false");
+        var painel = document.getElementById(t.getAttribute("aria-controls"));
+        if (painel) painel.hidden = !ativo;
+      });
+    }
+
+    abas.forEach(function (t) {
+      t.addEventListener("click", function (e) {
+        e.preventDefault();
+        var aba = t.id.replace("tab-", "");
+        mostrar(aba);
+        try { history.replaceState(null, "", t.getAttribute("href")); } catch (_) {}
       });
     });
   });
