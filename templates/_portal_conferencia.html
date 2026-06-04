@@ -1,0 +1,18 @@
+{# Conferência no portal nacional — CONVENIÊNCIA, não extração (I-2): a chave já
+   foi extraída; o link só leva o operador ao portal oficial. Com JS, copia a
+   chave ao abrir (o operador cola — os portais têm captcha/SPA, sem deep-link
+   pela chave crua). Sem JS, abre o portal e a chave continua visível na tela
+   para cópia manual (progressive enhancement). Não fingimos abrir a nota
+   específica (I-6). Requer `r` e `portal` no contexto (herdados do include). #}
+{% if portal %}
+<div class="portal-conf">
+  <a class="btn ghost" href="{{ portal.url }}" target="_blank" rel="noopener noreferrer"
+     data-copiar-chave="{{ r.chave }}">
+    <svg class="icon"><use href="#i-busca"/></svg> Abrir o portal nacional para conferência
+  </a>
+  <span class="copiado" data-copiado role="status" hidden></span>
+  <p class="note-foot">Copia a chave e abre o <strong>{{ portal.nome }}</strong> em nova aba —
+    cole a chave no campo de consulta. O portal exige captcha, então a nota não abre direto:
+    a conferência é feita por você no site oficial.</p>
+</div>
+{% endif %}

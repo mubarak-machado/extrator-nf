@@ -86,15 +86,29 @@
    oculta conforme o rádio (degrada bem: sem JS, o campo fica visível). */
 (function () {
   document.addEventListener("DOMContentLoaded", function () {
+    var form = document.querySelector(".mat-form");
     var campo = document.getElementById("campo-valor-material");
     var radios = document.querySelectorAll("[data-mostra-material]");
-    if (!campo || !radios.length) return;
-    function sync() {
+    if (!form || !campo || !radios.length) return;
+    var valor = document.getElementById("valor_material");
+    var btnAlt = form.querySelector("[data-mat-alterar]");
+
+    function sync() {     // mostra o campo de valor só quando "sim" está marcado
       var sim = document.querySelector('input[name="material"]:checked');
       campo.hidden = !(sim && sim.value === "sim");
     }
+    function travar(travado) {   // marcação já feita: rádios + valor desabilitados, troca botão (CSS via .travado)
+      radios.forEach(function (r) { r.disabled = travado; });
+      if (valor) valor.disabled = travado;
+      form.classList.toggle("travado", travado);
+    }
     radios.forEach(function (r) { r.addEventListener("change", sync); });
+    if (btnAlt) btnAlt.addEventListener("click", function () {
+      travar(false); sync();
+      (document.querySelector('input[name="material"]:checked') || radios[0]).focus();
+    });
     sync();
+    if (form.dataset.matMarcado) travar(true);   // entra travado quando já há marcação
   });
 })();
 
@@ -337,6 +351,30 @@
         mostrar(aba);
         try { history.replaceState(null, "", t.getAttribute("href")); } catch (_) {}
       });
+    });
+  });
+})();
+
+/* Conferência no portal nacional: ao abrir o portal, copia a chave para a área de
+   transferência (o operador cola na consulta pública). NÃO dá preventDefault — o
+   link abre o portal em nova aba normalmente. Progressive enhancement: sem JS / sem
+   clipboard, o link já abre o portal e a chave fica visível na tela para cópia
+   manual. Não há deep-link (portais com captcha/SPA) — só facilitamos a colagem. */
+(function () {
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest("[data-copiar-chave]");
+    if (!a) return;
+    var chave = a.getAttribute("data-copiar-chave");
+    var aviso = a.parentNode.querySelector("[data-copiado]");
+    function mostra(msg) { if (aviso) { aviso.hidden = false; aviso.textContent = msg; } }
+    if (!chave || !navigator.clipboard) {  // deixa o link abrir; cópia manual da chave
+      mostra("Copie a chave exibida e cole no campo de consulta do portal.");
+      return;
+    }
+    navigator.clipboard.writeText(chave).then(function () {
+      mostra("Chave copiada — cole no campo de consulta do portal.");
+    }).catch(function () {
+      mostra("Copie a chave exibida e cole no campo de consulta do portal.");
     });
   });
 })();

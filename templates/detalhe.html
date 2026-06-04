@@ -12,14 +12,15 @@
   {% if item.ja_exportada %}<span class="pill ja">já exportada</span>{% else %}<span class="pill nova">nova</span>{% endif %}
 </div>
 
-{# ---------- herói: tudo para a decisão de lançamento ---------- #}
+{# ---------- herói: resumo para a decisão de lançamento ----------
+   Sem identidade de prestador/tomador (vive no card "Partes", logo abaixo — sem
+   duplicar). O herói foca o VALOR e os atributos da própria nota; na NFS-e, o aside
+   mostra a relação bruto → (−) retido → (=) líquido. #}
 <section class="hero" aria-label="Resumo para lançamento">
   <div class="hero-main">
     <p class="label"><svg class="icon"><use href="#i-cifrao"/></svg> {{ 'Valor total da nota' if nfe else 'Valor dos serviços' }}</p>
     <p class="figure{{ ' zero' if (r.valor_total if nfe else r.valor_servicos) is ezero else '' }}">{{ (r.valor_total if nfe else r.valor_servicos) | moeda }}</p>
-    <p class="figure-meta"><svg class="icon"><use href="#i-pessoas"/></svg> {{ (r.emit_nome if nfe else r.prest_nome) or '—' }}</p>
     <div class="flagline">
-      <span class="flag"><svg class="icon"><use href="#i-check"/></svg> Optante Simples: {{ (r.emit_optante_simples if nfe else r.prest_optante_simples) | simnao }}</span>
       <span class="flag"><svg class="icon"><use href="#i-id"/></svg> Emissão {{ r.data_emissao | data }}</span>
       {% if not nfe %}
       <span class="flag"><svg class="icon"><use href="#i-servico"/></svg> Competência {{ r.competencia | competencia }}</span>
@@ -31,21 +32,21 @@
       {% endif %}
     </div>
   </div>
+  {% if not nfe %}
   <div class="hero-aside">
-    <div class="progress-wrap">
-      <div class="progress-top"><span>{{ 'Destinatário (órgão)' if nfe else 'Tomador (órgão)' }}</span></div>
-      <p class="figure small nome">{{ (r.dest_cnpj | orgao if nfe else r.toma_cnpj | orgao) or (r.dest_nome if nfe else r.toma_nome) or '—' }}</p>
-      <p class="mono muted small">
-        {% set odoc = r.dest_cnpj if nfe else r.toma_cnpj %}
-        {% if odoc %}{{ odoc | cnpj }}{% else %}<span class="falta">— (confira o CNPJ)</span>{% endif %}
-      </p>
+    <div class="resumo-fin" role="group" aria-label="Composição do valor líquido">
+      <div class="rf-linha rf-menos">
+        <span class="rf-rot">(−) Total retido</span>
+        <b class="num rf-retido{{ ' zero' if total_retido is ezero else '' }}">{{ total_retido | moeda }}</b>
+      </div>
+      <div class="rf-linha rf-igual">
+        <span class="rf-rot">(=) Valor líquido</span>
+        <b class="num{{ ' zero' if r.valor_liquido is ezero else '' }}">{{ r.valor_liquido | moeda }}</b>
+      </div>
+      <p class="rf-fonte"><svg class="icon"><use href="#i-doc"/></svg> valores destacados pelo emitente</p>
     </div>
-    {% if not nfe %}
-    <div class="progress-wrap">
-      <div class="progress-top"><span>Valor líquido</span><span><b>{{ r.valor_liquido | moeda }}</b></span></div>
-    </div>
-    {% endif %}
   </div>
+  {% endif %}
 </section>
 
 {% if nfe %}
@@ -97,6 +98,7 @@
       <dt>Natureza da operação</dt><dd>{{ r.natureza_operacao or '—' }}</dd>
       <dt>Data de emissão</dt><dd class="num">{{ r.data_emissao | datahora }}</dd>
     </dl>
+    {% include "_portal_conferencia.html" %}
   </div></section>
 
 {% else %}
@@ -123,7 +125,11 @@
 
   <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-doc"/></svg> Serviço</h3></div><div class="card-b">
     <dl class="grid">
-      <dt>Código (LC 116)</dt><dd class="num">{{ r.codigo_servico or '—' }}</dd>
+      <dt>Código (LC 116)</dt>
+      <dd>{% if r.codigo_servico %}<span class="num">{{ r.codigo_servico }}</span>
+          {% set desc = r.codigo_servico | lc116 %}
+          {% if desc %}— {{ desc }}{% else %}<span class="muted">— (descrição não localizada na LC 116)</span>{% endif %}
+          {% else %}—{% endif %}</dd>
       <dt>Local da prestação</dt><dd>{{ r.municipio_nome or r.local_prestacao or '—' }}</dd>
       <dt>Local do prestador</dt><dd>{{ r.prest_municipio or r.local_prestador or '—' }}</dd>
     </dl>
@@ -131,98 +137,109 @@
     <div class="discr">{{ r.discriminacao or '— (sem discriminação)' }}</div>
   </div></section>
 
-  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-cifrao"/></svg> Valores e tributos</h3></div><div class="card-b">
-    <div class="declarado">
-      <p class="note"><span class="chip">destaque do emitente</span> Lido como destacado pelo emitente — não é apuração (Fase 2).</p>
-      <dl class="grid">
-        <dt>Valor dos serviços</dt><dd class="num{{ ' zero' if r.valor_servicos is ezero else '' }}">{{ r.valor_servicos | moeda }}</dd>
-        <dt>Deduções</dt><dd class="num{{ ' zero' if r.deducoes is ezero else '' }}">{{ r.deducoes | moeda }}</dd>
-        <dt>Base de cálculo</dt><dd class="num{{ ' zero' if r.base_calculo is ezero else '' }}">{{ r.base_calculo | moeda }}</dd>
-        <dt>ISS (alíquota / valor)</dt><dd class="num">{{ r.iss_aliquota_destaque_emitente | percent }} · <span class="{{ 'zero' if r.iss_valor_destaque_emitente is ezero else '' }}">{{ r.iss_valor_destaque_emitente | moeda }}</span></dd>
-        <dt>ISS retido (indicador)</dt><dd class="num">{{ r.iss_retido_destaque_emitente or '—' }}</dd>
-        <dt>Valor líquido</dt><dd class="num{{ ' zero' if r.valor_liquido is ezero else '' }}">{{ r.valor_liquido | moeda }}</dd>
-      </dl>
-      <p class="overline mt-3">Retenções federais</p>
-      <dl class="tax-grid mt-3">
-        {% for rot, val in [('IR', r.ir_destaque_emitente), ('PIS', r.pis_destaque_emitente),
-                            ('COFINS', r.cofins_destaque_emitente), ('CSLL', r.csll_destaque_emitente),
-                            ('INSS', r.inss_destaque_emitente)] %}
-          <div class="cell"><dt>{{ rot }}</dt><dd class="{{ 'zero' if val is ezero else '' }}">{{ val | moeda }}</dd></div>
-        {% endfor %}
-      </dl>
-    </div>
-  </div></section>
-
-  {# ---------- Conferência contra o contrato (Fase 2 — sugestão, não decide) ---------- #}
-  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-check"/></svg> Conferência contra o contrato</h3></div><div class="card-b">
-    {% if not conf or conf.estado == 'sem_npp' %}
-      <p class="muted small">Esta nota não está vinculada a uma NPP. A conferência usa o contrato da NPP — importe a nota dentro de uma NPP para conferir as retenções.</p>
+  {# ---------- Retenções e conferência (Fase 1 destaque + Fase 2 sugestão) ----------
+     O destaque do emitente (I-2) vive AQUI agrupado — INSS → federais → ISS — para não
+     duplicar com um card de valores. Quando há contrato, sobrepõe regra/esperado/situação
+     por tributo: sugestão para conferência, nada aplicado (I-3). #}
+  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-check"/></svg> Retenções e conferência contra o contrato</h3></div><div class="card-b">
+    {% set temconf = conf and conf.estado == 'ok' %}
+    {% if conf.estado == 'sem_npp' %}
+      <p class="muted small">Nota não vinculada a uma NPP — abaixo, apenas o <strong>destaque do emitente</strong> (extração fiel). A conferência contra o contrato aparece ao importar a nota dentro de uma NPP.</p>
     {% elif conf.estado == 'sem_contrato' %}
-      <p class="muted small">A NPP desta nota não tem contrato associado. Cadastre/edite em <a href="{{ url_for('contratos') }}">Contratos</a> para conferir as retenções.</p>
+      <p class="muted small">A NPP desta nota não tem contrato — abaixo, apenas o <strong>destaque do emitente</strong>. Cadastre/edite em <a href="{{ url_for('contratos') }}">Contratos</a> para conferir.</p>
     {% else %}
-      {% set res = conf.resultado %}
-      <p class="note"><span class="chip">contrato {{ res.contrato_rotulo }}</span> Comparação da regra declarada com o destaque do emitente. É <strong>sugestão para conferência</strong> — nada é aplicado (Fase 2).</p>
+      <p class="note"><span class="chip">contrato {{ conf.resultado.contrato_rotulo }}</span> Comparação da regra declarada com o destaque do emitente. É <strong>sugestão para conferência</strong> — nada é aplicado (Fase 2).</p>
       {% if conf.federal_origem == 'ajustado' %}
       <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> Enquadramento federal <strong>ajustado pelo operador</strong>{% if conf.federal_codigo %} (sobre a regra {{ conf.federal_codigo }}){% endif %} — não veio do catálogo padrão.{% if conf.federal_justificativa %} Justificativa: “{{ conf.federal_justificativa }}”.{% endif %}</p></div>
       {% elif conf.federal_codigo %}
       <p class="muted small">Enquadramento federal derivado da regra <span class="chip">{{ conf.federal_codigo }}</span> do catálogo.</p>
       {% endif %}
+    {% endif %}
+
+    {% for g in conf.grupos %}
+    <div class="conf-grupo camada-{{ g.key }}{{ ' tem-diverge' if g.diverge }}">
+      <div class="cg-head">
+        <span class="cg-nome">{{ g.label }}</span>
+        {% if g.key == 'federal' and (g.codigo or g.aliquota_txt) %}
+          <span class="cg-meta">{% if g.codigo %}cód. <strong>{{ g.codigo }}</strong>{% endif %}{% if g.aliquota_txt %} · {{ g.aliquota_txt }}{% endif %}</span>
+        {% elif g.key == 'iss' %}
+          <span class="cg-meta">
+            {% if r.iss_aliquota_destaque_emitente %}alíq. {{ r.iss_aliquota_destaque_emitente | percent }} · {% endif %}base {{ r.base_calculo | moeda }}{% if r.deducoes is not ezero %} · deduções {{ r.deducoes | moeda }}{% endif %} · {{ 'retido' if r.iss_retido_destaque_emitente in ('2', '3') else 'não retido' }}
+          </span>
+        {% endif %}
+        {% if g.key == 'federal' and g.soma_destaque is not none %}<span class="cg-soma"><span class="ov">Σ destaque</span> <b class="num">{{ g.soma_destaque | moeda }}</b></span>{% endif %}
+      </div>
       <table class="conf-tab">
-        <thead><tr><th>Tributo</th><th>Regra do contrato</th><th class="num">Destaque emitente</th><th class="num">Esperado (sugestão)</th><th>Situação</th></tr></thead>
+        <thead><tr>
+          {% if g.key == 'federal' %}<th>Tributo</th>{% endif %}
+          {% if temconf %}<th>Regra</th>{% endif %}
+          <th class="num">Destaque emitente</th>
+          {% if temconf %}<th class="num">Esperado</th><th>Situação</th>{% endif %}
+        </tr></thead>
         <tbody>
-          {% for a in res.achados %}
-          <tr>
-            <td><strong>{{ a.tributo }}</strong></td>
-            <td class="small">{{ a.regra }}{% if a.nota %}<br><span class="muted">{{ a.nota }}</span>{% endif %}</td>
-            <td class="num {{ 'zero' if a.destaque_emitente is ezero else '' }}">{{ a.destaque_emitente | moeda }}</td>
-            <td class="num {{ 'zero' if a.esperado is ezero else '' }}">{% if a.esperado is not none %}{{ a.esperado | moeda }}{% else %}—{% endif %}</td>
+          {% for l in g.linhas %}
+          <tr{% if l.situacao == 'diverge' %} class="linha-diverge"{% endif %}>
+            {% if g.key == 'federal' %}<td><strong>{{ l.tributo }}</strong></td>{% endif %}
+            {% if temconf %}<td class="small">{% if l.regra %}{{ l.regra }}{% if l.obs %}<br><span class="muted">{{ l.obs }}</span>{% endif %}{% else %}<span class="muted">não previsto no contrato</span>{% endif %}</td>{% endif %}
+            <td class="num {{ 'zero' if l.destaque is ezero else '' }}">{{ l.destaque | moeda }}</td>
+            {% if temconf %}
+            <td class="num {{ 'zero' if l.esperado is ezero else '' }}">{% if l.esperado is not none %}{{ l.esperado | moeda }}{% else %}—{% endif %}</td>
             <td>
-              {% if a.situacao == 'confere' %}<span class="selo confere">confere</span>
-              {% elif a.situacao == 'diverge' %}<span class="selo diverge">diverge — confira</span>
-              {% else %}<span class="selo indef">indefinido</span>{% endif %}
+              {% if l.situacao == 'confere' %}<span class="selo confere">confere</span>
+              {% elif l.situacao == 'diverge' %}<span class="selo diverge">diverge — confira</span>
+              {% elif l.situacao == 'indefinido' %}<span class="selo indef">indefinido</span>
+              {% else %}<span class="muted small">—</span>{% endif %}
             </td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>
       </table>
-      <p class="note-foot">O “esperado” deriva da regra que o especialista cadastrou no contrato e da sua marcação de material — é um apoio à conferência, <strong>nunca uma retenção aplicada</strong>. A apuração definitiva é da Fase 2.</p>
-    {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if temconf %}<p class="note-foot">O “esperado” deriva da regra que o especialista cadastrou no contrato e da sua marcação de material — é um apoio à conferência, <strong>nunca uma retenção aplicada</strong>. A apuração definitiva é da Fase 2.</p>{% endif %}
   </div></section>
 
-  <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-alerta"/></svg> Material aplicado — conferência humana</h3></div><div class="card-b">
+  {# ---------- Material aplicado — marcação humana (I-4), compacta ----------
+     O texto livre (discriminação) vive no card "Serviço". Aqui o operador resolve a
+     ambiguidade e marca; a leitura da máquina é só apoio, nunca decide (I-3). #}
+  <section class="card material-card"><div class="card-h">
+    <h3><svg class="icon"><use href="#i-alerta"/></svg> Material aplicado</h3>
     {% if item.marcacao %}
-      <p class="muted small">Marcação vigente: <strong>{{ item.marcacao.valor|upper }}</strong>{% if item.marcacao.valor_material %} — material {{ item.marcacao.valor_material | moeda }}{% endif %} — por {{ item.marcacao.autor }} em {{ item.marcacao.marcado_em | datahora }}.</p>
+      <span class="mat-status">material: <strong>{{ item.marcacao.valor|upper }}</strong>{% if item.marcacao.valor_material %} · {{ item.marcacao.valor_material | moeda }}{% endif %}</span>
     {% else %}
-      <p class="muted small">Ainda não conferido.</p>
+      <span class="mat-status pend">não conferido</span>
     {% endif %}
+  </div><div class="card-b">
+    {% if item.marcacao %}<p class="mat-audit">Registrado por {{ item.marcacao.autor }} em {{ item.marcacao.marcado_em | datahora }}.</p>{% endif %}
 
     {% if sugestao and (sugestao.presenca or sugestao.valor) %}
-      <div class="sugestao" role="note">
-        <p class="sug-titulo"><svg class="icon"><use href="#i-alerta"/></svg> Sugestão da máquina (confira no texto acima — não é decisão)</p>
-        <p class="sug-corpo">
-          {% if sugestao.presenca == 'nao' %}O texto parece indicar <strong>sem material</strong>.{% endif %}
-          {% if sugestao.presenca == 'sim' %}O texto menciona <strong>material</strong>{% if sugestao.valor %}, possível valor <strong>{{ sugestao.valor | moeda }}</strong>{% endif %}.{% endif %}
-          {% if sugestao.trecho %}<br><span class="muted small">Trecho: “{{ sugestao.trecho }}”</span>{% endif %}
-        </p>
-      </div>
+    <p class="mat-hint">
+      <svg class="icon"><use href="#i-busca"/></svg>
+      <span><span class="mh-rot">leitura da máquina · não decide</span> {% if sugestao.presenca == 'nao' %}o texto parece indicar <strong>sem material</strong>{% elif sugestao.presenca == 'sim' %}o texto menciona <strong>material</strong>{% if sugestao.valor %}, possível <strong>{{ sugestao.valor | moeda }}</strong>{% endif %}{% endif %}{% if sugestao.trecho %} — <span class="muted">“{{ sugestao.trecho }}”</span>{% endif %}</span>
+    </p>
     {% endif %}
 
-    <form method="post" action="{{ url_for('marcar', chave=r.chave) }}">
-      <fieldset>
-        <legend>Houve emprego de material neste serviço?</legend>
-        <div class="radio-row">
-          <label class="opt"><input type="radio" name="material" value="sim" data-mostra-material {{ 'checked' if sugestao and sugestao.presenca == 'sim' }}> Sim, houve material</label>
-          <label class="opt"><input type="radio" name="material" value="nao" data-mostra-material {{ 'checked' if sugestao and sugestao.presenca == 'nao' }}> Não houve material</label>
-        </div>
-        <label class="field" id="campo-valor-material" for="valor_material">
-          <span class="lbl">Valor do material (R$) — confira no texto e ajuste</span>
-          <input type="text" id="valor_material" name="valor_material" inputmode="decimal"
-                 placeholder="0,00" value="{{ sugestao.valor | numero if sugestao and sugestao.valor else '' }}">
-        </label>
-        <button class="btn" type="submit"><svg class="icon"><use href="#i-check"/></svg> Registrar marcação</button>
-      </fieldset>
+    {# Estado da escolha: já marcado → reflete a marcação; senão → leitura da máquina (apoio).
+       Já marcado trava os controles e mostra "Alterar" (JS); sem JS o form segue editável. #}
+    {% set mat_atual = item.marcacao.valor if item.marcacao else (sugestao.presenca if sugestao else None) %}
+    {% set val_atual = item.marcacao.valor_material if (item.marcacao and item.marcacao.valor_material) else (sugestao.valor if sugestao and sugestao.valor else None) %}
+    <form method="post" action="{{ url_for('marcar', chave=r.chave) }}" class="mat-form" data-mat-marcado="{{ '1' if item.marcacao else '' }}">
+      <span class="mat-q">Houve emprego de material?</span>
+      <div class="radio-row">
+        <label class="opt"><input type="radio" name="material" value="sim" data-mostra-material {{ 'checked' if mat_atual == 'sim' }}> Sim</label>
+        <label class="opt"><input type="radio" name="material" value="nao" data-mostra-material {{ 'checked' if mat_atual == 'nao' }}> Não</label>
+      </div>
+      <label class="field inline" id="campo-valor-material" for="valor_material">
+        <span class="lbl">Valor (R$)</span>
+        <input type="text" id="valor_material" name="valor_material" inputmode="decimal"
+               placeholder="0,00" value="{{ val_atual | numero if val_atual else '' }}">
+      </label>
+      <button class="btn" type="submit" data-mat-registrar><svg class="icon"><use href="#i-check"/></svg> {{ 'Salvar alteração' if item.marcacao else 'Registrar' }}</button>
+      {% if item.marcacao %}<button type="button" class="btn ghost" data-mat-alterar><svg class="icon"><use href="#i-config"/></svg> Alterar marcação</button>{% endif %}
     </form>
-    <p class="note-foot">A marcação é gravada com data (auditável). O valor do material é o que <strong>você</strong> valida lendo a descrição — a sugestão da máquina nunca é aplicada sozinha. A apuração que usa esta marcação é a Fase 2, fora deste MVP.</p>
+    <p class="note-foot">Gravada com data, auditável (I-4). O valor é o que <strong>você</strong> valida lendo a discriminação — a leitura da máquina nunca é aplicada sozinha. A apuração que a usa é a Fase 2.</p>
   </div></section>
 
   <section class="card"><div class="card-h"><h3><svg class="icon"><use href="#i-id"/></svg> Identificação</h3></div><div class="card-b">
@@ -233,6 +250,7 @@
       <dt>Competência</dt><dd class="num">{{ r.competencia | competencia }}</dd>
       <dt>Data de emissão</dt><dd class="num">{{ r.data_emissao | datahora }}</dd>
     </dl>
+    {% include "_portal_conferencia.html" %}
   </div></section>
 {% endif %}
 {% endblock %}

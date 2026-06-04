@@ -466,6 +466,22 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .note-foot { color: var(--ink-3); font-size: .8rem; line-height: 1.6; margin-top: var(--sp-4); }
 .note-foot code { font-family: var(--font-mono); font-size: .92em; }
 
+/* conferência no portal nacional (detalhe da nota) */
+.portal-conf { margin-top: var(--sp-4); }
+.portal-conf .copiado { margin-left: var(--sp-3); color: var(--ok-ink); font-size: .85rem; font-weight: 600; }
+
+/* grupos de tributos no detalhe (INSS / federais / ISS) — distinção por acento à esquerda */
+.conf-grupo { border: 1px solid var(--line); border-left: 4px solid var(--line-strong); border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-4) var(--sp-4); margin-top: var(--sp-4); }
+.conf-grupo.camada-inss    { border-left-color: var(--primary); }
+.conf-grupo.camada-federal { border-left-color: var(--declarado); }
+.conf-grupo.camada-iss     { border-left-color: var(--ok); }
+.conf-grupo .cg-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2) var(--sp-3); }
+.conf-grupo .cg-nome { font-weight: 700; font-size: .95rem; }
+.conf-grupo .cg-meta { color: var(--ink-3); font-size: .8rem; }
+.conf-grupo .cg-soma { margin-left: auto; font-size: .82rem; color: var(--ink-2); }
+.conf-grupo .cg-soma .ov { color: var(--ink-3); }
+.conf-grupo .conf-tab { margin-top: var(--sp-2); }
+
 /* ---------- painel-herói (número como protagonista) ----------
    Usado na lista (prontidão do lote) e no consolidado (totais do pagamento).
    "Moderno" = hierarquia forte + profundidade, não cor nova: o gradiente reusa
@@ -506,6 +522,46 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .hero .stat b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
 .hero .stat.warn { color: var(--warn-ink); }
 .hero .hero-aside .btn { width: 100%; justify-content: center; }
+/* composição do líquido no herói (NFS-e): bruto → (−) retido → (=) líquido */
+.hero .resumo-fin { display: flex; flex-direction: column; gap: var(--sp-2); }
+.hero .rf-linha { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-3); font-size: .9rem; color: var(--ink-2); }
+.hero .rf-linha .rf-rot { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.hero .rf-linha .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; white-space: nowrap; }
+.hero .rf-igual { border-top: 1px solid var(--line); padding-top: var(--sp-3); margin-top: var(--sp-1); }
+.hero .rf-igual .rf-rot { font-weight: 700; color: var(--ink); }
+.hero .rf-igual .num { font-size: 1.3rem; }
+/* retido com um pouco mais de peso e tinta "declarado" — a cor já sinaliza a procedência */
+.hero .rf-retido { font-size: 1.05rem; color: var(--declarado-ink); background: var(--declarado-bg); padding: .1rem .45rem; border-radius: var(--radius-sm); }
+.hero .rf-retido.zero { background: transparent; color: var(--ink-3); }
+/* legenda discreta da procedência (substitui o chip em caixa-alta) */
+.hero .rf-fonte { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-2) 0 0; font-size: .72rem; color: var(--declarado-ink); }
+.hero .rf-fonte .icon { opacity: .75; }
+
+/* card "Material aplicado" — compacto: status no cabeçalho, form em uma linha */
+.material-card .card-h { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.mat-status { font-size: .72rem; font-weight: 600; padding: .12rem .55rem; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
+.mat-status strong { color: var(--ink); }
+.mat-status.pend { background: var(--warn-bg); color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.mat-audit { margin: var(--sp-1) 0 0; font-size: .75rem; color: var(--ink-3); }
+.mat-hint { display: flex; align-items: flex-start; gap: var(--sp-2); margin: var(--sp-3) 0 0; padding: var(--sp-2) var(--sp-3); background: var(--info-bg); border-radius: var(--radius-sm); font-size: .82rem; color: var(--ink-2); line-height: 1.5; }
+.mat-hint .icon { color: var(--info); margin-top: .12rem; flex: none; }
+.mat-hint .mh-rot { font-size: .66rem; text-transform: uppercase; letter-spacing: .03em; color: var(--info-ink); font-weight: 700; margin-right: var(--sp-1); }
+.mat-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-top: var(--sp-4); }
+.mat-form .mat-q { font-size: .92rem; font-weight: 600; color: var(--ink); }
+.mat-form .radio-row { margin: 0; gap: var(--sp-4); }
+.mat-form .field.inline { display: inline-flex; align-items: center; gap: var(--sp-2); margin: 0; }
+.mat-form .field.inline[hidden] { display: none; }
+.mat-form .field.inline .lbl { margin: 0; }
+.mat-form .field.inline input[type="text"] { width: 7rem; }
+.mat-form [data-mat-registrar] { margin-left: auto; }
+/* alternância marcado↔edição: "Alterar" só aparece quando travado; "Registrar/Salvar" só ao editar */
+.mat-form [data-mat-alterar] { display: none; margin-left: auto; }
+.mat-form.travado [data-mat-registrar] { display: none; }
+.mat-form.travado [data-mat-alterar] { display: inline-flex; }
+/* controles travados (já marcado): leitura clara de "bloqueado" — opção escolhida em
+   destaque, as demais esmaecidas (degrada: sem :has, todas ficam esmaecidas) */
+.mat-form.travado .opt { cursor: default; color: var(--ink-3); }
+.mat-form.travado .radio-row .opt:has(input:checked) { color: var(--ink); font-weight: 600; }
 @media (max-width: 720px) {
   .hero .hero-aside { padding-left: 0; border-left: none; border-top: 1px solid var(--line); padding-top: var(--sp-4); }
 }

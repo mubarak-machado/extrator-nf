@@ -33,6 +33,9 @@ from tronco.contratos import (StoreContratos, Contrato,
                               IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL)
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
 from tronco import formato, redefinicao, orgaos
+from tronco.portais import portal_consulta
+from tronco.retencao_federal import pct_txt
+from galho_nfse.lc116 import descricao_servico
 from tronco.util import agora as agora_maquina
 from galho_nfse.material import sugerir_material
 from galho_nfse import retencao, enquadramento, tabela_in1234
@@ -55,6 +58,11 @@ for nome in ("moeda", "numero", "data", "datahora", "competencia",
 # Razão social canônica de um órgão tomador conhecido (por CNPJ) — só exibição,
 # não toca a extração fiel (I-2). `{{ cnpj | orgao }}` devolve o nome ou None.
 app.jinja_env.filters["orgao"] = orgaos.nome
+
+# Descrição oficial do serviço pela LC 116/2003 a partir do código (cTribNac) —
+# referência/exibição, não extração (I-2). `{{ codigo | lc116 }}` devolve a redação
+# do subitem ou None (a tela mostra "descrição não localizada", sem inventar — I-6).
+app.jinja_env.filters["lc116"] = descricao_servico
 
 # Teste Jinja: `{{ valor is ezero }}` atenua (não esconde) valores zerados.
 app.jinja_env.tests["ezero"] = formato.ezero
@@ -189,9 +197,12 @@ def detalhe(chave):
             sugestao = (sugerir_material(item["reg"].discriminacao)
                         if item["tipo"] == "NFSE" else None)
             conf = _conferencia(item) if item["tipo"] == "NFSE" else None
+            total_retido = (_total_retido_destaque(item["reg"])
+                            if item["tipo"] == "NFSE" else None)
             npp = _obter_npp(item["npp_id"]) if item.get("npp_id") else None
             return render_template("detalhe.html", item=item, sugestao=sugestao,
-                                   conf=conf, npp=npp)
+                                   conf=conf, npp=npp, total_retido=total_retido,
+                                   portal=portal_consulta(item["tipo"]))
     flash("Nota não encontrada.", "erro")
     return redirect(url_for("hub"))
 
@@ -199,23 +210,134 @@ def detalhe(chave):
 def _conferencia(item):
     """Confere a nota contra a regra do contrato da SUA NPP (vínculo explícito, não
     mais heurística por CNPJ). Read-only, sugestão (I-3); o contrato é sempre único
-    (some o estado 'varios'). Despacha por tipo (galhos independentes)."""
+    (some o estado 'varios'). Despacha por tipo (galhos independentes).
+
+    Sempre devolve `grupos` (INSS → federais → ISS) com o DESTAQUE do emitente
+    (Fase 1, I-2), mesmo sem NPP/contrato — assim a nota não vinculada ainda mostra
+    o que foi lido. Quando há contrato, os grupos recebem regra/esperado/situação por
+    tributo (conferência, sugestão I-3)."""
+    reg = item["reg"]
     npp_id = item.get("npp_id")
     if not npp_id:
-        return {"estado": "sem_npp"}
+        return {"estado": "sem_npp", "grupos": _grupos_conferencia(reg, None, None)}
     npp = _obter_npp(npp_id)
     if not npp:
-        return {"estado": "sem_npp"}
+        return {"estado": "sem_npp", "grupos": _grupos_conferencia(reg, None, None)}
     store = StoreContratos(); contrato = store.obter(npp.contrato_id); store.fechar()
     if not contrato:
-        return {"estado": "sem_contrato"}
+        return {"estado": "sem_contrato", "grupos": _grupos_conferencia(reg, None, None)}
     marc = item["marcacao"]
     marcado = marc.get("valor") if marc else None
-    resultado = _conferir_por_tipo(item["reg"], item["tipo"], contrato, marcado)
+    resultado = _conferir_por_tipo(reg, item["tipo"], contrato, marcado)
     return {"estado": "ok", "resultado": resultado,
+            "grupos": _grupos_conferencia(reg, resultado, contrato),
             "federal_origem": contrato.ret_federal_origem,
             "federal_codigo": contrato.ret_federal_regra_codigo,
             "federal_justificativa": contrato.ret_federal_justificativa}
+
+
+# Grupos de tributos do detalhe da NFS-e: INSS → federais (4) → ISS, espelhando a
+# aba "Grupos de impostos". Cada grupo sempre exibe o DESTAQUE do emitente (Fase 1,
+# I-2); a regra/esperado/situação por tributo entram quando há contrato (Fase 2,
+# sugestão I-3). Os 4 federais agregam sob o código de receita e a alíquota derivada.
+_GRUPOS_DETALHE = (
+    ("inss", "INSS", ("INSS",)),
+    ("federal", "Tributos federais", ("IR", "CSLL", "COFINS", "PIS")),
+    ("iss", "ISS", ("ISS",)),
+)
+_DESTAQUE_POR_TRIBUTO = {
+    "IR": "ir_destaque_emitente", "CSLL": "csll_destaque_emitente",
+    "COFINS": "cofins_destaque_emitente", "PIS": "pis_destaque_emitente",
+    "INSS": "inss_destaque_emitente", "ISS": "iss_valor_destaque_emitente",
+}
+
+
+# Prefixos de tributo nas regras (o mais longo antes do mais curto: "ISS retido" > "ISS").
+_PREFIXOS_REGRA = ("IR", "CSLL", "COFINS", "PIS", "INSS", "ISS retido", "ISS")
+
+
+def _regra_aliquota(regra):
+    """Para a conferência do detalhe: remove o nome do tributo (já está na coluna/grupo)
+    e rotula o detalhe como "alíquota" — ex.: "INSS 11%" → "alíquota 11%";
+    "ISS retido 5%, subitem 7.02" → "alíquota 5%, subitem 7.02". Evita duplicar o termo."""
+    if not regra:
+        return regra
+    for p in _PREFIXOS_REGRA:
+        if regra.startswith(p):
+            resto = regra[len(p):].lstrip(" ,·-")
+            return "alíquota " + resto if resto else regra
+    return regra
+
+
+def _dec(v):
+    """Decimal de um valor canônico (str/Decimal) ou None se vazio/inválido."""
+    if v in (None, ""):
+        return None
+    try:
+        return Decimal(str(v))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _grupos_conferencia(reg, resultado, contrato):
+    """Monta os 3 grupos (INSS/federais/ISS) com o destaque do emitente por tributo e,
+    quando há `resultado`, sobrepõe a regra/esperado/situação do achado correspondente.
+    As somas são de CONFERÊNCIA dos destaques fiéis (I-2: nada apurado)."""
+    por_trib = {a.tributo: a for a in resultado.achados} if resultado else {}
+    grupos = []
+    for key, label, tributos in _GRUPOS_DETALHE:
+        linhas = []
+        soma_d = Decimal("0"); soma_e = Decimal("0")
+        tem_d = tem_e = diverge = False
+        for t in tributos:
+            destaque = getattr(reg, _DESTAQUE_POR_TRIBUTO[t], None)
+            a = por_trib.get(t)
+            dd = _dec(destaque)
+            if dd is not None:
+                soma_d += dd; tem_d = True
+            ee = _dec(a.esperado) if a else None
+            if ee is not None:
+                soma_e += ee; tem_e = True
+            if a and a.situacao == "diverge":
+                diverge = True
+            linhas.append({
+                "tributo": t, "destaque": destaque,
+                "regra": _regra_aliquota(a.regra) if a else None,
+                "esperado": a.esperado if a else None,
+                "situacao": a.situacao if a else None,
+                "obs": a.nota if a else "",
+            })
+        grupo = {"key": key, "label": label, "linhas": linhas,
+                 "soma_destaque": format(soma_d, "f") if tem_d else None,
+                 "soma_esperado": format(soma_e, "f") if tem_e else None,
+                 "diverge": diverge}
+        if key == "federal":
+            cod = next((getattr(por_trib.get(t), "codigo", None)
+                        for t in tributos if por_trib.get(t)
+                        and getattr(por_trib.get(t), "codigo", None)), None)
+            grupo["codigo"] = cod or (contrato.ret_federal_codigo_receita if contrato else None)
+            pct = _federal_agregada_pct(contrato) if contrato else None
+            grupo["aliquota_txt"] = pct_txt(pct) if pct is not None else None
+        grupos.append(grupo)
+    return grupos
+
+
+def _total_retido_destaque(reg):
+    """Soma dos tributos RETIDOS destacados pelo emitente (I-2: soma de valores fiéis,
+    não apuração) — IR/PIS/COFINS/CSLL/INSS sempre; ISS só quando o indicador diz
+    retido (tpRetISSQN ∈ {2,3}). Devolve string canônica, ou None se nenhum presente."""
+    valores = [reg.ir_destaque_emitente, reg.pis_destaque_emitente,
+               reg.cofins_destaque_emitente, reg.csll_destaque_emitente,
+               reg.inss_destaque_emitente]
+    iss_retido = str(reg.iss_retido_destaque_emitente or "").strip() in ("2", "3")
+    if iss_retido:
+        valores.append(reg.iss_valor_destaque_emitente)
+    total = Decimal("0"); algum = False
+    for v in valores:
+        d = _dec(v)
+        if d is not None:
+            total += d; algum = True
+    return format(total, "f") if algum else None
 
 
 @app.route("/marcar/<chave>", methods=["POST"])

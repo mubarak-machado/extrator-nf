@@ -1496,3 +1496,72 @@ def test_npp_ajustes_ui_municipio_diverge_colapsavel(tmp_path, monkeypatch):
     assert html.count('class="grupo-colapsavel"') == 3
     # #4: botão "Confirmar os que conferem" presente em algum grupo
     assert 'Confirmar os que conferem' in html
+
+
+# ---------- Conferência no portal nacional (conveniência, não extração) ----------
+
+def test_portal_consulta_aponta_para_o_ambiente_nacional():
+    """Cada tipo aponta para o portal nacional oficial de consulta pública; tipo
+    desconhecido NÃO inventa link (ausência visível — I-6). É conveniência de
+    navegação, não extração de dado fiscal (I-2)."""
+    from tronco.portais import portal_consulta
+    nfe = portal_consulta("NFE")
+    assert nfe and "nfe.fazenda.gov.br" in nfe["url"]
+    nfse = portal_consulta("NFSE")
+    assert nfse and "nfse.gov.br" in nfse["url"]
+    assert portal_consulta("OUTRO") is None
+    assert portal_consulta(None) is None
+
+
+# ---------- Descrição do serviço pela LC 116/2003 (referência, não extração) ----------
+
+def test_lc116_descricao_do_codigo_de_servico():
+    """O cTribNac de 6 dígitos deriva o subitem (4 primeiros) e busca a redação
+    oficial; código não localizado devolve None (a tela não inventa — I-6)."""
+    from galho_nfse.lc116 import descricao_servico, subitem_de, LISTA_LC116
+    assert len(LISTA_LC116) >= 200          # lista completa transcrita
+    assert subitem_de("070201") == "7.02"
+    assert descricao_servico("070201").startswith("Execução, por administração")
+    assert descricao_servico("17.02").startswith("Datilografia")   # aceita subitem direto
+    assert descricao_servico("999999") is None
+    assert descricao_servico(None) is None
+
+
+# ---------- Detalhe NFS-e: total retido (destaque) e grupos de tributos ----------
+
+def test_total_retido_destaque_soma_federais_inss_e_iss_so_quando_retido():
+    """Soma os destaques retidos (I-2: soma de valores fiéis, não apuração). ISS só
+    entra quando o indicador diz retido (tpRetISSQN ∈ {2,3})."""
+    from tronco.app import _total_retido_destaque
+    com_mat = _reg("nfse_com_material.xml")     # ISS indicador '1' (não retido)
+    assert _total_retido_destaque(com_mat) == "458.50"   # só federais; ISS fora
+    simples = _reg("nfse_simples.xml")           # ISS indicador '2' (retido), federais 0
+    assert _total_retido_destaque(simples) == "90.00"    # só o ISS retido
+
+
+def test_grupos_conferencia_ordena_inss_federais_iss_com_destaque_e_sugestao():
+    """Três grupos na ordem INSS → federais → ISS; cada um exibe o destaque do emitente
+    (sempre, Fase 1) e, com contrato, a sugestão por tributo (Fase 2). Os federais
+    agregam sob o código de receita."""
+    from tronco.app import _grupos_conferencia, _conferir_por_tipo
+    from tronco.contratos import Contrato
+    reg = _reg("nfse_com_material.xml")
+    # sem contrato: só destaque, sem código/sugestão
+    g0 = _grupos_conferencia(reg, None, None)
+    assert [x["key"] for x in g0] == ["inss", "federal", "iss"]
+    fed0 = next(x for x in g0 if x["key"] == "federal")
+    assert [l["tributo"] for l in fed0["linhas"]] == ["IR", "CSLL", "COFINS", "PIS"]
+    assert fed0["soma_destaque"] == "458.50" and fed0["codigo"] is None
+    assert all(l["esperado"] is None for x in g0 for l in x["linhas"])
+    # com contrato: aparece o código de receita e a sugestão por tributo
+    contrato = Contrato(prest_identificacao="ACME", prest_documento="11222333000181",
+                        prest_natureza="nao_optante", numero="01", ano="2026",
+                        categoria_servico="manutencao_predial", material_previsao="sim_discriminado",
+                        ret_federal_sujeito=True, ret_federal_codigo_receita="6190",
+                        ret_federal_csll=True, ret_federal_cofins=True, ret_federal_pis=True,
+                        iss_retido_tomador=True, iss_aliquota="5")
+    res = _conferir_por_tipo(reg, "NFSE", contrato, "sim")
+    g1 = _grupos_conferencia(reg, res, contrato)
+    fed1 = next(x for x in g1 if x["key"] == "federal")
+    assert fed1["codigo"] == "6190" and fed1["aliquota_txt"]
+    assert any(l["esperado"] is not None for l in fed1["linhas"])
