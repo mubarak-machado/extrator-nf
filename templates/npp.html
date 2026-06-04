@@ -155,20 +155,6 @@
     </form>
     </div>
 
-    {% if material_pendente %}
-    <div class="atencao mb-3">
-      <p class="note"><svg class="icon"><use href="#i-alerta"/></svg> {{ material_pendente }} nota(s) de serviço com <strong>material não conferido</strong> — isso afeta o IR e a base do INSS. Confira na nota (aba "Documentos de origem") antes de validar esses tributos.</p>
-    </div>
-    {% endif %}
-
-    <div class="declarado mb-5">
-      <p class="note">
-        Três camadas, lado a lado: <span class="chip">destaque do emitente</span> (transcrição fiel da nota, Fase 1 — nunca alterada),
-        <span class="chip">sugestão</span> da regra do contrato (Fase 2, <strong>só para você comparar</strong> — o sistema não a adota)
-        e a sua <strong>validação</strong> (confirmar o destaque ou retificar o valor). Só o valor que você valida entra no Total retido e no Líquido.
-      </p>
-    </div>
-
     {% for grupo in grupos %}
     {# Cada grupo é um cartão colapsável, fechado por padrão (#3). O cabeçalho carrega o
        resumo — chips de status e total validado — para o operador saber o que abrir sem
