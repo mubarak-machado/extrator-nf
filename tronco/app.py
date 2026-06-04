@@ -902,13 +902,16 @@ def _grupos_impostos(itens, contrato, val_store=None, marc=None):
                              and r["destaque"] is not None and r["esperado"] is not None)
             # contadores para o resumo no cabeçalho do grupo (apenas exibição — I-6:
             # pendência e divergência ficam visíveis mesmo com o grupo fechado).
+            # "encontradas" = todas as divergências do grupo; "tratadas" = as que já
+            # têm validação do operador. A diferença é o que ainda exige atenção.
             n_pendentes_g = sum(1 for r in rows if r["pendente"])
-            n_diverge_g = sum(1 for r in rows if r["situacao"] == "diverge" and not r["validacao"])
-            n_validados_g = sum(1 for r in rows if r["validacao"] is not None)
+            n_diverge_total = sum(1 for r in rows if r["situacao"] == "diverge")
+            n_diverge_tratadas = sum(1 for r in rows
+                                     if r["situacao"] == "diverge" and r["validacao"] is not None)
             grupo = {"label": label, "key": key, "rows": rows,
                      "total_validado": f"{tot:.2f}", "n_conferem": n_conferem,
                      "n_total": len(rows), "n_pendentes": n_pendentes_g,
-                     "n_diverge": n_diverge_g, "n_validados": n_validados_g}
+                     "n_diverge_total": n_diverge_total, "n_diverge_tratadas": n_diverge_tratadas}
             if key == "federal":
                 grupo["agregados"] = _agregar_federal(rows, contrato)
             grupos.append(grupo)

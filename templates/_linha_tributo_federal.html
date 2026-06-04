@@ -3,8 +3,9 @@
    linha (não se repetem aqui). Mantém data-chave/data-tributo e .cel-validar/.cel-situacao
    para a validação inline (mesmos fragmentos das demais tabelas). Linha divergente ganha
    realce enquanto não validada (#2/I-6). O campo de retificar nunca nasce com a sugestão. #}
-<tr data-chave="{{ r.chave }}" data-tributo="{{ r.tributo }}"{% if r.situacao == 'diverge' and not r.validacao %} class="linha-diverge"{% endif %}>
-  <td>{{ r.tributo }}<span class="sub">{{ r.regra }}</span></td>
+{% set det = r.regra %}{% if det and det.startswith(r.tributo) %}{% set det = det[r.tributo|length:].lstrip(' ,·-') %}{% endif %}
+<tr data-chave="{{ r.chave }}" data-tributo="{{ r.tributo }}"{% if r.situacao == 'diverge' %} data-diverge="1"{% endif %}{% if r.situacao == 'diverge' and not r.validacao %} class="linha-diverge"{% endif %}>
+  <td>{{ r.tributo }}{% if det %}<span class="sub">{{ det }}</span>{% endif %}</td>
   <td class="num{{ ' zero' if r.destaque is ezero else '' }}">{{ r.destaque | moeda if r.destaque is not none else '—' }}</td>
   <td class="num">{% if r.esperado is not none %}<span class="chip">sugestão</span> {{ r.esperado | moeda }}{% else %}<span class="muted">—</span>{% endif %}</td>
   <td class="cel-validar">{% include "_validar_celula.html" %}</td>

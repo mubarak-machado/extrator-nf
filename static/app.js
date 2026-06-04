@@ -221,7 +221,11 @@
       if (!head) return;
       var nTotal = grupoEl.querySelectorAll("tr[data-chave]").length;
       var nPend = grupoEl.querySelectorAll(".cel-situacao .warn").length;
-      var nDiv = grupoEl.querySelectorAll("tr.linha-diverge").length;
+      // divergências: a marca data-diverge é persistente (não some ao validar). Uma
+      // divergência é "tratada" quando a célula de situação mostra "validado" (.ok-chip).
+      var divRows = grupoEl.querySelectorAll("tr[data-diverge]");
+      var nDivTotal = divRows.length, nDivTratadas = 0;
+      divRows.forEach(function (tr) { if (tr.querySelector(".cel-situacao .ok-chip")) nDivTratadas++; });
       function chip(seletor, mostrar, texto) {
         var c = head.querySelector(seletor);
         if (!c) return;
@@ -231,10 +235,13 @@
           if (t) t.textContent = texto;
         }
       }
-      chip(".gh-chip.diverge", nDiv > 0, nDiv + (nDiv === 1 ? " divergência" : " divergências"));
+      function plDiv(n, suf) { var s = n === 1 ? "" : "s"; return n + " divergência" + s + " " + suf + s; }
+      var found = head.querySelector(".gh-chip.found");
+      if (found) found.classList.toggle("alarme", nDivTotal > nDivTratadas);
+      chip(".gh-chip.found", nDivTotal > 0, plDiv(nDivTotal, "encontrada"));
+      chip(".gh-chip.treated", nDivTratadas > 0, plDiv(nDivTratadas, "tratada"));
       chip(".gh-chip.pend", nPend > 0, nPend + " a validar");
-      chip(".gh-chip.ok", nTotal > 0 && nPend === 0, null);
-      chip(".gh-chip.none", nTotal === 0, null);
+      chip(".gh-chip.ok", nTotal > 0 && nPend === 0 && nDivTotal === 0, null);
       var b = head.querySelector("[data-grupo-total-head]");
       if (b && totalTxt != null) b.textContent = totalTxt;
     }

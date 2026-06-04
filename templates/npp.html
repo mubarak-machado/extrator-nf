@@ -179,17 +179,20 @@
         <span class="gh-left">
           <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
           <span class="gh-nome">{{ grupo.label }}</span>
-          <span class="gh-chip diverge"{% if not grupo.n_diverge %} hidden{% endif %}>
+          <span class="gh-chip found{% if grupo.n_diverge_total > grupo.n_diverge_tratadas %} alarme{% endif %}"{% if not grupo.n_diverge_total %} hidden{% endif %}>
             <svg class="icon"><use href="#i-alerta"/></svg>
-            <span data-txt>{{ grupo.n_diverge }} divergência{{ 's' if grupo.n_diverge != 1 }}</span>
+            <span data-txt>{{ grupo.n_diverge_total }} divergência{{ 's' if grupo.n_diverge_total != 1 }} encontrada{{ 's' if grupo.n_diverge_total != 1 }}</span>
+          </span>
+          <span class="gh-chip treated"{% if not grupo.n_diverge_tratadas %} hidden{% endif %}>
+            <svg class="icon"><use href="#i-check"/></svg>
+            <span data-txt>{{ grupo.n_diverge_tratadas }} divergência{{ 's' if grupo.n_diverge_tratadas != 1 }} tratada{{ 's' if grupo.n_diverge_tratadas != 1 }}</span>
           </span>
           <span class="gh-chip pend"{% if not grupo.n_pendentes %} hidden{% endif %}>
             <span data-txt>{{ grupo.n_pendentes }} a validar</span>
           </span>
-          <span class="gh-chip ok"{% if grupo.n_pendentes or not grupo.n_total %} hidden{% endif %}>
+          <span class="gh-chip ok"{% if grupo.n_pendentes or grupo.n_diverge_total or not grupo.n_total %} hidden{% endif %}>
             <svg class="icon"><use href="#i-check"/></svg> validado
           </span>
-          <span class="gh-chip none"{% if grupo.n_total %} hidden{% endif %}>não incide</span>
         </span>
         <span class="gh-total">
           <span class="ov">validado</span>

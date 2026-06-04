@@ -2,7 +2,10 @@
    Contexto: `r` (linha) e `npp`. Renderizado tanto na página quanto como fragmento da
    validação inline (resposta JSON) — por isso é um partial isolado, sem o <td>. #}
 {% if r.validacao %}
-<strong>{{ r.validacao.valor | moeda }}</strong> <span class="sub">{{ r.validacao.acao }} · {{ r.validacao.autor }} · {{ r.validacao.validado_em | datahora }}</span>
+{# Autor fica fora do carimbo inline (operador único; vê-lo sempre não agrega) — mas
+   continua persistido e rastreável no store/histórico/exportação (I-4). Omití-lo aqui
+   também harmoniza a altura da linha entre os três grupos. #}
+<strong>{{ r.validacao.valor | moeda }}</strong> <span class="sub">{{ r.validacao.acao }} · {{ r.validacao.validado_em | datahora }}</span>
 <details class="revalidar">
   <summary>Revalidar</summary>
   {% include "_validar_controles.html" %}
