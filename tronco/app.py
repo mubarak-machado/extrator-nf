@@ -900,8 +900,15 @@ def _grupos_impostos(itens, contrato, val_store=None, marc=None):
                         pass
             n_conferem = sum(1 for r in rows if r["pendente"] and r["situacao"] == "confere"
                              and r["destaque"] is not None and r["esperado"] is not None)
+            # contadores para o resumo no cabeçalho do grupo (apenas exibição — I-6:
+            # pendência e divergência ficam visíveis mesmo com o grupo fechado).
+            n_pendentes_g = sum(1 for r in rows if r["pendente"])
+            n_diverge_g = sum(1 for r in rows if r["situacao"] == "diverge" and not r["validacao"])
+            n_validados_g = sum(1 for r in rows if r["validacao"] is not None)
             grupo = {"label": label, "key": key, "rows": rows,
-                     "total_validado": f"{tot:.2f}", "n_conferem": n_conferem}
+                     "total_validado": f"{tot:.2f}", "n_conferem": n_conferem,
+                     "n_total": len(rows), "n_pendentes": n_pendentes_g,
+                     "n_diverge": n_diverge_g, "n_validados": n_validados_g}
             if key == "federal":
                 grupo["agregados"] = _agregar_federal(rows, contrato)
             grupos.append(grupo)

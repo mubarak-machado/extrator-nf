@@ -580,19 +580,56 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .fed-agregado.fed-diverge > .fed-resumo:hover { background: color-mix(in srgb, var(--warn-bg) 86%, var(--warn)); }
 @media (prefers-reduced-motion: reduce) { .fed-resumo .chev { transition: none; } }
 
-/* grupos de tributos colapsáveis (INSS / Tributos federais / ISS) — #3 */
-.grupo-colapsavel { margin-bottom: var(--sp-5); }
-.grupo-colapsavel > summary {
-  list-style: none; cursor: pointer; user-select: none;
-  display: flex; align-items: center; gap: var(--sp-2);
+/* grupos de tributos colapsáveis (INSS / Tributos federais / ISS) — #3.
+   Cada grupo é um CARTÃO fechado por padrão; o cabeçalho resume status e total
+   para o operador abrir só o que precisa (I-6: pendência/divergência visíveis
+   mesmo fechado). */
+.grupo-colapsavel {
+  margin-bottom: var(--sp-4); border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden;
 }
-.grupo-colapsavel > summary::-webkit-details-marker { display: none; }
-.grupo-colapsavel > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-sm); }
-.grupo-colapsavel > summary .chev { width: .9rem; height: .9rem; opacity: .6; transition: transform .15s ease; }
-.grupo-colapsavel[open] > summary .chev { transform: rotate(180deg); }
-.grupo-colapsavel > summary:hover .chev { opacity: 1; }
-.grupo-colapsavel .grupo-imposto { margin-top: var(--sp-3); }
-@media (prefers-reduced-motion: reduce) { .grupo-colapsavel > summary .chev { transition: none; } }
+.grupo-head {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: var(--sp-3) var(--sp-4); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); background: var(--surface-2);
+}
+.grupo-head::-webkit-details-marker { display: none; }
+.grupo-head:hover { background: color-mix(in srgb, var(--surface-2) 82%, var(--primary-soft)); }
+.grupo-head:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.grupo-colapsavel[open] > .grupo-head { border-bottom: 1px solid var(--line); }
+.gh-left { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); flex: 1 1 auto; min-width: 0; }
+.gh-nome { font-family: var(--font-display); font-size: 1.02rem; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+.grupo-head .chev { width: .9rem; height: .9rem; opacity: .55; transition: transform .15s ease; flex: none; }
+.grupo-colapsavel[open] > .grupo-head .chev { transform: rotate(180deg); }
+.grupo-head:hover .chev { opacity: 1; }
+.gh-total { display: inline-flex; align-items: baseline; gap: var(--sp-2); margin-left: auto; }
+.gh-total .ov { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); }
+.gh-total b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); font-size: 1rem; }
+.grupo-colapsavel .grupo-imposto { margin: 0; padding: var(--sp-4); }
+@media (prefers-reduced-motion: reduce) { .grupo-head .chev { transition: none; } }
+
+/* chips de status no cabeçalho do grupo. Amarelo (warn) reservado ao que pede
+   conferência humana — divergência (I-6); "a validar" sem divergência é tarefa
+   de rotina, em tom neutro, para não competir com a atenção real. */
+.gh-chip {
+  display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap;
+  font-size: .72rem; font-weight: 700; letter-spacing: .02em;
+  padding: .12rem .5rem; border-radius: 999px; border: 1px solid transparent;
+}
+.gh-chip .icon { width: .82rem; height: .82rem; }
+.gh-chip.diverge { background: var(--warn-bg); color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.gh-chip.pend { background: var(--surface-3); color: var(--ink-2); border-color: var(--line-strong); }
+.gh-chip.ok { background: var(--ok-bg); color: var(--ok-ink); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.gh-chip.none { background: transparent; color: var(--ink-3); border-color: var(--line); }
+
+/* acento de cor por camada nos cabeçalhos das 3 colunas (destaque / sugestão /
+   validação). Tradução visual do bloco-legenda: destaque = declarado (azul-frio,
+   I-2), sugestão = neutro/referência (I-3, o sistema não adota), validação =
+   primary (a ação do operador). Acento na borda inferior — não recolore o texto,
+   preserva o contraste AA do cabeçalho. */
+th.th-destaque { box-shadow: inset 0 -2px 0 var(--declarado); }
+th.th-sugestao { box-shadow: inset 0 -2px 0 var(--ink-3); }
+th.th-validar  { box-shadow: inset 0 -2px 0 var(--primary); }
 
 /* realce da linha divergente (destaque ≠ sugestão) — #2: facilita achar o que revisar */
 tr.linha-diverge > td { background: var(--warn-bg); }
@@ -662,8 +699,6 @@ tr.linha-diverge > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .mb-3 { margin-bottom: var(--sp-3); }
 .mb-5 { margin-bottom: var(--sp-5); }
 .ml-auto { margin-left: auto; }
-/* rótulo de um grupo de impostos (NPP) */
-.group-label { margin: var(--sp-4) 0 var(--sp-2); font-size: 1rem; }
 .small { font-size: .85rem; }
 .break-all { word-break: break-all; }
 .discr-label { font-size: .8rem; color: var(--ink-3); margin: var(--sp-3) 0 var(--sp-1); }

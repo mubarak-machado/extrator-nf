@@ -170,9 +170,32 @@
     </div>
 
     {% for grupo in grupos %}
-    {# Cada grupo é colapsável (#3) para o operador domar a quantidade de informação #}
-    <details class="grupo-colapsavel" open>
-      <summary class="group-label">{{ grupo.label }} <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+    {# Cada grupo é um cartão colapsável, fechado por padrão (#3). O cabeçalho carrega o
+       resumo — chips de status e total validado — para o operador saber o que abrir sem
+       expandir (I-6: pendência/divergência visíveis com o grupo fechado). Os chips se
+       atualizam por DOM na validação inline (app.js). #}
+    <details class="grupo-colapsavel">
+      <summary class="grupo-head">
+        <span class="gh-left">
+          <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+          <span class="gh-nome">{{ grupo.label }}</span>
+          <span class="gh-chip diverge"{% if not grupo.n_diverge %} hidden{% endif %}>
+            <svg class="icon"><use href="#i-alerta"/></svg>
+            <span data-txt>{{ grupo.n_diverge }} divergência{{ 's' if grupo.n_diverge != 1 }}</span>
+          </span>
+          <span class="gh-chip pend"{% if not grupo.n_pendentes %} hidden{% endif %}>
+            <span data-txt>{{ grupo.n_pendentes }} a validar</span>
+          </span>
+          <span class="gh-chip ok"{% if grupo.n_pendentes or not grupo.n_total %} hidden{% endif %}>
+            <svg class="icon"><use href="#i-check"/></svg> validado
+          </span>
+          <span class="gh-chip none"{% if grupo.n_total %} hidden{% endif %}>não incide</span>
+        </span>
+        <span class="gh-total">
+          <span class="ov">validado</span>
+          <b class="num" data-grupo-total-head>{{ grupo.total_validado | moeda }}</b>
+        </span>
+      </summary>
       <div class="grupo-imposto" data-grupo="{{ grupo.key }}">
 
         {% if grupo.n_conferem %}
@@ -205,9 +228,9 @@
               <thead>
                 <tr>
                   <th scope="col">Tributo</th>
-                  <th scope="col" class="num">Destacado pelo emitente</th>
-                  <th scope="col" class="num">Sugerido pela regra</th>
-                  <th scope="col">Validar / retificar (operador)</th>
+                  <th scope="col" class="num th-destaque">Destacado pelo emitente</th>
+                  <th scope="col" class="num th-sugestao">Sugerido pela regra</th>
+                  <th scope="col" class="th-validar">Validar / retificar (operador)</th>
                   <th scope="col">Situação</th>
                 </tr>
               </thead>
@@ -233,9 +256,9 @@
                 <th scope="col">Município</th>
                 <th scope="col">Nota</th>
                 <th scope="col">Tributo</th>
-                <th scope="col" class="num">Destacado pelo emitente</th>
-                <th scope="col" class="num">Sugerido pela regra</th>
-                <th scope="col">Validar / retificar (operador)</th>
+                <th scope="col" class="num th-destaque">Destacado pelo emitente</th>
+                <th scope="col" class="num th-sugestao">Sugerido pela regra</th>
+                <th scope="col" class="th-validar">Validar / retificar (operador)</th>
                 <th scope="col">Situação</th>
               </tr>
             </thead>

@@ -210,6 +210,35 @@
       setTimeout(function () { row.classList.remove("linha-validada"); }, 1500);
     }
 
+    // Recomputa o resumo do cabeçalho do grupo (chips + total) a partir do DOM já
+    // atualizado, para não defasar quando o grupo está fechado. Pendência e divergência
+    // são contadas no nível do tributo (uniforme entre federal/INSS/ISS), igual ao
+    // servidor (_grupos_impostos).
+    function atualizarCabecalhoGrupo(grupoEl, totalTxt) {
+      if (!grupoEl) return;
+      var det = grupoEl.closest("details.grupo-colapsavel");
+      var head = det && det.querySelector(".grupo-head");
+      if (!head) return;
+      var nTotal = grupoEl.querySelectorAll("tr[data-chave]").length;
+      var nPend = grupoEl.querySelectorAll(".cel-situacao .warn").length;
+      var nDiv = grupoEl.querySelectorAll("tr.linha-diverge").length;
+      function chip(seletor, mostrar, texto) {
+        var c = head.querySelector(seletor);
+        if (!c) return;
+        c.hidden = !mostrar;
+        if (mostrar && texto != null) {
+          var t = c.querySelector("[data-txt]");
+          if (t) t.textContent = texto;
+        }
+      }
+      chip(".gh-chip.diverge", nDiv > 0, nDiv + (nDiv === 1 ? " divergência" : " divergências"));
+      chip(".gh-chip.pend", nPend > 0, nPend + " a validar");
+      chip(".gh-chip.ok", nTotal > 0 && nPend === 0, null);
+      chip(".gh-chip.none", nTotal === 0, null);
+      var b = head.querySelector("[data-grupo-total-head]");
+      if (b && totalTxt != null) b.textContent = totalTxt;
+    }
+
     function aplicar(data) {
       var row = acharLinha(data.chave, data.tributo);
       if (row) {
@@ -225,6 +254,7 @@
       var grupo = secao.querySelector('[data-grupo="' + data.grupo_key + '"]');
       var gt = grupo ? grupo.querySelector("[data-grupo-total]") : null;
       if (gt) gt.textContent = data.grupo_total;
+      atualizarCabecalhoGrupo(grupo, data.grupo_total);
       // federal é agregado por nota: troca o resumo (headline) da nota afetada e
       // realça/limpa a linha conforme a divergência destaque≠sugestão persista ou não.
       if (data.federal_resumo != null && data.federal_chave != null) {
