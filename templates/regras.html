@@ -2,33 +2,26 @@
 {% block title %}Regras de enquadramento · Extrator NF{% endblock %}
 {% block conteudo %}
 
-<div class="page-head row">
-  <div>
-    <h2>Regras de enquadramento — tributos federais</h2>
-    <p>As regras que derivam o enquadramento das retenções federais (IR/CSLL/COFINS/PIS)
-       a partir das características do contrato. Aplica-se a <strong>primeira</strong> regra
-       cuja condição casar (a ordem importa). O sistema <strong>sugere</strong>; o especialista
-       ratifica por contrato (Fase 2).</p>
-  </div>
-  {% if catalogo %}<a class="btn ml-auto" href="{{ url_for('regra_nova') }}"><svg class="icon"><use href="#i-doc"/></svg> Nova regra</a>{% endif %}
+<div class="page-head">
+  <h2>Regras de enquadramento</h2>
+  <p>As regras que derivam o enquadramento das retenções a partir das características do
+     contrato. Aplica-se a <strong>primeira</strong> regra cuja condição casar (a ordem
+     importa). O sistema <strong>sugere</strong>; o especialista ratifica por contrato (Fase 2).</p>
 </div>
 
-{% if not catalogo %}
-<div class="card empty-banner">
-  <svg class="icon" aria-hidden="true"><use href="#i-doc"/></svg>
-  <div>
-    <h3>Nenhuma regra cadastrada</h3>
-    <p>Enquanto o catálogo estiver vazio, todo contrato cai em <em>indefinido</em> e o enquadramento
-       federal precisa ser definido manualmente, com justificativa. Cadastre a primeira regra.</p>
+{# ---------------- Tributos federais (IR/CSLL/COFINS/PIS) ---------------- #}
+<section class="card mt-3"><div class="card-b">
+  <div class="page-head row">
+    <div><h3>Tributos federais <span class="lbl" style="font-weight:400">(IR/CSLL/COFINS/PIS — IN 1234/2012)</span></h3></div>
+    <a class="btn ml-auto" href="{{ url_for('regra_nova', grupo='federal') }}"><svg class="icon"><use href="#i-doc"/></svg> Nova regra federal</a>
   </div>
-  <a class="btn" href="{{ url_for('regra_nova') }}">Nova regra</a>
-</div>
-{% else %}
-<section class="card"><div class="card-b">
+  {% if not catalogo_federal %}
+  <p class="note">Nenhuma regra federal cadastrada — todo contrato cai em <em>indefinido</em> até cadastrar a primeira.</p>
+  {% else %}
   <table class="conf-tab">
     <thead><tr><th>Ordem</th><th>Código</th><th>Quando se aplica</th><th class="num">IR</th><th>Contribuições</th><th class="num">Agregada</th><th></th></tr></thead>
     <tbody>
-      {% for r in catalogo %}
+      {% for r in catalogo_federal %}
       <tr>
         <td class="num">{{ r.ordem }}</td>
         <td><span class="chip">{{ r.codigo }}</span></td>
@@ -38,13 +31,42 @@
         <td class="num">{{ r.ir_txt() }}</td>
         <td class="small">{% if r.sujeito %}{{ 'CSLL' if r.csll }}{{ ' · COFINS' if r.cofins }}{{ ' · PIS' if r.pis }}{% else %}<span class="muted">dispensado</span>{% endif %}</td>
         <td class="num"><strong>{{ r.agregada_txt() }}</strong></td>
-        <td><a class="row-link" href="{{ url_for('regra_editar', id_=r.id) }}">editar <svg class="icon"><use href="#i-seta"/></svg></a></td>
+        <td><a class="row-link" href="{{ url_for('regra_editar', id_=r.id, grupo='federal') }}">editar <svg class="icon"><use href="#i-seta"/></svg></a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
-  <p class="note-foot">A agregada é derivada (IR + as contribuições que incidem) — nunca digitada.
-     Os percentuais e o enquadramento são responsabilidade técnica do especialista; o sistema não confere nem inventa (I-3).</p>
+  {% endif %}
 </div></section>
-{% endif %}
+
+{# ---------------- INSS (IN 2110/2022) ---------------- #}
+<section class="card mt-3"><div class="card-b">
+  <div class="page-head row">
+    <div><h3>INSS <span class="lbl" style="font-weight:400">(cessão de mão de obra / empreitada — IN 2110/2022)</span></h3></div>
+    <a class="btn ml-auto" href="{{ url_for('regra_nova', grupo='inss') }}"><svg class="icon"><use href="#i-doc"/></svg> Nova regra de INSS</a>
+  </div>
+  {% if not catalogo_inss %}
+  <p class="note">Nenhuma regra de INSS cadastrada — o contrato que precisar de INSS cai em <em>indefinido</em> até cadastrar a primeira (ou usar ajuste manual).</p>
+  {% else %}
+  <table class="conf-tab">
+    <thead><tr><th>Ordem</th><th>Código</th><th>Quando se aplica</th><th class="num">Alíquota</th><th>Base mín. / adicional</th><th></th></tr></thead>
+    <tbody>
+      {% for r in catalogo_inss %}
+      <tr>
+        <td class="num">{{ r.ordem }}</td>
+        <td><span class="chip">{{ r.codigo }}</span></td>
+        <td class="small">{{ r.descricao }}
+          <br><span class="muted">{% if r.naturezas %}prestador: {{ r.naturezas|map('replace','_',' ')|join(', ') }}{% else %}qualquer prestador{% endif %}</span>
+          {% if r.fundamento %}<br><span class="muted">{{ r.fundamento }}</span>{% endif %}</td>
+        <td class="num">{% if r.cessao_mao_obra %}{{ r.aliquota_txt() }}{% else %}<span class="muted">dispensado</span>{% endif %}</td>
+        <td class="small">{% if r.cessao_mao_obra %}{% if r.base_minima_pct %}base mín. {{ vocab.bases[r.base_minima_pct] }}{% else %}—{% endif %}{% if r.adicional_pct %} · +{{ r.adicional_pct }}%{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td><a class="row-link" href="{{ url_for('regra_editar', id_=r.id, grupo='inss') }}">editar <svg class="icon"><use href="#i-seta"/></svg></a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div></section>
+
+<p class="note-foot">Os percentuais e o enquadramento são responsabilidade técnica do especialista; o sistema não confere nem inventa (I-3).</p>
 {% endblock %}

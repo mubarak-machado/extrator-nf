@@ -378,3 +378,68 @@
     });
   });
 })();
+
+/* Máscaras de entrada (progressive enhancement). Acionadas por data-mask:
+   - "competencia": data mm/aaaa — digitação corrida 052026 vira 05/2026. Insere a
+     barra após 2 dígitos enquanto digita e normaliza ao sair do campo; aceita o
+     operador digitar a barra. NÃO adivinha: entrada incompleta fica como está (I-6).
+   - "documento": CPF (11 díg) ou CNPJ (14 díg) no padrão br, formatado ao sair do campo.
+   - "subitem": subitem da lista LC 116 (N.NN) — 702 vira 7.02 ao sair do campo; aceita
+     tanto a digitação corrida quanto a pontuada.
+   Como o app.js é carregado no <head>, liga após DOMContentLoaded (senão o DOM ainda
+   não existe). Tudo é só normalização de entrada — o servidor revalida (formato.py). */
+(function () {
+  function soDigitos(s) { return (s || "").replace(/\D/g, ""); }
+
+  function fmtCompetencia(v) {
+    var d = soDigitos(v);
+    if (d.length >= 3) return d.slice(0, 2) + "/" + d.slice(2, 6);
+    return d;
+  }
+
+  function fmtDocumento(d) {
+    if (d.length === 11)
+      return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+    if (d.length === 14)
+      return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+    return d;
+  }
+
+  function fmtSubitem(v) {
+    var d = soDigitos(v);
+    // N.NN: as duas últimas casas vão depois do ponto (702 -> 7.02; 1705 -> 17.05).
+    if (d.length >= 3) return d.slice(0, d.length - 2) + "." + d.slice(d.length - 2);
+    return d;
+  }
+
+  function ligar() {
+    document.querySelectorAll('[data-mask="competencia"]').forEach(function (el) {
+      el.addEventListener("input", function () {
+        var pos = el.selectionStart;
+        var antes = el.value.length;
+        el.value = fmtCompetencia(el.value);
+        if (el.value.length !== antes) pos += (el.value.length - antes);
+        try { el.setSelectionRange(pos, pos); } catch (e) {}
+      });
+      el.addEventListener("blur", function () { el.value = fmtCompetencia(el.value); });
+    });
+
+    document.querySelectorAll('[data-mask="documento"]').forEach(function (el) {
+      el.addEventListener("blur", function () {
+        var d = soDigitos(el.value);
+        // Só formata em tamanho de CPF/CNPJ; fora disso deixa visível p/ o operador (I-6).
+        el.value = (d.length === 11 || d.length === 14) ? fmtDocumento(d) : el.value;
+      });
+    });
+
+    document.querySelectorAll('[data-mask="subitem"]').forEach(function (el) {
+      el.addEventListener("blur", function () {
+        if (el.value.trim()) el.value = fmtSubitem(el.value);
+      });
+    });
+  }
+
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", ligar);
+  else ligar();
+})();

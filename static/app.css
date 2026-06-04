@@ -453,15 +453,16 @@ td .sub.mono { font-family: var(--font-mono); }
 .list-row .amount .total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.2rem; font-weight: 600; }
 .list-row .amount .meta { font-size: .78rem; color: var(--ink-3); }
 .btn.btn-sm { padding: .4rem .7rem; font-size: .85rem; }
-/* Linha de NPP em duas linhas (histórico e lista de NPPs): a linha NÃO é um link
-   inteiro — o acesso vai num botão à direita. 1ª linha: identidade (data·sequencial)
-   + nome completo do prestador; 2ª: competência, nº de notas e situação. O total
-   mescla as duas linhas (centralizado à direita). */
+/* Linha em duas linhas, compartilhada por NPPs e contratos: a linha NÃO é um link
+   inteiro — o acesso vai num botão à direita. 1ª linha: identidade (mono) + nome do
+   prestador; demais: sublinhas descritivas. Quando há valor (NPP), o total mescla as
+   linhas à direita; sem valor (contrato), o botão fica à direita pelo flex-grow do .who. */
 .npp-row { padding: var(--sp-4) var(--sp-5); }
 .npp-row .who { min-width: 0; }
 .npp-row .who-top { display: flex; align-items: baseline; gap: var(--sp-2) var(--sp-3); flex-wrap: wrap; }
 .npp-row .who-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
 .npp-row .who-prest { font-weight: 600; color: var(--ink); }
+.npp-row .who-doc { font-size: .85rem; color: var(--ink-3); }
 .npp-row .who .sub { display: block; margin-top: 3px; font-size: .85rem; color: var(--ink-2); }
 .npp-row .amount { margin-left: auto; }
 .npp-row .btn { flex: none; }
@@ -478,6 +479,26 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 
 .note-foot { color: var(--ink-3); font-size: .8rem; line-height: 1.6; margin-top: var(--sp-4); }
 .note-foot code { font-family: var(--font-mono); font-size: .92em; }
+
+/* ISS por município (config do contrato) — uma linha por município contemplado */
+.mun-lista { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-2); }
+.mun-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-2) var(--sp-3); }
+.mun-campo { display: flex; flex-direction: column; gap: var(--sp-1); margin: 0; flex: 1 1 9rem; min-width: 8rem; }
+.mun-campo .lbl { font-size: .78rem; color: var(--ink-2); font-weight: 500; }
+.mun-campo select, .mun-campo input[type="text"] { width: 100%; margin: 0; }
+.mun-campo-aliq { flex: 0 1 7rem; min-width: 5.5rem; }
+.mun-campo-chk { flex: 0 0 auto; }
+.mun-campo-chk .mun-chk { display: inline-flex; align-items: center; gap: var(--sp-2); padding: .5rem 0; font-size: .92rem; white-space: nowrap; }
+.mun-row .mun-remover { flex: 0 0 auto; padding-bottom: .6rem; }
+/* Descrição do subitem LC 116: largura toda da seção, no máx. 2 linhas (excedente
+   oculto com reticências; texto completo no title). :empty some para não deixar gap. */
+.lc116-desc {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; text-overflow: ellipsis;
+  width: 100%; margin-top: var(--sp-1); color: var(--ink-3);
+  font-size: .82rem; line-height: 1.5;
+}
+.lc116-desc:empty { display: none; }
 
 /* conferência no portal nacional (detalhe da nota) */
 .portal-conf { margin-top: var(--sp-4); }
@@ -941,9 +962,54 @@ input[type="file"]::file-selector-button:hover { background: var(--surface); }
 .sugestao .sug-titulo .icon { width: 1rem; height: 1rem; }
 .sugestao .sug-corpo { margin: 0; font-size: .9rem; color: var(--ink-2); line-height: 1.5; }
 
-/* ---------- formulário de contrato ---------- */
-.form-contrato fieldset.card { padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-4); }
-.form-contrato legend { font-size: .95rem; font-weight: 700; color: var(--ink); padding: 0 var(--sp-2); }
+/* ---------- formulário de contrato ----------
+   Separação por seção espelhando os "grupos de impostos" (acento de cor à esquerda):
+   dados neutros, e cada camada tributária na sua cor (federal=declarado, INSS=primary,
+   ISS=ok). O cabeçalho ganha um marcador colorido casando com o acento da seção. */
+.form-contrato fieldset.card {
+  padding: var(--sp-4) var(--sp-5) var(--sp-5);
+  margin-bottom: var(--sp-5);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent, var(--ink-3));
+}
+.form-contrato fieldset.sec-dados   { --accent: var(--ink-3); }
+.form-contrato fieldset.sec-federal { --accent: var(--declarado); }
+.form-contrato fieldset.sec-inss    { --accent: var(--primary); }
+.form-contrato fieldset.sec-iss     { --accent: var(--ok); }
+.form-contrato legend {
+  font-size: 1rem; font-weight: 700; color: var(--ink);
+  padding: .1rem var(--sp-2) .1rem 0; margin-left: -.1rem;
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+}
+.form-contrato legend::before {
+  content: ""; width: .55rem; height: .55rem; border-radius: 2px;
+  background: var(--accent, var(--ink-3)); flex: 0 0 auto;
+}
+
+/* Tooltip de ajuda (ⓘ): explicações sucintas sob demanda, sem poluir a tela.
+   Fonte legível (~13px) e bolha compacta (max-width 18rem). Aparece no hover e no
+   foco por teclado (acessível). Texto curto vai no atributo data-tip. */
+.info-tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.05rem; height: 1.05rem; border-radius: 50%; flex: 0 0 auto;
+  border: 1.5px solid var(--ink-3); color: var(--ink-3);
+  font-size: .72rem; font-weight: 700; font-style: normal; line-height: 1;
+  cursor: help; position: relative; vertical-align: middle; user-select: none;
+}
+.info-tip:hover, .info-tip:focus-visible { border-color: var(--primary); color: var(--primary); outline: none; }
+.info-tip::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; top: calc(100% + 7px); transform: translateX(-50%);
+  z-index: 30; width: max-content; max-width: 18rem;
+  background: var(--ink); color: var(--surface);
+  padding: .45rem .65rem; border-radius: var(--radius-sm);
+  font-size: .82rem; font-weight: 400; font-style: normal; line-height: 1.45;
+  text-align: left; white-space: normal;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+  opacity: 0; visibility: hidden; transition: opacity .12s ease; pointer-events: none;
+}
+.info-tip:hover::after, .info-tip:focus::after, .info-tip:focus-visible::after { opacity: 1; visibility: visible; }
+.lbl .info-tip { margin-left: .3rem; }
 .form-contrato .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3) var(--sp-4); }
 .form-contrato .grid-3 { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: var(--sp-3) var(--sp-4); }
 @media (max-width: 640px) { .form-contrato .grid-2, .form-contrato .grid-3 { grid-template-columns: 1fr; } }

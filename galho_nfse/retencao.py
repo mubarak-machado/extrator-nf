@@ -59,9 +59,10 @@ def conferir_retencao(reg, contrato, material_marcado=None) -> ResultadoConferen
     if contrato.inss_cessao_mao_obra:
         achados.append(_achado_inss(reg, contrato, base))
 
-    # ---- ISS (LC 116/2003) ----
-    if contrato.iss_retido_tomador:
-        achados.append(_achado_iss(reg, contrato, base))
+    # ---- ISS (LC 116/2003) — alíquota por município do contrato ----
+    linhas_iss = [m for m in contrato.linhas_iss() if m.iss_retido]
+    if linhas_iss:
+        achados.append(_achado_iss(reg, contrato, base, linhas_iss))
 
     return ResultadoConferencia(rotulo_contrato(contrato), achados)
 
@@ -86,13 +87,44 @@ def _achado_inss(reg, contrato, base) -> Achado:
     return Achado("INSS", regra, fmt(destaque), fmt(esperado), comparar(esperado, destaque))
 
 
-def _achado_iss(reg, contrato, base) -> Achado:
-    aliq = num(contrato.iss_aliquota)
+_RECOLHIMENTO_TXT = {"guia": "guia da prefeitura", "dar": "DAR (SIAFI)"}
+
+
+def _casa_municipio(linha, reg) -> bool:
+    """A linha de ISS do município casa com o município da nota? Compara o nome da
+    linha (ex.: 'Betim') contra o município lido da nota ('Betim/MG' em
+    `municipio_nome`, ou `local_prestacao`). Comparação tolerante (caixa/acentos
+    fora do escopo aqui — nomes do IBGE/da nota tendem a bater)."""
+    alvo = (linha.municipio or "").strip().lower()
+    if not alvo:
+        return False
+    for campo in (reg.municipio_nome, reg.local_prestacao, reg.prest_municipio):
+        if campo and alvo in str(campo).strip().lower():
+            return True
+    return False
+
+
+def _achado_iss(reg, contrato, base, linhas_iss) -> Achado:
+    """Escolhe a linha de ISS do município da nota e confere. Uma única linha retida →
+    sem ambiguidade, usa direto. Várias → casa pelo município da nota; nenhuma casa →
+    indefinido visível (I-6), nunca chuta qual município."""
     destaque = num(reg.iss_valor_destaque_emitente)
     sub = contrato.iss_subitem_lista
-    regra = f"ISS retido {pct_txt(aliq)}" + (f", subitem {sub}" if sub else "")
+    if len(linhas_iss) == 1:
+        linha = linhas_iss[0]
+    else:
+        casadas = [m for m in linhas_iss if _casa_municipio(m, reg)]
+        if not casadas:
+            return Achado("ISS", "ISS retido (por município)", fmt(destaque), None,
+                          "indefinido",
+                          "Município da nota não está nas linhas de ISS do contrato — confira.")
+        linha = casadas[0]
+    aliq = num(linha.iss_aliquota)
+    recol = _RECOLHIMENTO_TXT.get(linha.iss_recolhimento or "")
+    regra = f"ISS retido {pct_txt(aliq)}" + (f" · {linha.municipio}" if linha.municipio else "")
+    regra += (f", {recol}" if recol else "") + (f", subitem {sub}" if sub else "")
     if aliq is None or base is None:
         return Achado("ISS", regra, fmt(destaque), None, "indefinido",
-                      "Defina a alíquota de ISS (2%–5%) no contrato.")
+                      "Defina a alíquota de ISS (2%–5%) para o município no contrato.")
     esperado = base * aliq / 100
     return Achado("ISS", regra, fmt(destaque), fmt(esperado), comparar(esperado, destaque))

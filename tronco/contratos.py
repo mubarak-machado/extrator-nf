@@ -24,7 +24,7 @@ Os campos capturados foram destilados das INs que regem a retenção:
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 from tronco.util import agora as agora_maquina
@@ -66,6 +66,24 @@ INSS_ADICIONAL = {"": "Sem adicional", "4": "+4% — exposição 15 anos",
 # Local de incidência do ISS (LC 116/2003, art. 3º).
 ISS_LOCAL = {"estabelecimento_prestador": "Estab. do prestador (regra geral)",
              "local_prestacao": "Local da prestação (exceção art. 3º)"}
+# Forma de recolhimento do ISS retido — varia por município (depende do convênio).
+ISS_RECOLHIMENTO = {"guia": "Guia", "dar": "DAR"}
+
+
+@dataclass
+class MunicipioIss:
+    """Uma linha de ISS por município contemplado pelo contrato. O ISS é o único
+    tributo configurado DIRETO no contrato (varia por município); o que muda de um
+    para outro é a **alíquota**, **se é retido** (depende de a lei municipal nomear o
+    tomador substituto tributário) e a **forma de recolhimento** (guia da prefeitura
+    ou DAR via convênio SIAFI). Persistida na tabela filha `contrato_municipios`."""
+    municipio: str = ""
+    uf: str | None = None
+    iss_aliquota: str | None = None          # 2%–5% (LC 116/2003)
+    iss_retido: bool = False                 # tomador é substituto tributário neste município?
+    iss_recolhimento: str | None = None      # ver ISS_RECOLHIMENTO ("guia" | "dar")
+    id: int | None = None
+    contrato_id: int | None = None
 
 
 @dataclass
@@ -86,6 +104,11 @@ class Contrato:
     vigencia_inicio: str | None = None
     vigencia_fim: str | None = None
     objeto: str | None = None
+    # PGEA = processo do Sistema Único do MPF onde moram os documentos. O da
+    # contratação guarda o contrato e a documentação da contratação; o da liquidação
+    # é anual e junta os documentos de pagamento ao longo da execução.
+    pgea_contratacao: str | None = None
+    pgea_liquidacao: str | None = None
     categoria_servico: str = "geral"         # ver CATEGORIAS
     material_previsao: str = "nao"           # ver MATERIAL_PREVISAO
     # --- Enquadramento de retenção (declarado pelo especialista — base p/ Fase 2) ---
@@ -102,29 +125,56 @@ class Contrato:
     ret_federal_justificativa: str | None = None  # obrigatória quando "ajustado" (I-6)
     ret_federal_ajustado_por: str | None = None   # autor do override (I-4)
     ret_federal_ajustado_em: str | None = None    # data ISO-8601 do override (I-4)
-    inss_cessao_mao_obra: bool = False       # INSS (IN 2110/2022)
+    # INSS (IN 2110/2022) — como o federal, vem de uma regra do catálogo selecionada
+    # (origem 'derivado') ou ajustada à mão (origem 'ajustado', com justificativa). Os
+    # campos abaixo guardam o EFEITO da regra escolhida (espelha os ret_federal_*).
+    inss_cessao_mao_obra: bool = False       # INSS incide (cessão de mão de obra/empreitada)?
     inss_aliquota: str | None = None         # "11" | "3.5"
     inss_base_minima_pct: str | None = None  # ver BASES_MINIMAS
     inss_adicional_pct: str | None = None    # ver INSS_ADICIONAL ("4"/"3"/"2")
-    iss_retido_tomador: bool = False
-    iss_aliquota: str | None = None          # 2%–5% (LC 116/2003)
+    inss_regra_codigo: str | None = None     # "INSS-001" — regra do catálogo que gerou
+    inss_origem: str = "derivado"            # "derivado" | "ajustado"
+    inss_justificativa: str | None = None    # obrigatória quando "ajustado" (I-6)
+    inss_ajustado_por: str | None = None     # autor do override (I-4)
+    inss_ajustado_em: str | None = None      # data ISO-8601 do override (I-4)
+    # ISS (LC 116/2003) — único tributo configurado DIRETO no contrato; a alíquota,
+    # o "retido" e a forma de recolhimento variam por município (ver `municipios`).
+    # Os campos abaixo valem para o contrato todo (não variam por município).
     iss_subitem_lista: str | None = None     # subitem da lista LC 116 (ex. "7.02")
     iss_local_incidencia: str = "estabelecimento_prestador"  # ver ISS_LOCAL
-    iss_municipio: str | None = None         # município competente p/ o ISS
     iss_deduz_material: bool = False         # dedução de material (subitens 7.02/7.05)
+    # Escalares de ISS legados (contrato município-único, pré-multi-município). Mantidos
+    # para não perder dado na migração; `linhas_iss()` os materializa quando não há
+    # linhas filhas. A entrada nova passa por `municipios`.
+    iss_retido_tomador: bool = False
+    iss_aliquota: str | None = None
+    iss_municipio: str | None = None
     observacoes: str | None = None
     # --- Auditoria (I-4) ---
     criado_por: str = "operador"
     criado_em: str | None = None
     atualizado_em: str | None = None
     id: int | None = None
+    # Linhas de ISS por município (tabela filha; não é coluna — fora de _CAMPOS).
+    municipios: list[MunicipioIss] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
         return asdict(self)
 
+    def linhas_iss(self) -> list[MunicipioIss]:
+        """Linhas de ISS por município. Se não houver linhas filhas mas o contrato
+        legado tiver o ISS escalar marcado, materializa uma linha única — assim a
+        conferência (galho NFS-e) funciona para contratos antigos sem reentrada."""
+        if self.municipios:
+            return self.municipios
+        if self.iss_retido_tomador and self.iss_aliquota:
+            return [MunicipioIss(municipio=self.iss_municipio or "",
+                                 iss_aliquota=self.iss_aliquota, iss_retido=True)]
+        return []
 
-_CAMPOS = [f.name for f in fields(Contrato) if f.name != "id"]
+
+_CAMPOS = [f.name for f in fields(Contrato) if f.name not in ("id", "municipios")]
 _BOOLS = {"ret_federal_sujeito", "ret_federal_csll", "ret_federal_cofins",
           "ret_federal_pis", "inss_cessao_mao_obra", "iss_retido_tomador",
           "iss_deduz_material"}
@@ -147,6 +197,22 @@ class StoreContratos:
             )
             """
         )
+        # Tabela filha: ISS por município (o único tributo configurado direto no
+        # contrato). ON DELETE CASCADE casa com a remoção do contrato.
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS contrato_municipios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                contrato_id INTEGER NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
+                municipio TEXT,
+                uf TEXT,
+                iss_aliquota TEXT,
+                iss_retido TEXT,
+                iss_recolhimento TEXT
+            )
+            """
+        )
+        self._conn.execute("PRAGMA foreign_keys = ON")
         self._migrar_colunas()
         self._conn.commit()
 
@@ -166,7 +232,30 @@ class StoreContratos:
         d = {c: row[c] for c in _CAMPOS}
         for b in _BOOLS:
             d[b] = _ler_bool(row[b])
-        return Contrato(id=row["id"], **d)
+        return Contrato(id=row["id"], municipios=self._municipios_de(row["id"]), **d)
+
+    def _municipios_de(self, contrato_id) -> list[MunicipioIss]:
+        cur = self._conn.execute(
+            "SELECT * FROM contrato_municipios WHERE contrato_id = ? ORDER BY uf, municipio, id",
+            (contrato_id,))
+        return [MunicipioIss(id=r["id"], contrato_id=r["contrato_id"],
+                             municipio=r["municipio"] or "", uf=r["uf"],
+                             iss_aliquota=r["iss_aliquota"], iss_retido=_ler_bool(r["iss_retido"]),
+                             iss_recolhimento=r["iss_recolhimento"]) for r in cur.fetchall()]
+
+    def _gravar_municipios(self, contrato_id, municipios) -> None:
+        """Regrava as linhas de ISS do contrato (delete+insert). Só persiste linhas com
+        município preenchido — linha em branco do form é ignorada, não vira lixo (I-6)."""
+        self._conn.execute("DELETE FROM contrato_municipios WHERE contrato_id = ?", (contrato_id,))
+        for m in municipios or []:
+            if not (m.municipio or "").strip():
+                continue
+            self._conn.execute(
+                "INSERT INTO contrato_municipios "
+                "(contrato_id, municipio, uf, iss_aliquota, iss_retido, iss_recolhimento) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (contrato_id, m.municipio.strip(), m.uf, m.iss_aliquota,
+                 _sql(m.iss_retido), m.iss_recolhimento))
 
     def salvar(self, c: Contrato) -> int:
         """Insere (id None) ou atualiza. Mantém criado_em; atualiza atualizado_em.
@@ -182,12 +271,14 @@ class StoreContratos:
                 f"VALUES ({', '.join('?' for _ in _CAMPOS)})",
                 valores,
             )
-            self._conn.commit()
             c.id = cur.lastrowid
+            self._gravar_municipios(c.id, c.municipios)
+            self._conn.commit()
             return c.id
         sets = ", ".join(f"{k} = ?" for k in _CAMPOS if k != "criado_em")
         valores = [_sql(getattr(c, k)) for k in _CAMPOS if k != "criado_em"]
         self._conn.execute(f"UPDATE contratos SET {sets} WHERE id = ?", [*valores, c.id])
+        self._gravar_municipios(c.id, c.municipios)
         self._conn.commit()
         return c.id
 
@@ -202,6 +293,8 @@ class StoreContratos:
         return self._do_row(row) if row else None
 
     def remover(self, id_: int) -> None:
+        # Apaga as linhas filhas explicitamente (não depender do PRAGMA da conexão).
+        self._conn.execute("DELETE FROM contrato_municipios WHERE contrato_id = ?", (id_,))
         self._conn.execute("DELETE FROM contratos WHERE id = ?", (id_,))
         self._conn.commit()
 

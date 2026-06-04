@@ -1585,3 +1585,171 @@ def test_grupos_conferencia_ordena_inss_federais_iss_com_destaque_e_sugestao():
     fed1 = next(x for x in g1 if x["key"] == "federal")
     assert fed1["codigo"] == "6190" and fed1["aliquota_txt"]
     assert any(l["esperado"] is not None for l in fed1["linhas"])
+
+
+# ---------- Config de contratos: ISS por município, INSS por regra, máscaras, PGEA ----------
+
+def test_contrato_municipios_iss_round_trip():
+    """Tabela filha de ISS por município: salva, recarrega e edita sem perder dado.
+    Cada linha guarda alíquota, se é retido e a forma de recolhimento (guia/DAR)."""
+    import tempfile
+    from pathlib import Path
+    from tronco.contratos import StoreContratos, Contrato, MunicipioIss
+    with tempfile.TemporaryDirectory() as d:
+        store = StoreContratos(Path(d) / "c.sqlite")
+        c = Contrato(prest_identificacao="ORBENK", prest_documento="79283065000303",
+                     numero="07", ano="2026",
+                     municipios=[
+                         MunicipioIss(municipio="Betim", uf="MG", iss_aliquota="5",
+                                      iss_retido=True, iss_recolhimento="guia"),
+                         MunicipioIss(municipio="Contagem", uf="MG", iss_aliquota="3",
+                                      iss_retido=False, iss_recolhimento="dar"),
+                     ])
+        cid = store.salvar(c)
+        o = store.obter(cid)
+        assert len(o.municipios) == 2
+        betim = [m for m in o.municipios if m.municipio == "Betim"][0]
+        assert betim.uf == "MG" and betim.iss_aliquota == "5"
+        assert betim.iss_retido is True and betim.iss_recolhimento == "guia"
+        conta = [m for m in o.municipios if m.municipio == "Contagem"][0]
+        assert conta.iss_retido is False and conta.iss_recolhimento == "dar"
+        # edição: remove um município, regrava (delete+insert, sem lixo)
+        o.municipios = [betim]
+        store.salvar(o)
+        reeditado = store.obter(cid)
+        assert len(reeditado.municipios) == 1 and reeditado.municipios[0].municipio == "Betim"
+        store.fechar()
+
+
+def test_conferencia_iss_escolhe_aliquota_do_municipio_da_nota():
+    """Com várias linhas de ISS, a conferência escolhe a alíquota do município da NOTA;
+    município sem linha cai em INDEFINIDO visível (I-6), nunca chuta."""
+    from galho_nfse import retencao
+    from tronco.contratos import MunicipioIss
+    munis = [MunicipioIss(municipio="Betim", uf="MG", iss_aliquota="5", iss_retido=True),
+             MunicipioIss(municipio="Contagem", uf="MG", iss_aliquota="2", iss_retido=True)]
+    # nota de Betim: 5% de 1000 = 50,00
+    reg = _reg_nfse(municipio_nome="Betim/MG", iss_valor_destaque_emitente="50.00")
+    iss = [a for a in retencao.conferir_retencao(reg, _contrato(municipios=munis)).achados
+           if a.tributo == "ISS"][0]
+    assert iss.esperado == "50.00" and iss.situacao == "confere"
+    # nota de Contagem: 2% de 1000 = 20,00
+    reg2 = _reg_nfse(municipio_nome="Contagem/MG", iss_valor_destaque_emitente="20.00")
+    iss2 = [a for a in retencao.conferir_retencao(reg2, _contrato(municipios=munis)).achados
+            if a.tributo == "ISS"][0]
+    assert iss2.esperado == "20.00" and iss2.situacao == "confere"
+    # nota de município fora da lista: indefinido (I-6)
+    reg3 = _reg_nfse(municipio_nome="Lavras/MG", iss_valor_destaque_emitente="30.00")
+    iss3 = [a for a in retencao.conferir_retencao(reg3, _contrato(municipios=munis)).achados
+            if a.tributo == "ISS"][0]
+    assert iss3.situacao == "indefinido" and iss3.esperado is None
+
+
+def test_aplicar_catalogo_inss_casa_e_indefinido():
+    """Motor de INSS (espelho do federal): a 1ª regra que casa vence; nenhuma casa →
+    indefinido com motivo visível (I-6). Função pura, sem I/O."""
+    from galho_nfse.inss import RegraInss, aplicar_catalogo_inss
+    regra = RegraInss(codigo="INSS-001", descricao="cessão", fundamento="",
+                      naturezas=("nao_optante",), cessao_mao_obra=True, aliquota="11")
+    casa = aplicar_catalogo_inss(_contrato(prest_natureza="nao_optante"), [regra])
+    assert casa.regra is not None and casa.regra.codigo == "INSS-001"
+    nenhuma = aplicar_catalogo_inss(_contrato(prest_natureza="simples"), [regra])
+    assert nenhuma.regra is None and nenhuma.indefinido_motivo
+
+
+def test_contrato_inss_por_regra_e_override_manual(tmp_path, monkeypatch):
+    """O contrato copia o efeito da regra de INSS escolhida (origem 'derivado'); o
+    ajuste manual exige justificativa (I-6) e grava autor+data (I-4)."""
+    import tronco.app as A
+    from tronco.operador import StoreOperador
+    from tronco.contratos import StoreContratos
+    from galho_nfse.catalogo_inss import StoreRegrasInss
+    from galho_nfse.catalogo_federal import StoreRegrasFederais
+    from galho_nfse.inss import RegraInss
+    from galho_nfse.enquadramento import RegraEnquadramento
+    monkeypatch.setattr(A, "StoreOperador", lambda *a, **k: StoreOperador(tmp_path / "op.sqlite"))
+    monkeypatch.setattr(A, "StoreContratos", lambda *a, **k: StoreContratos(tmp_path / "c.sqlite"))
+    monkeypatch.setattr(A, "StoreRegrasInss", lambda *a, **k: StoreRegrasInss(tmp_path / "i.sqlite"))
+    monkeypatch.setattr(A, "StoreRegrasFederais", lambda *a, **k: StoreRegrasFederais(tmp_path / "r.sqlite"))
+    A.app.config.update(TESTING=True)
+    cli = A.app.test_client()
+    cli.post("/operador", data={"iniciais": "op", "nome": "Op"})
+    # o contrato exige uma regra federal selecionada (mesmo de dispensa) — cria uma.
+    sf = StoreRegrasFederais(tmp_path / "r.sqlite")
+    fid = sf.salvar(RegraEnquadramento(codigo="TF-001", descricao="dispensa",
+                    fundamento="", sujeito=False)); sf.fechar()
+    si = StoreRegrasInss(tmp_path / "i.sqlite")
+    rid = si.salvar(RegraInss(codigo="INSS-001", descricao="cessão", fundamento="",
+                    naturezas=("nao_optante",), cessao_mao_obra=True, aliquota="11",
+                    adicional_pct="3")); si.fechar()
+    cli.post("/contratos", data={"prest_identificacao": "ACME", "prest_documento": "11222333000181",
+             "prest_natureza": "nao_optante", "numero": "10", "ano": "2026",
+             "ret_federal_regra_id": str(fid), "inss_regra_id": str(rid)})
+    ct = StoreContratos(tmp_path / "c.sqlite").listar()[0]
+    assert ct.inss_regra_codigo == "INSS-001" and ct.inss_origem == "derivado"
+    assert ct.inss_cessao_mao_obra is True and ct.inss_aliquota == "11" and ct.inss_adicional_pct == "3"
+    # override manual sem justificativa: barrado (I-6)
+    r = cli.post("/contratos", data={"prest_identificacao": "B", "prest_documento": "11222333000181",
+                 "prest_natureza": "nao_optante", "numero": "11", "ano": "2026",
+                 "ret_federal_regra_id": str(fid),
+                 "inss_ajustar": "on", "inss_cessao_mao_obra": "on", "inss_aliquota": "11"})
+    assert r.status_code == 200 and "Justifique".encode() in r.data
+    # override com justificativa: grava com autor+data (I-4)
+    cli.post("/contratos", data={"prest_identificacao": "B", "prest_documento": "11222333000181",
+             "prest_natureza": "nao_optante", "numero": "11", "ano": "2026",
+             "ret_federal_regra_id": str(fid),
+             "inss_ajustar": "on", "inss_cessao_mao_obra": "on", "inss_aliquota": "3.5",
+             "inss_justificativa": "convênio específico"})
+    ct2 = [c for c in StoreContratos(tmp_path / "c.sqlite").listar() if c.numero == "11"][0]
+    assert ct2.inss_origem == "ajustado" and ct2.inss_aliquota == "3.5"
+    assert ct2.inss_justificativa == "convênio específico" and ct2.inss_ajustado_em
+
+
+def test_parse_competencia_canoniza_e_nao_chuta():
+    """Digitação corrida de data (mm/aaaa) é canonizada; entrada inválida volta crua,
+    nunca adivinhada (I-6)."""
+    from tronco import formato
+    assert formato.parse_competencia("052026") == "05/2026"
+    assert formato.parse_competencia("5/2026") == "05/2026"
+    assert formato.parse_competencia("05/2026") == "05/2026"
+    assert formato.parse_competencia("") is None
+    # inválido (mês 13 / lixo): devolve cru, não inventa
+    assert formato.parse_competencia("132026") == "132026"
+    assert formato.parse_competencia("abc") == "abc"
+
+
+def test_documento_formata_cpf_e_cnpj():
+    """O filtro de documento formata CPF (11) e CNPJ (14) no padrão br; fora disso
+    devolve o que veio (I-6)."""
+    from tronco import formato
+    assert formato.documento("11222333000181") == "11.222.333/0001-81"
+    assert formato.documento("12345678909") == "123.456.789-09"
+    assert formato.documento("123") == "123"
+
+
+def test_parse_subitem_canoniza_e_aceita_pontuado():
+    """Subitem LC 116 (N.NN): digitação corrida vira N.NN; já pontuado/vazio passa cru (I-6)."""
+    from tronco import formato
+    assert formato.parse_subitem("702") == "7.02"
+    assert formato.parse_subitem("1705") == "17.05"
+    assert formato.parse_subitem("7.02") == "7.02"     # já pontuado, intacto
+    assert formato.parse_subitem("") is None
+
+
+def test_local_incidencia_lc116_pre_seleciona_excecoes_e_regra_geral():
+    """Local de incidência do ISS (art. 3º): exceções objetivas → local da prestação;
+    o resto → estabelecimento do prestador (regra geral). Itens da LC 157/2016 suspensos
+    pelo STF (ADI 5835) ficam na regra geral (não chuta o contestado — I-6). É default
+    sugerido, sempre retificável (I-3)."""
+    from galho_nfse.lc116 import local_incidencia_de
+    # exceções assentadas → local da prestação
+    for sub in ("7.02", "7.05", "7.10", "11.02", "12.07", "16.01", "17.05", "20.01"):
+        assert local_incidencia_de(sub) == "local_prestacao", sub
+    # regra geral → estabelecimento do prestador
+    for sub in ("1.06", "17.01", "12.13"):     # 12.13 é a exceção dentro do item 12
+        assert local_incidencia_de(sub) == "estabelecimento_prestador", sub
+    # itens contestados (LC 157, suspensos pelo STF) ficam na regra geral
+    for sub in ("4.22", "5.09", "15.01", "15.09", "10.04"):
+        assert local_incidencia_de(sub) == "estabelecimento_prestador", sub
+    # subitem não derivável → None (I-6)
+    assert local_incidencia_de("") is None

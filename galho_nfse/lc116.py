@@ -249,3 +249,48 @@ def descricao_servico(codigo: str | None) -> str | None:
     localizada (a tela não inventa — I-6)."""
     sub = subitem_de(codigo)
     return LISTA_LC116.get(sub) if sub else None
+
+
+# Subitens cujo ISS é devido no LOCAL DA PRESTAÇÃO — exceções do art. 3º da LC 116/2003
+# (incisos II a XXII). Fora desta lista vale a REGRA GERAL do caput: estabelecimento do
+# prestador. Transcrito do texto da lei (Planalto) — DADO DE REFERÊNCIA objetivo, não
+# interpretação: serve para PRÉ-SELECIONAR o campo, que o operador pode retificar (I-3).
+#
+# Deliberadamente NÃO inclui os subitens acrescidos pela LC 157/2016 (4.22, 4.23, 5.09 —
+# planos de saúde; 10.04 e 15.09 — leasing; 15.01 — administração de cartões), cuja
+# eficácia o STF suspendeu na ADI 5835: são controversos, então ficam na regra geral
+# para o operador decidir caso a caso (I-6: não se chuta o que está em disputa).
+SUBITENS_LOCAL_PRESTACAO: frozenset[str] = frozenset({
+    "3.05",                                   # andaimes, palcos, coberturas (II)
+    "7.02", "7.19",                           # execução da obra (III)
+    "7.04",                                   # demolição (IV)
+    "7.05",                                   # edificações, estradas, pontes... (V)
+    "7.09",                                   # varrição, coleta, destinação de lixo (VI)
+    "7.10",                                   # limpeza de vias/imóveis... (VII)
+    "7.11",                                   # decoração e jardinagem (VIII)
+    "7.12",                                   # tratamento de efluentes (IX)
+    "7.16",                                   # florestamento/reflorestamento (XII)
+    "7.17",                                   # escoramento, contenção de encostas (XIII)
+    "7.18",                                   # limpeza e dragagem (XIV)
+    "11.01",                                  # guarda e estacionamento (XV)
+    "11.02",                                  # vigilância, segurança, monitoramento (XVI)
+    "11.04",                                  # armazenamento, depósito, carga... (XVII)
+    "16.01", "16.02",                         # transporte de natureza municipal (XIX)
+    "17.05",                                  # fornecimento de mão de obra (XX)
+    "17.10",                                  # feiras, exposições, congressos (XXI)
+    "20.01", "20.02", "20.03",                # portos, aeroportos, terminais (XXII)
+    # Item 12 (diversão/lazer/entretenimento), exceto 12.13 (XVIII):
+    *(s for s in LISTA_LC116 if s.startswith("12.") and s != "12.13"),
+})
+
+
+def local_incidencia_de(codigo: str | None) -> str | None:
+    """Local de incidência do ISS conforme o art. 3º da LC 116/2003: 'local_prestacao'
+    para os subitens listados em `SUBITENS_LOCAL_PRESTACAO`, senão 'estabelecimento_
+    prestador' (regra geral). None se o subitem não puder ser derivado (I-6). Devolve a
+    chave do vocabulário `contratos.ISS_LOCAL` — é um DEFAULT sugerido, sempre
+    retificável pelo operador (I-3)."""
+    sub = subitem_de(codigo)
+    if not sub:
+        return None
+    return "local_prestacao" if sub in SUBITENS_LOCAL_PRESTACAO else "estabelecimento_prestador"
