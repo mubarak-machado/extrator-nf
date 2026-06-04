@@ -452,6 +452,19 @@ td .sub.mono { font-family: var(--font-mono); }
 .list-row .amount { text-align: right; }
 .list-row .amount .total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.2rem; font-weight: 600; }
 .list-row .amount .meta { font-size: .78rem; color: var(--ink-3); }
+.btn.btn-sm { padding: .4rem .7rem; font-size: .85rem; }
+/* Linha de NPP em duas linhas (histórico e lista de NPPs): a linha NÃO é um link
+   inteiro — o acesso vai num botão à direita. 1ª linha: identidade (data·sequencial)
+   + nome completo do prestador; 2ª: competência, nº de notas e situação. O total
+   mescla as duas linhas (centralizado à direita). */
+.npp-row { padding: var(--sp-4) var(--sp-5); }
+.npp-row .who { min-width: 0; }
+.npp-row .who-top { display: flex; align-items: baseline; gap: var(--sp-2) var(--sp-3); flex-wrap: wrap; }
+.npp-row .who-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
+.npp-row .who-prest { font-weight: 600; color: var(--ink); }
+.npp-row .who .sub { display: block; margin-top: 3px; font-size: .85rem; color: var(--ink-2); }
+.npp-row .amount { margin-left: auto; }
+.npp-row .btn { flex: none; }
 
 /* ---------- formulário ---------- */
 fieldset { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--sp-4); margin: var(--sp-3) 0 0; }
@@ -763,6 +776,21 @@ tr.linha-diverge > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .module-card .mod-go { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--primary); font-weight: 600; font-size: .88rem; }
 .module-card .mod-warn { color: var(--warn-ink); font-weight: 600; }
 .module-card .mod-top { display: flex; align-items: center; gap: var(--sp-3); }
+/* Card estático (não é um link inteiro): os links vivem dentro dele, então some o
+   realce de "clicável" do card no hover. */
+.module-card.estatico:hover { box-shadow: var(--shadow-sm); border-color: var(--line); }
+.module-card .mod-go[href]:hover { text-decoration: underline; }
+/* Lista compacta de NPPs abertas dentro do card de Início. */
+.npp-mini-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.npp-mini {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2); margin: 0 calc(var(--sp-2) * -1);
+  border-radius: var(--radius); text-decoration: none; color: var(--ink); min-width: 0;
+}
+.npp-mini:hover { background: var(--primary-soft); color: var(--ink); }
+.npp-mini .icon { width: .9rem; height: .9rem; color: var(--primary); flex: none; }
+.npp-mini-id { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: .95rem; flex: none; }
+.npp-mini-emp { font-size: .82rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* histórico: bloco por lote */
 .lote { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); margin-bottom: var(--sp-4); overflow: hidden; }
@@ -836,19 +864,20 @@ tr.linha-diverge > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .empty-banner p { margin: 0; color: var(--ink-2); font-size: .9rem; }
 .empty-banner .btn { flex: none; }
 
-.import-card { max-width: 720px; padding: var(--sp-5) var(--sp-6); }
-.import-status { margin: 0 0 var(--sp-4); color: var(--ink-2); font-size: .92rem; }
-.import-form .field { margin-bottom: var(--sp-4); }
-.import-form input[type="text"] { font-family: var(--font-mono); font-size: .85rem; }
-.import-form .actions { margin-bottom: 0; }
-
-/* duas opções de importação lado a lado */
-.import-grid { align-items: stretch; }
-.import-card { display: flex; flex-direction: column; }
-.import-top { display: flex; gap: var(--sp-3); align-items: flex-start; margin-bottom: var(--sp-4); }
-.import-top h3 { margin: 0 0 .1rem; font-size: 1.05rem; }
-.import-card .import-form { margin-top: auto; }
-.import-card input[type="text"] { width: 100%; font-family: var(--font-mono); font-size: .82rem; }
+/* ---------- importar notas para a NPP (duas opções, lado a lado) ---------- */
+.import-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--sp-3); align-items: start; }
+.import-card { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4) var(--sp-5); }
+.import-card + .import-card { margin-top: 0; }
+.import-head { display: flex; gap: var(--sp-3); align-items: center; }
+.import-ico {
+  width: 2.1rem; height: 2.1rem; flex: none; display: grid; place-items: center;
+  border-radius: var(--radius); background: var(--primary-soft); color: var(--primary);
+}
+.import-ico .icon { width: 1.1rem; height: 1.1rem; }
+.import-titulo h4 { margin: 0; font-family: var(--font-display); font-size: 1rem; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+.import-titulo p { margin: .1rem 0 0; font-size: .82rem; color: var(--ink-3); line-height: 1.4; }
+.import-form { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: auto; }
+.import-form .btn { align-self: flex-start; }
 input[type="file"] {
   font: inherit; font-size: .88rem; width: 100%;
   padding: .5rem; border: 1px dashed var(--line-strong);
@@ -888,11 +917,18 @@ input[type="file"]::file-selector-button:hover { background: var(--surface); }
 .modal-msg-erro { color: var(--danger-ink); }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--sp-3); padding: 0 var(--sp-5) var(--sp-5); }
 
-/* ---------- seletor de pasta (webkitdirectory) ---------- */
-.seletor-pasta-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
-.seletor-pasta-info { font-size: .85rem; color: var(--ink-3); font-family: var(--font-mono); }
-.import-exemplos { margin-top: var(--sp-3); }
-.link-inline { background: none; border: none; padding: 0; font: inherit; font-size: .85rem; color: var(--ink-3); text-decoration: underline; cursor: pointer; }
+/* ---------- seletor de pasta (botão que abre o input webkitdirectory oculto) ---------- */
+.dropzone {
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%;
+  padding: .55rem .7rem; font: inherit; text-align: left; cursor: pointer;
+  border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--ink-2);
+}
+.dropzone:hover { background: var(--surface); border-color: var(--primary); color: var(--ink); }
+.dropzone .icon { width: 1rem; height: 1rem; flex: none; color: var(--primary); }
+.seletor-pasta-info { font-size: .85rem; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-exemplos { margin-top: calc(var(--sp-2) * -1); }
+.link-inline { background: none; border: none; padding: 0; font: inherit; font-size: .82rem; color: var(--ink-3); text-decoration: underline; cursor: pointer; }
 .link-inline:hover { color: var(--ink); }
 
 /* ---------- sugestão de material (máquina sugere, operador valida) ---------- */

@@ -4,7 +4,7 @@
 {% set r = item.reg %}
 {% set nfe = item.tipo == 'NFE' %}
 
-<p class="breadcrumb"><a href="{{ url_for('hub') }}">Início</a> › {% if npp %}<a href="{{ url_for('npp_detalhe', id_=npp.id) }}">{{ npp.numero }}</a> › {% endif %}Nota {{ r.numero or '(sem número)' }}</p>
+<p class="breadcrumb"><a href="{{ url_for('hub') }}">Início</a> › {% if npp %}<a href="{{ url_for('npp_detalhe', id_=npp.id) }}">{{ npp.numero | npp_curto }}</a> › {% endif %}Nota {{ r.numero or '(sem número)' }}</p>
 
 <div class="page-head row">
   <h2>Nota {{ r.numero or '(sem número)' }}</h2>

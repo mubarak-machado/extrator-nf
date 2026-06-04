@@ -5,12 +5,12 @@
 <div class="page-head row">
   <div>
     <h2>NPPs — Notas de Pré-Pagamento</h2>
-    <p>Cada pagamento é uma NPP: um contrato, uma competência, uma ou mais notas. Crie a NPP e importe as notas dentro dela — não existe nota solta.</p>
+    <p>Cada pagamento é uma NPP: um contrato, uma competência, uma ou mais notas. As já exportadas continuam aqui — é a memória que impede pagamento em duplicidade.</p>
   </div>
-  {% if cards %}<a class="btn ml-auto" href="{{ url_for('npp_nova') }}"><svg class="icon"><use href="#i-doc"/></svg> Nova NPP</a>{% endif %}
+  {% if npp_total %}<a class="btn ml-auto" href="{{ url_for('npp_nova') }}"><svg class="icon"><use href="#i-doc"/></svg> Nova NPP</a>{% endif %}
 </div>
 
-{% if not cards %}
+{% if not npp_total %}
 <div class="card empty-banner">
   <svg class="icon" aria-hidden="true"><use href="#i-doc"/></svg>
   <div>
@@ -20,24 +20,37 @@
   <a class="btn" href="{{ url_for('npp_nova') }}">Nova NPP</a>
 </div>
 {% else %}
+
+<div class="tabs" role="tablist" aria-label="Filtrar NPPs">
+  <a role="tab" class="tab" href="{{ url_for('npps', ver='todas') }}" aria-selected="{{ 'true' if ver == 'todas' else 'false' }}">Todas ({{ n_todas }})</a>
+  <a role="tab" class="tab" href="{{ url_for('npps', ver='abertas') }}" aria-selected="{{ 'true' if ver == 'abertas' else 'false' }}">Abertas ({{ n_abertas }})</a>
+  <a role="tab" class="tab" href="{{ url_for('npps', ver='exportadas') }}" aria-selected="{{ 'true' if ver == 'exportadas' else 'false' }}">Exportadas ({{ n_exportadas }})</a>
+</div>
+
+{% if not cards %}
+<p class="empty-msg mt-3">Nenhuma NPP nesta visão.</p>
+{% else %}
 <section class="section" aria-label="NPPs">
   {% for card in cards %}
-  <a class="card list-row mt-3" href="{{ url_for('npp_detalhe', id_=card.npp.id) }}">
+  <div class="card list-row npp-row mt-3">
     <div class="who">
-      <strong>{{ card.npp.numero }}</strong>
-      <span class="sub">{{ card.contrato_rotulo }}</span>
+      <div class="who-top">
+        <span class="who-num">{{ card.npp.numero | npp_curto }}</span>
+        <span class="who-prest">{{ card.prestador or '(contrato removido)' }}</span>
+      </div>
       <span class="sub">
         Competência {{ card.npp.competencia | competencia }} · {{ card.n }} nota(s) ·
-        {% if card.status == 'vazia' %}vazia{% elif card.status == 'exportada' %}exportada{% else %}{{ card.novas }} nova(s){% endif %}
+        {% if card.status == 'vazia' %}vazia{% elif card.status == 'exportada' %}exportada{% if card.exportado_em %} {{ card.exportado_em | data }}{% endif %}{% else %}{{ card.novas }} nova(s){% endif %}
         {% if card.npp.rotulo %} · {{ card.npp.rotulo }}{% endif %}
       </span>
     </div>
     <div class="amount">
-      <div class="total">{{ card.total | moeda }}</div>
-      <div class="meta">abrir <svg class="icon"><use href="#i-seta"/></svg></div>
+      <div class="total{{ ' zero' if card.total is ezero else '' }}">{{ card.total | moeda }}</div>
     </div>
-  </a>
+    <a class="btn ghost btn-sm" href="{{ url_for('npp_detalhe', id_=card.npp.id) }}">Abrir NPP <svg class="icon"><use href="#i-seta"/></svg></a>
+  </div>
   {% endfor %}
 </section>
+{% endif %}
 {% endif %}
 {% endblock %}

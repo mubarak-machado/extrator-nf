@@ -117,6 +117,37 @@ nenhum invariante tocado). **71 testes verdes.**
   e mostra **tooltip** de conferência (I-6). `_agregar_federal` agrupa por `chave`; partial
   novo `_linha_tributo_federal.html`; swap inline por nota (`data-federal-chave`).
 
+## Revisão geral da interface — apresentação das NPPs: FEITO (2026-06-04) — branch `refit/revisao-interface`
+
+Rodada de refino visual/UX da jornada por NPP pedida pelo humano. **Só Fase 1/apresentação;
+nenhum invariante quebrado.** **77 testes verdes.**
+
+- **Rótulo compacto da NPP (`npp_curto`):** o `numero`
+  `NPP_<iniciais>_<AAAAMMDD>_<NNNN>` é identidade/nome de arquivo, não rótulo de UI. Na
+  tela mostra só `dia/mês · sequencial` (ex.: `04/06 · 0001`) — some prefixo e iniciais.
+  Só apresentação (I-2): o `numero` segue **imutável** no banco e **inteiro** no artefato
+  exportado; autoria das iniciais persistida em `criada_por`/Responsável (I-4). Aplicado
+  na lista, no detalhe da NPP/nota e no form.
+- **Filtro `competencia` tolerante a `AAAA-MM`** (a NPP guarda a competência sem dia):
+  `2026-05 → 05/2026` em toda a app (antes vinha cru).
+- **Cards de importação (detalhe da NPP) refeitos:** mais compactos/harmônicos/modernos —
+  chip de ícone estilizado (antes sem estilo fora de `.module-card`), header título+descrição
+  e **dropzone tracejada** para a pasta espelhando o input nativo. Ganchos de JS preservados.
+- **Linha de NPP em duas linhas (`.npp-row`, compartilhada por lista e histórico):** 1ª
+  linha = `data·seq` + **nome completo do prestador**; 2ª = competência · nº de notas ·
+  situação; **total mescla as duas** à direita; **botão "Abrir NPP"** em vez de
+  linha-inteira-link (o valor não herda mais a cor de link).
+- **DECISÃO (arquitetura): menu "Histórico" removido — fundido na lista de NPPs.** Desde
+  que o histórico passou a ser agrupado por NPP, ele era apenas "as NPPs filtradas por
+  exportadas". A lista de NPPs ganhou **filtro Todas/Abertas/Exportadas** e passou a exibir
+  a **data de exportação** nas exportadas. **I-1 intacto:** a idempotência vive no
+  `RegistroDeExportacao` (chave = PK) + checagem `ja_exportada()` antes de cada lote, nunca
+  na tela — remover o menu não a toca. `/historico` → **redirect** p/ `/npps?ver=exportadas`;
+  `historico.html` removido; nav enxuta (Início · NPPs · Configuração); o card do Início
+  virou **"NPPs exportadas"**. *Ressalva:* nota exportada sem NPP (órfã de base legada)
+  deixaria de ter tela — não há nenhuma hoje e o modelo novo não cria mais; reavaliar se um
+  dia importar base legada.
+
 ## Refit visual da aba de Impostos da NPP: FEITO (2026-06-04) — branch `refit-grupo-impostos` (mergeada+removida)
 
 Refino visual da aba "Grupos de impostos" pedido pelo humano (direção escolhida:

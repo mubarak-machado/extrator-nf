@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ npp.numero }} · Extrator NF{% endblock %}
+{% block title %}{{ npp.numero | npp_curto }} · Extrator NF{% endblock %}
 {% block conteudo %}
 
-<p class="breadcrumb"><a href="{{ url_for('npps') }}">NPPs</a> › {{ npp.numero }}</p>
+<p class="breadcrumb"><a href="{{ url_for('npps') }}">NPPs</a> › {{ npp.numero | npp_curto }}</p>
 
 <div class="page-head row">
   <div>
-    <h2>{{ npp.numero }}</h2>
+    <h2 title="{{ npp.numero }}">{{ npp.numero | npp_curto }}</h2>
     <p>{{ contrato_rotulo }}{% if npp.rotulo %} · {{ npp.rotulo }}{% endif %}</p>
   </div>
   {% if itens %}
@@ -99,36 +99,36 @@
 
   <section class="section" aria-label="Importar notas para esta NPP">
     <h3>Importar notas para esta NPP</h3>
-    <div class="cards-2 import-grid">
+    <div class="import-grid">
       <div class="card import-card">
-        <div class="import-top">
-          <span class="mod-icon"><svg class="icon"><use href="#i-doc"/></svg></span>
-          <div><h3>Uma nota</h3><p class="mod-desc">Envie um único arquivo XML (NF-e ou NFS-e).</p></div>
+        <div class="import-head">
+          <span class="import-ico"><svg class="icon"><use href="#i-doc"/></svg></span>
+          <div class="import-titulo">
+            <h4>Uma nota</h4>
+            <p>Um único arquivo XML (NF-e ou NFS-e).</p>
+          </div>
         </div>
         <form method="post" action="{{ url_for('npp_importar_arquivo', id_=npp.id) }}" enctype="multipart/form-data" class="import-form">
-          <label class="field">
-            <span class="lbl">Arquivo XML</span>
-            <input type="file" name="arquivo" accept=".xml,application/xml,text/xml" required>
-          </label>
-          <div class="actions"><button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar esta nota</button></div>
+          <input type="file" name="arquivo" accept=".xml,application/xml,text/xml" aria-label="Arquivo XML" required>
+          <button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar nota</button>
         </form>
       </div>
 
       <div class="card import-card">
-        <div class="import-top">
-          <span class="mod-icon"><svg class="icon"><use href="#i-servico"/></svg></span>
-          <div><h3>Uma pasta</h3><p class="mod-desc">Selecione uma pasta inteira; lê todos os .xml dela de uma vez.</p></div>
+        <div class="import-head">
+          <span class="import-ico"><svg class="icon"><use href="#i-servico"/></svg></span>
+          <div class="import-titulo">
+            <h4>Uma pasta</h4>
+            <p>Lê todos os .xml da pasta de uma vez.</p>
+          </div>
         </div>
         <form method="post" action="{{ url_for('npp_importar_pasta', id_=npp.id) }}" enctype="multipart/form-data" class="import-form" data-form-pasta>
-          <label class="field">
-            <span class="lbl">Pasta com os XML</span>
-            <input type="file" name="arquivos" id="seletor-pasta" webkitdirectory directory multiple required hidden>
-            <span class="seletor-pasta-row">
-              <button type="button" class="btn ghost" data-abrir-seletor="seletor-pasta"><svg class="icon"><use href="#i-doc"/></svg> Selecionar pasta…</button>
-              <span class="seletor-pasta-info" data-info-seletor="seletor-pasta">Nenhuma pasta selecionada</span>
-            </span>
-          </label>
-          <div class="actions"><button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar pasta selecionada</button></div>
+          <input type="file" name="arquivos" id="seletor-pasta" webkitdirectory directory multiple required hidden>
+          <button type="button" class="dropzone" data-abrir-seletor="seletor-pasta">
+            <svg class="icon"><use href="#i-doc"/></svg>
+            <span class="seletor-pasta-info" data-info-seletor="seletor-pasta">Selecionar pasta…</span>
+          </button>
+          <button type="submit" class="btn"><svg class="icon"><use href="#i-exportar"/></svg> Importar pasta</button>
         </form>
         <form method="post" action="{{ url_for('npp_importar_exemplos', id_=npp.id) }}" class="import-exemplos">
           <button type="submit" class="link-inline">ou usar a pasta de exemplos do projeto</button>

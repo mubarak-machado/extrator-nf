@@ -143,6 +143,26 @@ def test_formato_formatar_dispatch():
         formato.formatar("x", "inexistente")
 
 
+def test_npp_curto_e_so_apresentacao():
+    """O rótulo curto da NPP deriva do `numero` imutável (data/mês + sequencial),
+    some prefixo 'NPP' e iniciais (autoria fica no criada_por/arquivo). Fora do
+    padrão, devolve o que veio — nunca inventa (I-6)."""
+    from tronco import formato
+    assert formato.npp_curto("NPP_MN_20260603_0001") == "03/06 · 0001"
+    assert formato.npp_curto("NPP_ABC_20251231_0042") == "31/12 · 0042"
+    assert formato.npp_curto("") == "—"
+    assert formato.npp_curto("fora_do_padrao") == "fora_do_padrao"
+
+
+def test_competencia_aceita_ano_mes():
+    """A NPP guarda competência como 'AAAA-MM' (sem dia); o filtro formata os dois
+    casos (com e sem dia) para 'MM/AAAA'."""
+    from tronco import formato
+    assert formato.competencia("2026-05") == "05/2026"
+    assert formato.competencia("2026-05-01") == "05/2026"
+    assert formato.competencia("") == "—"
+
+
 # ---------- I-4: marcação persistida com autoria ----------
 
 def test_marcacao_persistida_com_autor():

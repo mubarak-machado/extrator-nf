@@ -14,7 +14,6 @@ from __future__ import annotations
 import os
 import re
 import tempfile
-from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -52,7 +51,7 @@ app = Flask(__name__,
 app.secret_key = "mvp-poc-extrator-nf"
 
 for nome in ("moeda", "numero", "data", "datahora", "competencia",
-             "cnpj", "percent", "chave", "simnao"):
+             "cnpj", "percent", "chave", "simnao", "npp_curto"):
     app.jinja_env.filters[nome] = getattr(formato, nome)
 
 # Razão social canônica de um órgão tomador conhecido (por CNPJ) — só exibição,
@@ -134,23 +133,27 @@ def hub():
     seu valor pendente, e o Histórico do que já foi exportado. Sem NPP nenhuma,
     convida a criar a primeira."""
     store = StoreNPP(); npps_lista = store.listar(); store.fechar()
-    abertas = vazias = 0
-    total_aberto = Decimal("0")
-    for npp in npps_lista:
-        itens = _itens_da_npp(npp.id)
-        st = _npp_status(itens)
+    cstore = StoreContratos(); contr_por_id = {c.id: c for c in cstore.listar()}
+    cstore.fechar()
+    abertas_lista = []
+    vazias = exportadas = 0
+    for npp in npps_lista:                         # listar() já vem mais recente primeiro
+        st = _npp_status(_itens_da_npp(npp.id))
         if st == "aberta":
-            abertas += 1
-            total_aberto += Decimal(_bruto([i for i in itens if not i["ja_exportada"]]))
+            c = contr_por_id.get(npp.contrato_id)
+            empresa = (getattr(c, "prest_identificacao", None) or "").split()
+            abertas_lista.append({"id": npp.id, "numero": npp.numero,
+                                  "empresa": empresa[0] if empresa else None})
         elif st == "vazia":
             vazias += 1
-    registro = RegistroDeExportacao(); exportadas = registro.listar(); registro.fechar()
+        elif st == "exportada":
+            exportadas += 1
     cards = {
         "npp_total": len(npps_lista),
-        "npp_abertas": abertas,
+        "npp_abertas": len(abertas_lista),
+        "abertas_lista": abertas_lista,
         "npp_vazias": vazias,
-        "npp_valor": f"{total_aberto:.2f}",
-        "hist_total": len(exportadas),
+        "npp_exportadas": exportadas,
         "sem_npps": not npps_lista,
     }
     return render_template("hub.html", cards=cards)
@@ -158,34 +161,11 @@ def hub():
 
 @app.route("/historico")
 def historico():
-    """Notas já exportadas (registro de idempotência), agrupadas por lote. É o
-    'feito': consulta, não some, e impede pagamento em duplicidade (I-1)."""
-    por_chave = {it["reg"].chave: it for it in _carregar() if it["reg"]}
-    npps_store = StoreNPP(); npp_por_id = {n.id: n for n in npps_store.listar()}
-    npps_store.fechar()
-    registro = RegistroDeExportacao()
-    exportadas = registro.listar()
-    registro.fechar()
-    lotes = defaultdict(list)
-    for e in exportadas:
-        it = por_chave.get(e["chave"])
-        r = it["reg"] if it else None
-        npp = npp_por_id.get(it["npp_id"]) if it and it.get("npp_id") else None
-        lotes[e["lote_id"]].append({
-            "chave": e["chave"], "tipo": e["tipo"], "exportado_em": e["exportado_em"],
-            "numero": getattr(r, "numero", None),
-            "npp_id": npp.id if npp else None,
-            "npp_numero": npp.numero if npp else None,
-            "nome": (getattr(r, "emit_nome", None) if e["tipo"] == "NFE"
-                     else getattr(r, "prest_nome", None)) if r else None,
-            "valor": (getattr(r, "valor_total", None) if e["tipo"] == "NFE"
-                      else getattr(r, "valor_servicos", None)) if r else None,
-            "disponivel": it is not None,
-        })
-    blocos = [{"lote_id": lid, "exportado_em": its[0]["exportado_em"],
-               "n": len(its), "itens": its} for lid, its in lotes.items()]
-    blocos.sort(key=lambda b: b["exportado_em"], reverse=True)
-    return render_template("historico.html", blocos=blocos, total=len(exportadas))
+    """O histórico de exportação deixou de ter tela própria: virou a lista de NPPs
+    filtrada por 'exportadas' (uma NPP exportada É um registro do que já foi pago).
+    Mantido como atalho/compatibilidade. A idempotência (I-1) segue intacta no
+    RegistroDeExportacao e na checagem feita antes de cada lote — não dependia da tela."""
+    return redirect(url_for("npps", ver="exportadas"))
 
 
 @app.route("/nota/<chave>")
@@ -1051,25 +1031,48 @@ def _rotulos_contratos(contratos):
 
 @app.route("/npps")
 def npps():
-    """Lista de NPPs (abertas, vazias e exportadas), com contrato, competência,
-    contagem e valor bruto."""
+    """Lista única de NPPs (abertas, vazias e exportadas). O antigo 'Histórico' é esta
+    mesma lista filtrada por 'exportadas' — uma NPP exportada É o registro do que já foi
+    pago. Filtro ?ver=todas|abertas|exportadas. A idempotência (I-1) vive no
+    RegistroDeExportacao; aqui ele só informa a DATA de exportação exibida nas exportadas."""
+    ver = request.args.get("ver", "todas")
+    if ver not in ("todas", "abertas", "exportadas"):
+        ver = "todas"
     store = StoreNPP(); lista = store.listar(); store.fechar()
-    cstore = StoreContratos()
-    por_id = {c.id: c for c in cstore.listar()}
-    cstore.fechar()
+    cstore = StoreContratos(); por_id = {c.id: c for c in cstore.listar()}; cstore.fechar()
+    # Data de exportação por NPP (a mais recente), lida do registro de idempotência.
+    registro = RegistroDeExportacao(); exportadas = registro.listar(); registro.fechar()
+    por_chave = {it["reg"].chave: it for it in _carregar() if it["reg"]}
+    exp_por_npp: dict = {}
+    for e in exportadas:
+        it = por_chave.get(e["chave"])
+        nid = it.get("npp_id") if it else None
+        if nid and e["exportado_em"] > exp_por_npp.get(nid, ""):
+            exp_por_npp[nid] = e["exportado_em"]
     cards = []
     for npp in lista:
         itens = _itens_da_npp(npp.id)
         c = por_id.get(npp.contrato_id)
         cards.append({
             "npp": npp,
-            "contrato_rotulo": retencao.rotulo_contrato(c) if c else "(contrato removido)",
+            "prestador": (c.prest_identificacao if c else None),   # nome completo (1ª linha)
             "n": len(itens),
             "novas": sum(1 for i in itens if not i["ja_exportada"]),
             "total": _bruto(itens),
             "status": _npp_status(itens),
+            "exportado_em": exp_por_npp.get(npp.id),
         })
-    return render_template("npps.html", cards=cards)
+    n_todas = len(cards)
+    n_exportadas = sum(1 for c in cards if c["status"] == "exportada")
+    n_abertas = n_todas - n_exportadas        # abertas + vazias (tudo que ainda não saiu)
+    if ver == "abertas":
+        visiveis = [c for c in cards if c["status"] != "exportada"]
+    elif ver == "exportadas":
+        visiveis = [c for c in cards if c["status"] == "exportada"]
+    else:
+        visiveis = cards
+    return render_template("npps.html", cards=visiveis, ver=ver, npp_total=n_todas,
+                           n_todas=n_todas, n_abertas=n_abertas, n_exportadas=n_exportadas)
 
 
 @app.route("/npps/nova")

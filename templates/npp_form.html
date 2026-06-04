@@ -2,7 +2,7 @@
 {% block title %}{{ 'Nova NPP' if novo else 'Editar NPP' }} · Extrator NF{% endblock %}
 {% block conteudo %}
 
-<p class="breadcrumb"><a href="{{ url_for('npps') }}">NPPs</a> › {{ 'Nova NPP' if novo else npp.numero }}</p>
+<p class="breadcrumb"><a href="{{ url_for('npps') }}">NPPs</a> › {{ 'Nova NPP' if novo else npp.numero | npp_curto }}</p>
 
 <div class="page-head">
   <h2>{{ 'Nova NPP' if novo else 'Editar NPP' }}</h2>

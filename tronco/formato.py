@@ -93,13 +93,35 @@ def datahora(iso) -> str:
 
 
 def competencia(iso) -> str:
-    """'2026-05-01' -> '05/2026' (mês/ano de competência)."""
+    """'2026-05-01' ou '2026-05' -> '05/2026' (mês/ano de competência). A NPP guarda a
+    competência como 'AAAA-MM' (sem dia), que o fromisoformat não parseia — tratamos
+    esse caso explicitamente antes de cair no parse de data completa."""
     if not iso:
         return TRACO
+    s = str(iso)
+    ano, _, mes = s.partition("-")
+    if len(ano) == 4 and ano.isdigit() and len(mes) == 2 and mes.isdigit():
+        return f"{mes}/{ano}"
     try:
-        return datetime.fromisoformat(str(iso)).strftime("%m/%Y")
+        return datetime.fromisoformat(s).strftime("%m/%Y")
     except ValueError:
-        return str(iso)
+        return s
+
+
+def npp_curto(numero) -> str:
+    """'NPP_MNS_20260604_0001' -> '04/06 · 0001'. Rótulo de UI da NPP: o operador
+    trabalha na sua própria instância, então o prefixo 'NPP' (óbvio pelo contexto da
+    tela) e as iniciais do operador são ruído — sobra data (dia/mês) e sequencial.
+
+    Só apresentação (I-2): o `numero` completo segue **imutável** no banco (é a
+    identidade) e **inteiro** no artefato exportado; a autoria das iniciais continua
+    persistida em `criada_por` e visível na linha 'Responsável' do detalhe (I-4).
+    Fora do padrão (sem 8 dígitos de data), devolve o que veio — nunca inventa (I-6)."""
+    partes = str(numero or "").split("_")
+    if len(partes) >= 4 and len(partes[-2]) == 8 and partes[-2].isdigit():
+        d = partes[-2]
+        return f"{d[6:8]}/{d[4:6]} · {partes[-1]}"
+    return str(numero) if numero else TRACO
 
 
 def cnpj(valor) -> str:

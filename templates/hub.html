@@ -4,7 +4,7 @@
 
 <div class="page-head">
   <h2>O que você vai lançar?</h2>
-  <p>Cada pagamento é uma NPP — um contrato, uma competência, uma ou mais notas. Crie a NPP, importe as notas dentro dela e confira as retenções. O que já foi exportado fica no Histórico.</p>
+  <p>Cada pagamento é uma NPP — um contrato, uma competência, uma ou mais notas. Crie a NPP, importe as notas dentro dela e confira as retenções. O que já foi exportado continua na lista de NPPs, em “Exportadas”.</p>
 </div>
 
 {% if cards.sem_npps %}
@@ -19,7 +19,7 @@
 {% endif %}
 
 <section class="modules" aria-label="Módulos">
-  <a class="module-card" href="{{ url_for('npps') }}">
+  <div class="module-card estatico">
     <div class="mod-top">
       <span class="mod-icon"><svg class="icon"><use href="#i-servico"/></svg></span>
       <div>
@@ -27,26 +27,42 @@
         <p class="mod-desc">Pagamentos com nota nova, aguardando conferência ou exportação.</p>
       </div>
     </div>
+    {% if cards.abertas_lista %}
+    <ul class="npp-mini-list">
+      {% for a in cards.abertas_lista[:4] %}
+      <li>
+        <a class="npp-mini" href="{{ url_for('npp_detalhe', id_=a.id) }}">
+          <svg class="icon"><use href="#i-seta"/></svg>
+          <span class="npp-mini-id">{{ a.numero | npp_curto }}</span>
+          {% if a.empresa %}<span class="npp-mini-emp">{{ a.empresa }}</span>{% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mod-sub">Nenhuma NPP aberta no momento.</p>
+    {% endif %}
     <div class="mod-figs">
-      <span class="mod-big{{ ' zero' if cards.npp_valor is ezero else '' }}">{{ cards.npp_valor | moeda }}</span>
       <span class="mod-sub">{{ cards.npp_abertas }} aberta(s){% if cards.npp_vazias %} · {{ cards.npp_vazias }} vazia(s){% endif %}</span>
     </div>
-    <span class="mod-go">Abrir NPPs <svg class="icon"><use href="#i-seta"/></svg></span>
-  </a>
+    <a class="mod-go" href="{{ url_for('npps') }}">
+      {% if cards.npp_abertas > 4 %}+{{ cards.npp_abertas - 4 }} mais · {% endif %}Abrir todas as NPPs <svg class="icon"><use href="#i-seta"/></svg>
+    </a>
+  </div>
 
-  <a class="module-card" href="{{ url_for('historico') }}">
+  <a class="module-card" href="{{ url_for('npps', ver='exportadas') }}">
     <div class="mod-top">
       <span class="mod-icon"><svg class="icon"><use href="#i-check"/></svg></span>
       <div>
-        <h3>Histórico</h3>
-        <p class="mod-desc">Notas já exportadas, por lote e por NPP. Consulta — impede pagamento em duplicidade.</p>
+        <h3>NPPs exportadas</h3>
+        <p class="mod-desc">Pagamentos já exportados. Consulta — é a memória que impede pagamento em duplicidade.</p>
       </div>
     </div>
     <div class="mod-figs">
-      <span class="mod-big">{{ cards.hist_total }}</span>
-      <span class="mod-sub">nota(s) exportada(s)</span>
+      <span class="mod-big">{{ cards.npp_exportadas }}</span>
+      <span class="mod-sub">exportada(s)</span>
     </div>
-    <span class="mod-go">Ver histórico <svg class="icon"><use href="#i-seta"/></svg></span>
+    <span class="mod-go">Ver exportadas <svg class="icon"><use href="#i-seta"/></svg></span>
   </a>
 </section>
 

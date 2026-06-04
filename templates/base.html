@@ -72,7 +72,6 @@
     <nav class="nav" aria-label="Módulos">
       <a href="{{ url_for('hub') }}"{{ ' class=on' if request.endpoint == 'hub' }}>Início</a>
       <a href="{{ url_for('npps') }}"{{ ' class=on' if request.endpoint in ['npps', 'npp_nova', 'npp_criar', 'npp_detalhe', 'npp_editar', 'npp_salvar', 'npp_validar', 'npp_exportar', 'detalhe'] }}>NPPs</a>
-      <a href="{{ url_for('historico') }}"{{ ' class=on' if request.endpoint == 'historico' }}>Histórico</a>
       {# Configuração: agrupa as telas que se ajustam uma vez e se consultam pouco
          (Contratos, Regras, futuro Backup/Sync), deixando a nav de fluxo enxuta.
          Disclosure nativo — abre no clique mesmo sem JS; abre por padrão quando a
