@@ -551,23 +551,41 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
 .grupo-total .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
 .fed-agregado { border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: var(--sp-3); background: var(--surface); }
 .fed-agregado + .fed-agregado { margin-top: 0; }
+/* Resumo agregado em GRADE de células rotuladas (rótulo em cima, valor embaixo),
+   espelhando as colunas das tabelas INSS/ISS para harmonizar o retraído com o
+   expandido. As colunas de identidade são fr (mesmo container + mesmo template =
+   mesma largura entre as linhas, então alinham na vertical); as de valor têm
+   largura fixa para os números alinharem. Densidade igual à da tabela .dense. */
 .fed-resumo {
   list-style: none; cursor: pointer; user-select: none;
-  display: flex; align-items: center; gap: var(--sp-3) var(--sp-4); flex-wrap: wrap;
-  padding: var(--sp-3) var(--sp-4); font-size: .85rem; color: var(--ink-2);
+  display: grid; align-items: start; gap: var(--sp-1) var(--sp-3);
+  /* todas as colunas têm largura independente da linha (fr de identidade + fixas
+     de valor/ação), então as três linhas alinham verticalmente entre si. */
+  grid-template-columns:
+    minmax(6rem, 1.1fr) minmax(5rem, .9fr) minmax(7rem, 1.3fr)
+    7rem 7rem 10.5rem 1rem;
+  padding: var(--sp-2) var(--sp-3); font-size: .82rem; color: var(--ink-2);
 }
 .fed-resumo::-webkit-details-marker { display: none; }
 .fed-resumo:hover { background: var(--surface-2); }
 .fed-resumo:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--radius-sm); }
-.fed-resumo .fed-id { font-size: .95rem; color: var(--ink); }
-.fed-resumo .fed-id strong { font-family: var(--font-mono); }
-.fed-resumo .fed-mun { font-weight: 600; color: var(--ink); }
-.fed-resumo .fed-val { display: inline-flex; align-items: baseline; gap: var(--sp-2); }
-.fed-resumo .fed-val .ov { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); }
-.fed-resumo .fed-val b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
-.fed-resumo .fed-acao { margin-left: auto; display: inline-flex; align-items: center; gap: var(--sp-2); }
-.fed-resumo .fed-acao .btn { padding: .35rem .7rem; font-size: .82rem; }
-.fed-resumo .chev { width: .82rem; height: .82rem; opacity: .7; margin-left: var(--sp-2); transition: transform .15s ease; }
+.fed-resumo .fc { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fed-resumo .fc .ov { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); font-weight: 600; }
+.fed-resumo .fc .v { color: var(--ink); min-width: 0; }
+.fed-resumo .fc.num { text-align: right; }
+.fed-resumo .fc.num b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+.fed-resumo .fc-mun .v { font-weight: 600; }
+.fed-resumo .fc-trib .v strong { font-family: var(--font-mono); }
+/* rótulos das colunas de valor ecoam o acento das thead (destaque/sugestão) */
+.fed-resumo .fc-dest .ov { color: var(--declarado-ink); }
+.fed-resumo .fc-acao .v { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.fed-resumo .fc-acao .btn { padding: .3rem .6rem; font-size: .8rem; }
+.fed-resumo .chev { align-self: center; justify-self: end; width: .82rem; height: .82rem; opacity: .7; transition: transform .15s ease; }
+/* telas estreitas: degrada para empilhar (mantém os rótulos, perde o alinhamento em grade) */
+@media (max-width: 820px) {
+  .fed-resumo { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+  .fed-resumo .fc.num { text-align: left; }
+}
 .fed-agregado[open] .fed-resumo .chev { transform: rotate(180deg); }
 .fed-agregado[open] .fed-resumo { border-bottom: 1px solid var(--line); }
 /* botão "Confirmar agregado": aparece só com a linha FECHADA; aberta, valida-se tributo
@@ -588,17 +606,22 @@ input[type="radio"] { width: 1.05rem; height: 1.05rem; accent-color: var(--prima
   margin-bottom: var(--sp-4); border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden;
 }
+/* cabeçalho em DUAS linhas fixas: título (linha 1) + resumo (linha 2). Manter o
+   resumo sempre na 2ª linha evita que um cartão fique com 1 linha e outro com 2,
+   o que desequilibrava a altura entre os grupos. */
 .grupo-head {
   list-style: none; cursor: pointer; user-select: none;
-  display: flex; align-items: center; gap: var(--sp-3) var(--sp-4); flex-wrap: wrap;
+  display: flex; flex-direction: column; gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4); background: var(--surface-2);
 }
 .grupo-head::-webkit-details-marker { display: none; }
 .grupo-head:hover { background: color-mix(in srgb, var(--surface-2) 82%, var(--primary-soft)); }
 .grupo-head:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .grupo-colapsavel[open] > .grupo-head { border-bottom: 1px solid var(--line); }
-.gh-left { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); flex: 1 1 auto; min-width: 0; }
-.gh-nome { font-family: var(--font-display); font-size: 1.02rem; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+.gh-row1 { display: flex; align-items: center; gap: var(--sp-2); }
+.gh-row2 { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); padding-left: calc(.9rem + var(--sp-2)); }
+.gh-chips { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; }
+.gh-nome { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
 .grupo-head .chev { width: .9rem; height: .9rem; opacity: .55; transition: transform .15s ease; flex: none; }
 .grupo-colapsavel[open] > .grupo-head .chev { transform: rotate(180deg); }
 .grupo-head:hover .chev { opacity: 1; }

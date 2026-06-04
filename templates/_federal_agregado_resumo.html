@@ -1,23 +1,23 @@
 {# Resumo agregado dos tributos federais de UMA nota — a linha que o operador lê e
    confirma (código 6190 · 9,45%). Contexto: `ag` (agregado da nota) e `npp`. Renderizado
-   na página (dentro do <summary>) e como fragmento na validação inline. A soma é de
-   CONFERÊNCIA dos destaques fiéis (I-2) — nada apurado; o valor que conta é o validado
-   por tributo ao expandir. O botão "Confirmar agregado" só aparece com a linha fechada
-   (CSS) e sob pendência; ele submete, por `form=`, o <form> que vive no corpo do <details>
-   (botão é conteúdo válido em <summary>; <form> não seria) e confirma os tributos pelo
-   destaque do emitente (I-3/I-4). #}
-<span class="fed-mun">{{ ag.municipio or '—' }}</span>
-<span class="fed-nota"><a class="row-link" href="{{ url_for('detalhe', chave=ag.chave) }}">{{ ag.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if ag.tipo == 'NFE' else 'NFS-e' }}</span></span>
-<span class="fed-id">
-  {% if ag.codigo %}<strong>{{ ag.codigo }}</strong>{% if ag.aliquota_txt %} · {{ ag.aliquota_txt }}{% endif %}{% else %}<strong>Sem código</strong> · a resolver{% endif %}
-</span>
-<span class="fed-val"><span class="ov">destacado</span> <b class="num">{{ ag.soma_destaque | moeda }}</b></span>
-<span class="fed-val"><span class="ov">sugerido</span> <b class="num">{{ ag.soma_esperado | moeda }}</b></span>
-<span class="fed-acao">
+   na página (dentro do <summary>) e como fragmento na validação inline.
+
+   Layout em CÉLULAS ROTULADAS (rótulo em cima, valor embaixo), em grade, para harmonizar
+   com as tabelas de INSS/ISS: mesmas colunas (Município/Nota/Tributo/Destacado/Sugerido/
+   Situação) e mesma densidade, ainda que retraído ocupe duas linhas por item. A soma é de
+   CONFERÊNCIA dos destaques fiéis (I-2) — nada apurado; o valor que conta é o validado por
+   tributo ao expandir. O botão "Confirmar agregado" só aparece com a linha fechada (CSS) e
+   sob pendência; submete, por `form=`, o <form> do corpo do <details> (I-3/I-4). #}
+<span class="fc fc-mun"><span class="ov">Município</span><span class="v">{{ ag.municipio or '—' }}</span></span>
+<span class="fc fc-nota"><span class="ov">Nota</span><span class="v"><a class="row-link" href="{{ url_for('detalhe', chave=ag.chave) }}">{{ ag.nota_numero or '—' }}</a> <span class="sub">{{ 'NF-e' if ag.tipo == 'NFE' else 'NFS-e' }}</span></span></span>
+<span class="fc fc-trib"><span class="ov">Tributo</span><span class="v">{% if ag.codigo %}<strong>{{ ag.codigo }}</strong>{% if ag.aliquota_txt %} · {{ ag.aliquota_txt }}{% endif %}{% else %}<strong>Sem código</strong> · a resolver{% endif %}</span></span>
+<span class="fc fc-dest num"><span class="ov">Destacado</span><b class="num">{{ ag.soma_destaque | moeda }}</b></span>
+<span class="fc fc-sug num"><span class="ov">Sugerido</span><b class="num">{{ ag.soma_esperado | moeda }}</b></span>
+<span class="fc fc-acao"><span class="ov">Situação</span><span class="v">
   {% if ag.n_validavel and not ag.n_pendentes %}<span class="ok-chip">validado</span>
   {% elif ag.n_pendentes %}
     {% if ag.tem_destaque %}<button type="submit" form="fed-conf-{{ ag.chave }}" class="btn ghost fed-confirma" onclick="event.stopPropagation()" title="Confirmar de uma vez os tributos federais desta nota pelo destaque do emitente"><svg class="icon"><use href="#i-check"/></svg> Confirmar agregado</button>{% endif %}
     <span class="warn">a validar</span>
   {% else %}<span class="muted">não incide</span>{% endif %}
-</span>
+</span></span>
 <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>

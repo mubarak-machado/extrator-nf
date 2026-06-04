@@ -162,27 +162,34 @@
        atualizam por DOM na validação inline (app.js). #}
     <details class="grupo-colapsavel">
       <summary class="grupo-head">
-        <span class="gh-left">
+        {# Linha 1: só o título (sempre uma linha) — evita que um cabeçalho estoure
+           para a 2ª linha enquanto outro fica em uma só, desequilibrando os cartões. #}
+        <span class="gh-row1">
           <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
           <span class="gh-nome">{{ grupo.label }}</span>
-          <span class="gh-chip found{% if grupo.n_diverge_total > grupo.n_diverge_tratadas %} alarme{% endif %}"{% if not grupo.n_diverge_total %} hidden{% endif %}>
-            <svg class="icon"><use href="#i-alerta"/></svg>
-            <span data-txt>{{ grupo.n_diverge_total }} divergência{{ 's' if grupo.n_diverge_total != 1 }} encontrada{{ 's' if grupo.n_diverge_total != 1 }}</span>
-          </span>
-          <span class="gh-chip treated"{% if not grupo.n_diverge_tratadas %} hidden{% endif %}>
-            <svg class="icon"><use href="#i-check"/></svg>
-            <span data-txt>{{ grupo.n_diverge_tratadas }} divergência{{ 's' if grupo.n_diverge_tratadas != 1 }} tratada{{ 's' if grupo.n_diverge_tratadas != 1 }}</span>
-          </span>
-          <span class="gh-chip pend"{% if not grupo.n_pendentes %} hidden{% endif %}>
-            <span data-txt>{{ grupo.n_pendentes }} a validar</span>
-          </span>
-          <span class="gh-chip ok"{% if grupo.n_pendentes or grupo.n_diverge_total or not grupo.n_total %} hidden{% endif %}>
-            <svg class="icon"><use href="#i-check"/></svg> validado
-          </span>
         </span>
-        <span class="gh-total">
-          <span class="ov">validado</span>
-          <b class="num" data-grupo-total-head>{{ grupo.total_validado | moeda }}</b>
+        {# Linha 2: resumo (chips à esquerda, total à direita). #}
+        <span class="gh-row2">
+          <span class="gh-chips">
+            <span class="gh-chip found{% if grupo.n_diverge_total > grupo.n_diverge_tratadas %} alarme{% endif %}"{% if not grupo.n_diverge_total %} hidden{% endif %}>
+              <svg class="icon"><use href="#i-alerta"/></svg>
+              <span data-txt>{{ grupo.n_diverge_total }} divergência{{ 's' if grupo.n_diverge_total != 1 }} encontrada{{ 's' if grupo.n_diverge_total != 1 }}</span>
+            </span>
+            <span class="gh-chip treated"{% if not grupo.n_diverge_tratadas %} hidden{% endif %}>
+              <svg class="icon"><use href="#i-check"/></svg>
+              <span data-txt>{{ grupo.n_diverge_tratadas }} divergência{{ 's' if grupo.n_diverge_tratadas != 1 }} tratada{{ 's' if grupo.n_diverge_tratadas != 1 }}</span>
+            </span>
+            <span class="gh-chip pend"{% if not grupo.n_pendentes %} hidden{% endif %}>
+              <span data-txt>{{ grupo.n_pendentes }} a validar</span>
+            </span>
+            <span class="gh-chip ok"{% if grupo.n_pendentes or grupo.n_diverge_total or not grupo.n_total %} hidden{% endif %}>
+              <svg class="icon"><use href="#i-check"/></svg> validado
+            </span>
+          </span>
+          <span class="gh-total">
+            <span class="ov">validado</span>
+            <b class="num" data-grupo-total-head>{{ grupo.total_validado | moeda }}</b>
+          </span>
         </span>
       </summary>
       <div class="grupo-imposto" data-grupo="{{ grupo.key }}">
