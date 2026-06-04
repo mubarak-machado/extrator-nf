@@ -132,6 +132,61 @@ def cnpj(valor) -> str:
     return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
 
 
+def cpf(valor) -> str:
+    """11 dígitos -> '123.456.789-09'. Fora disso, devolve o que veio."""
+    d = _digitos(valor)
+    if len(d) != 11:
+        return str(valor) if valor else TRACO
+    return f"{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}"
+
+
+def documento(valor) -> str:
+    """CPF (11 díg) ou CNPJ (14 díg), formatado no padrão br conforme o tamanho.
+    Fora desses tamanhos, devolve o que veio (I-6: não chuta máscara)."""
+    d = _digitos(valor)
+    if len(d) == 11:
+        return cpf(d)
+    if len(d) == 14:
+        return cnpj(d)
+    return str(valor) if valor else TRACO
+
+
+def parse_competencia(texto) -> str | None:
+    """Lê uma competência/vigência digitada (mm/aaaa) e canoniza para 'MM/AAAA'.
+    Aceita digitação corrida ('052026'), com barra ('5/2026') ou já formatada. Só
+    apresentação/normalização de entrada (I-2). Inválido/vazio -> devolve o texto cru
+    (ou None se vazio), nunca adivinha mês/ano (I-6)."""
+    if texto is None:
+        return None
+    bruto = str(texto).strip()
+    if not bruto:
+        return None
+    d = _digitos(bruto)
+    # mmaaaa (6) ou maaaa (5, mês de 1 dígito) -> separa em mês/ano e zero-padda o mês.
+    if len(d) in (5, 6):
+        mes, ano = d[:-4], d[-4:]
+        mes_i = int(mes)
+        if 1 <= mes_i <= 12:
+            return f"{mes_i:02d}/{ano}"
+    return bruto
+
+
+def parse_subitem(texto) -> str | None:
+    """Canoniza o subitem da lista LC 116 (N.NN): '702' -> '7.02', '1705' -> '17.05'.
+    Aceita já pontuado. Só normalização de entrada (I-2). Vazio -> None; entrada que não
+    é só dígitos (ou já vem pontuada) -> devolve o que veio, não adivinha (I-6)."""
+    if texto is None:
+        return None
+    bruto = str(texto).strip()
+    if not bruto:
+        return None
+    d = _digitos(bruto)
+    # Só formata a digitação corrida (3+ dígitos, sem pontuação). Já pontuado/curto: cru.
+    if d == bruto and len(d) >= 3:
+        return f"{d[:-2]}.{d[-2:]}"
+    return bruto
+
+
 def percent(valor) -> str:
     """'5.00' -> '5,00%'."""
     if valor is None or valor == "":

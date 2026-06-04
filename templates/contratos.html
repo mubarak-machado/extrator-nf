@@ -22,28 +22,16 @@
 {% else %}
 <section class="section" aria-label="Contratos configurados">
   {% for c in contratos %}
-  <div class="card list-row mt-3">
+  <div class="card list-row npp-row mt-3">
     <div class="who">
-      <strong>{{ c.prest_identificacao }}</strong>
-      <span class="sub mono">{{ c.prest_documento | cnpj }}</span>
-      <span class="sub">
-        {{ vocab.categorias[c.categoria_servico] }} ·
-        {{ vocab.naturezas[c.prest_natureza] }}{% if c.prest_natureza == 'simples' and c.prest_simples_anexo %} (Anexo {{ c.prest_simples_anexo }}){% endif %} ·
-        material: {{ vocab.materiais[c.material_previsao] }}
-      </span>
-      <span class="sub">
-        Retém:
-        {% set marcados = [] %}
-        {% if c.ret_federal_sujeito %}{% set _ = marcados.append('IR/CSLL/COFINS/PIS' + (' (' ~ c.ret_federal_codigo_receita ~ ')' if c.ret_federal_codigo_receita else '')) %}{% endif %}
-        {% if c.inss_cessao_mao_obra %}{% set _ = marcados.append('INSS ' ~ (c.inss_aliquota or '') ~ '%') %}{% endif %}
-        {% if c.iss_retido_tomador %}{% set _ = marcados.append('ISS ' ~ (c.iss_aliquota or '') ~ '%') %}{% endif %}
-        {{ marcados | join(' · ') if marcados else '— (nenhuma marcada / dispensado)' }}
-      </span>
+      <div class="who-top">
+        <span class="who-num">{{ c.numero }}/{{ c.ano }}</span>
+        <span class="who-prest">{{ c.prest_identificacao }}</span>
+        <span class="who-doc mono">{{ c.prest_documento | documento }}</span>
+      </div>
+      <span class="sub">{{ c.objeto or '— (objeto não informado)' }}</span>
     </div>
-    <div class="amount">
-      <div class="total">{{ c.numero }}/{{ c.ano }}</div>
-      <div class="meta"><a class="row-link" href="{{ url_for('contrato_editar', id_=c.id) }}">editar <svg class="icon"><use href="#i-seta"/></svg></a></div>
-    </div>
+    <a class="btn ghost btn-sm" href="{{ url_for('contrato_editar', id_=c.id) }}">Editar contrato <svg class="icon"><use href="#i-seta"/></svg></a>
   </div>
   {% endfor %}
 </section>

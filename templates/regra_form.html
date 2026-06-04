@@ -2,21 +2,22 @@
 {% block title %}{{ 'Nova regra' if novo else 'Editar regra' }} · Extrator NF{% endblock %}
 {% block conteudo %}
 {% set r = regra %}
+{% set is_inss = grupo == 'inss' %}
 
-<p class="breadcrumb"><a href="{{ url_for('regras') }}">Regras</a> › {{ 'Nova regra' if novo else r.codigo }}</p>
+<p class="breadcrumb"><a href="{{ url_for('regras') }}">Regras</a> › {{ 'INSS' if is_inss else 'Tributos federais' }} › {{ 'Nova regra' if novo else r.codigo }}</p>
 
 <div class="page-head">
-  <h2>{{ 'Nova regra' if novo else 'Editar regra ' ~ r.codigo }}</h2>
-  <p>O sistema guarda a regra que você dita (I-3). O <strong>código é gerado automaticamente</strong> (sequencial por grupo). A agregada (IR + contribuições) é calculada sozinha.</p>
+  <h2>{{ 'Nova regra' if novo else 'Editar regra ' ~ r.codigo }} <span class="lbl" style="font-weight:400">— {{ 'INSS' if is_inss else 'tributos federais' }}</span></h2>
+  <p>O sistema guarda a regra que você dita (I-3). O <strong>código é gerado automaticamente</strong> (sequencial por grupo).{% if not is_inss %} A agregada (IR + contribuições) é calculada sozinha.{% endif %}</p>
 </div>
 
 <form method="post" action="{{ url_for('regra_salvar', id_=r.id) if not novo else url_for('regra_salvar') }}" class="form-contrato">
+  {# Grupo e código controlados pelo sistema; viajam em hidden para preservar em edição. #}
+  <input type="hidden" name="grupo" value="{{ grupo }}">
+  <input type="hidden" name="codigo" value="{{ r.codigo }}">
 
   <fieldset class="card card-b">
     <legend>Identificação</legend>
-    {# Código controlado pelo sistema (TF-/INSS-/ISS-): mostrado, não digitado. Em edição
-       viaja num hidden para preservar o valor. #}
-    <input type="hidden" name="codigo" value="{{ r.codigo }}">
     <div class="grid-3">
       <div class="field"><span class="lbl">Código (automático)</span>
         <p><span class="chip">{{ codigo_previsto }}</span></p>
@@ -27,7 +28,7 @@
     <label class="field"><span class="lbl">Descrição</span>
       <input type="text" name="descricao" value="{{ r.descricao }}" placeholder="ex.: PJ não optante — serviço sem material" required></label>
     <label class="field"><span class="lbl">Fundamento legal</span>
-      <input type="text" name="fundamento" value="{{ r.fundamento }}" placeholder="ex.: IN RFB 1234/2012, Anexo I"></label>
+      <input type="text" name="fundamento" value="{{ r.fundamento }}" placeholder="{{ 'ex.: IN RFB 2110/2022, art. 112' if is_inss else 'ex.: IN RFB 1234/2012, Anexo I' }}"></label>
   </fieldset>
 
   <fieldset class="card card-b">
@@ -42,6 +43,36 @@
     </div>
   </fieldset>
 
+  {% if is_inss %}
+  {# ---------------- Incidência de INSS ---------------- #}
+  <fieldset class="card card-b">
+    <legend>Incidência <span class="lbl" style="font-weight:400">(o enquadramento que a regra dita)</span></legend>
+    <label class="opt block"><input type="checkbox" name="cessao_mao_obra" {{ 'checked' if r.cessao_mao_obra }}> O INSS <strong>incide</strong> (cessão de mão de obra / empreitada)</label>
+    <div class="sub-field" data-mostra-se="cessao_mao_obra">
+      <div class="field"><span class="lbl">Alíquota</span>
+        <div class="radio-row">
+          <label class="opt"><input type="radio" name="aliquota" value="11" {{ 'checked' if r.aliquota != '3.5' }}> 11%</label>
+          <label class="opt"><input type="radio" name="aliquota" value="3.5" {{ 'checked' if r.aliquota == '3.5' }}> 3,5% (desoneração CPRB)</label>
+        </div>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span class="lbl">Base mínima quando material não é discriminado</span>
+          <select name="base_minima_pct">
+            <option value="">—</option>
+            {% for chave, rotulo in vocab.bases.items() %}<option value="{{ chave }}" {{ 'selected' if r.base_minima_pct == chave }}>{{ rotulo }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="field"><span class="lbl">Adicional de aposentadoria especial</span>
+          <select name="adicional_pct">
+            {% for chave, rotulo in vocab.inss_adicional.items() %}<option value="{{ chave }}" {{ 'selected' if (r.adicional_pct or '') == chave }}>{{ rotulo }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+    </div>
+    <p class="note-foot">Sem marcar “incide”, a regra significa <strong>dispensa</strong> de INSS (ex.: optante do Simples fora do Anexo IV, prestador sem cessão de mão de obra).</p>
+  </fieldset>
+  {% else %}
+  {# ---------------- Incidência federal ---------------- #}
   <fieldset class="card card-b">
     <legend>Incidência <span class="lbl" style="font-weight:400">(o enquadramento que a regra dita)</span></legend>
     <label class="opt block"><input type="checkbox" name="sujeito" id="reg-sujeito" {{ 'checked' if r.sujeito }}> Os tributos federais <strong>incidem</strong> (retidos juntos)</label>
@@ -76,18 +107,21 @@
     </div>
     <p class="note-foot">Sem marcar “incidem”, a regra significa <strong>dispensa</strong> de retenção federal (ex.: optante do Simples, MEI, pessoa física). Ao escolher uma alíquota agregada, os campos são preenchidos pela tabela da IN 1234/2012 — você ainda pode ajustar.</p>
   </fieldset>
+  {% endif %}
 
   <div class="actions">
     <button type="submit" class="btn"><svg class="icon"><use href="#i-check"/></svg> Salvar regra</button>
     <a class="btn ghost" href="{{ url_for('regras') }}">Cancelar</a>
     {% if not novo %}
     <form method="post" action="{{ url_for('regra_remover', id_=r.id) }}" onsubmit="return confirm('Remover esta regra?')" class="ml-auto">
+      <input type="hidden" name="grupo" value="{{ grupo }}">
       <button type="submit" class="link-inline">Remover regra</button>
     </form>
     {% endif %}
   </div>
 </form>
 
+{% if not is_inss %}
 {# Autopreenchimento pela tabela da IN 1234/2012: escolher um código agregado preenche
    IR e marca as contribuições devidas. É conveniência de configuração — o humano ratifica. #}
 <script>
@@ -109,4 +143,5 @@
   });
 })();
 </script>
+{% endif %}
 {% endblock %}

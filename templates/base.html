@@ -74,9 +74,10 @@
       <a href="{{ url_for('npps') }}"{{ ' class=on' if request.endpoint in ['npps', 'npp_nova', 'npp_criar', 'npp_detalhe', 'npp_editar', 'npp_salvar', 'npp_validar', 'npp_exportar', 'detalhe'] }}>NPPs</a>
       {# Configuração: agrupa as telas que se ajustam uma vez e se consultam pouco
          (Contratos, Regras, futuro Backup/Sync), deixando a nav de fluxo enxuta.
-         Disclosure nativo — abre no clique mesmo sem JS; abre por padrão quando a
-         página atual é de configuração, para o operador ver onde está. #}
-      <details class="dropdown nav-config" id="menu-config"{{ ' open' if request.endpoint in ep_config }}>
+         Disclosure nativo — abre no clique mesmo sem JS. Nasce SEMPRE recolhido (mesmo
+         nas telas de configuração): ao salvar um contrato/regra a página recarrega e o
+         submenu não deve ficar exposto. O rótulo só recebe `on` para indicar onde se está. #}
+      <details class="dropdown nav-config" id="menu-config">
         <summary class="nav-config-toggle{{ ' on' if request.endpoint in ep_config }}">
           Configuração
           <svg class="icon chev"><use href="#i-chevron"/></svg>

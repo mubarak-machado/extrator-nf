@@ -2,6 +2,7 @@
 {% block title %}{{ 'Novo contrato' if novo else 'Editar contrato' }} · Extrator NF{% endblock %}
 {% block conteudo %}
 {% set c = contrato %}
+{% set iss_rows = c.municipios or c.linhas_iss() %}
 
 <p class="breadcrumb"><a href="{{ url_for('contratos') }}">Contratos</a> › {{ 'Novo contrato' if novo else (c.numero ~ '/' ~ c.ano) }}</p>
 
@@ -12,8 +13,8 @@
 
 <form method="post" action="{{ url_for('contrato_salvar', id_=c.id) if not novo else url_for('contrato_salvar') }}" class="form-contrato">
 
-  <fieldset class="card card-b">
-    <legend>Prestador</legend>
+  <fieldset class="card card-b sec-dados">
+    <legend>Prestador <span class="info-tip" tabindex="0" role="note" aria-label="Ajuda da seção" data-tip="Quem presta o serviço. A natureza jurídica define a dispensa de retenção.">i</span></legend>
     <label class="field"><span class="lbl">Identificação (razão social / nome)</span>
       <input type="text" name="prest_identificacao" value="{{ c.prest_identificacao }}" required></label>
     <div class="grid-2">
@@ -24,7 +25,8 @@
         </div>
       </div>
       <label class="field"><span class="lbl">Documento (CNPJ/CPF)</span>
-        <input type="text" name="prest_documento" value="{{ c.prest_documento }}" inputmode="numeric"></label>
+        {# Formata no padrão br ao sair do campo; aceita digitação corrida ou já pontuada. #}
+        <input type="text" name="prest_documento" value="{{ c.prest_documento | documento }}" inputmode="numeric" data-mask="documento"></label>
     </div>
     <div class="field"><span class="lbl">Natureza jurídica (decide a dispensa de retenção)</span>
       <div class="radio-row">
@@ -52,23 +54,30 @@
     <label class="field"><span class="lbl">Inscrição municipal (opcional)</span><input type="text" name="prest_im" value="{{ c.prest_im or '' }}"></label>
   </fieldset>
 
-  <fieldset class="card card-b">
-    <legend>Contrato</legend>
+  <fieldset class="card card-b sec-dados">
+    <legend>Contrato <span class="info-tip" tabindex="0" role="note" aria-label="Ajuda da seção" data-tip="Identificação, vigência e os processos administrativos (PGEA) do contrato.">i</span></legend>
     <div class="grid-3">
       <label class="field"><span class="lbl">Número</span><input type="text" name="numero" value="{{ c.numero }}" required></label>
       <label class="field"><span class="lbl">Ano</span><input type="text" name="ano" inputmode="numeric" value="{{ c.ano }}"></label>
       <div class="field"><span class="lbl">Vigência</span>
+        {# Digitação corrida (052026) é formatada para 05/2026 ao sair do campo. #}
         <div class="radio-row">
-          <input type="text" name="vigencia_inicio" placeholder="mm/aaaa" style="width:7rem" value="{{ c.vigencia_inicio or '' }}">
+          <input type="text" name="vigencia_inicio" placeholder="mm/aaaa" style="width:7rem" inputmode="numeric" data-mask="competencia" value="{{ c.vigencia_inicio or '' }}">
           <span aria-hidden="true">a</span>
-          <input type="text" name="vigencia_fim" placeholder="mm/aaaa" style="width:7rem" value="{{ c.vigencia_fim or '' }}">
+          <input type="text" name="vigencia_fim" placeholder="mm/aaaa" style="width:7rem" inputmode="numeric" data-mask="competencia" value="{{ c.vigencia_fim or '' }}">
         </div>
       </div>
+    </div>
+    <div class="grid-2">
+      <label class="field"><span class="lbl">PGEA da contratação <span class="info-tip" tabindex="0" role="note" aria-label="Ajuda do campo" data-tip="Processo onde ficam os documentos da contratação, incluindo o contrato.">i</span></span>
+        <input type="text" name="pgea_contratacao" value="{{ c.pgea_contratacao or '' }}"></label>
+      <label class="field"><span class="lbl">PGEA da liquidação <span class="info-tip" tabindex="0" role="note" aria-label="Ajuda do campo" data-tip="PGEA anual com os documentos de pagamento ao longo da execução.">i</span></span>
+        <input type="text" name="pgea_liquidacao" value="{{ c.pgea_liquidacao or '' }}"></label>
     </div>
     <label class="field"><span class="lbl">Objeto</span><input type="text" name="objeto" value="{{ c.objeto or '' }}"></label>
   </fieldset>
 
-  <fieldset class="card card-b">
+  <fieldset class="card card-b sec-dados">
     <legend>Materiais <span class="lbl" style="font-weight:400">(impacta IR e a base do INSS)</span></legend>
     <div class="radio-row">
       {% for chave, rotulo in vocab.materiais.items() %}
@@ -77,13 +86,10 @@
     </div>
   </fieldset>
 
-  <fieldset class="card card-b">
-    <legend>Enquadramento de retenções <span class="lbl" style="font-weight:400">(declarado — base para a Fase 2)</span></legend>
+  {# ---------------- Tributos federais (IR/CSLL/COFINS/PIS) ---------------- #}
+  <fieldset class="card card-b sec-federal">
+    <legend>Tributos federais <span class="lbl" style="font-weight:400">— IR/CSLL/COFINS/PIS (IN 1234/2012)</span> <span class="info-tip" tabindex="0" role="note" aria-label="Ajuda da seção" data-tip="Selecione a regra do catálogo ou ajuste manualmente com justificativa.">i</span></legend>
 
-    {# Tributos federais: o operador SELECIONA a regra do catálogo (tela Regras). O sistema
-       não sugere (decisão do humano). "Ajustar manualmente" abre os campos para digitar as
-       alíquotas, com justificativa (I-4). Ver galho_nfse/catalogo_federal.py. #}
-    <p class="lbl" style="font-weight:600;margin-bottom:.4rem">Tributos federais (IR/CSLL/COFINS/PIS) — <a href="{{ url_for('regras') }}">catálogo IN 1234/2012</a></p>
     {% if regras_federais %}
     <label class="field"><span class="lbl">Regra do catálogo</span>
       <select name="ret_federal_regra_id">
@@ -96,7 +102,7 @@
       </select>
     </label>
     {% else %}
-    <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> Nenhuma regra federal cadastrada. <a href="{{ url_for('regra_nova') }}">Cadastre uma regra</a> ou ajuste manualmente abaixo.</p></div>
+    <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> Nenhuma regra federal cadastrada. <a href="{{ url_for('regra_nova', grupo='federal') }}">Cadastre uma regra</a> ou ajuste manualmente abaixo.</p></div>
     {% endif %}
 
     <label class="opt block"><input type="checkbox" name="ret_federal_ajustar" {{ 'checked' if c.ret_federal_origem == 'ajustado' }}> Ajustar manualmente <span class="lbl" style="font-weight:400">(digitar as alíquotas; exige justificativa)</span></label>
@@ -126,9 +132,30 @@
       <label class="field"><span class="lbl">Justificativa do ajuste manual (obrigatória)</span>
         <textarea name="ret_federal_justificativa" rows="2" placeholder="Por que este contrato não usa uma regra do catálogo?">{{ c.ret_federal_justificativa or '' }}</textarea></label>
     </div>
+  </fieldset>
 
-    <label class="opt block"><input type="checkbox" name="inss_cessao_mao_obra" {{ 'checked' if c.inss_cessao_mao_obra }}> <strong>INSS</strong> — cessão de mão de obra / empreitada (IN 2110/2022)</label>
-    <div class="sub-field" data-mostra-se="inss_cessao_mao_obra">
+  {# ---------------- INSS (IN 2110/2022) — mesma mecânica do federal ---------------- #}
+  <fieldset class="card card-b sec-inss">
+    <legend>INSS <span class="lbl" style="font-weight:400">— cessão de mão de obra / empreitada (IN 2110/2022)</span> <span class="info-tip" tabindex="0" role="note" aria-label="Ajuda da seção" data-tip="Regra do catálogo (aba INSS) ou ajuste manual. Sem regra, o contrato não retém INSS.">i</span></legend>
+
+    {% if regras_inss %}
+    <label class="field"><span class="lbl">Regra do catálogo</span>
+      <select name="inss_regra_id">
+        <option value="">— sem INSS (não retém) —</option>
+        {% for ri in regras_inss %}
+        <option value="{{ ri.id }}" {{ 'selected' if c.inss_regra_codigo == ri.codigo }}>
+          {{ ri.codigo }} · {{ ri.descricao }} · {{ ri.resumo_txt() }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    {% else %}
+    <div class="atencao mb-3"><p class="note"><svg class="icon"><use href="#i-alerta"/></svg> Nenhuma regra de INSS cadastrada. <a href="{{ url_for('regra_nova', grupo='inss') }}">Cadastre uma regra</a> ou ajuste manualmente abaixo.</p></div>
+    {% endif %}
+
+    <label class="opt block"><input type="checkbox" name="inss_ajustar" {{ 'checked' if c.inss_origem == 'ajustado' }}> Ajustar manualmente <span class="lbl" style="font-weight:400">(digitar a alíquota; exige justificativa)</span></label>
+    <div class="sub-field" data-mostra-se="inss_ajustar">
+      <label class="opt block"><input type="checkbox" name="inss_cessao_mao_obra" {{ 'checked' if c.inss_cessao_mao_obra }}> O INSS incide (cessão de mão de obra / empreitada)</label>
       <div class="field"><span class="lbl">Alíquota</span>
         <div class="radio-row">
           <label class="opt"><input type="radio" name="inss_aliquota" value="11" {{ 'checked' if c.inss_aliquota != '3.5' }}> 11%</label>
@@ -148,28 +175,68 @@
           </select>
         </label>
       </div>
-    </div>
-
-    <label class="opt block"><input type="checkbox" name="iss_retido_tomador" {{ 'checked' if c.iss_retido_tomador }}> <strong>ISS</strong> — retido pelo tomador (LC 116/2003)</label>
-    <div class="sub-field" data-mostra-se="iss_retido_tomador">
-      <div class="grid-3">
-        <label class="field"><span class="lbl">Alíquota de ISS (2%–5%)</span>
-          <input type="text" name="iss_aliquota" inputmode="decimal" value="{{ c.iss_aliquota or '' }}"></label>
-        <label class="field"><span class="lbl">Subitem da lista (LC 116)</span>
-          <input type="text" name="iss_subitem_lista" placeholder="ex.: 7.02" value="{{ c.iss_subitem_lista or '' }}"></label>
-        <label class="field"><span class="lbl">Município competente</span>
-          <input type="text" name="iss_municipio" value="{{ c.iss_municipio or '' }}"></label>
-      </div>
-      <label class="field"><span class="lbl">Local de incidência (art. 3º)</span>
-        <select name="iss_local_incidencia">
-          {% for chave, rotulo in vocab.iss_local.items() %}<option value="{{ chave }}" {{ 'selected' if c.iss_local_incidencia == chave }}>{{ rotulo }}</option>{% endfor %}
-        </select>
-      </label>
-      <label class="opt block"><input type="checkbox" name="iss_deduz_material" {{ 'checked' if c.iss_deduz_material }}> Admite dedução de material da base (subitens 7.02/7.05)</label>
+      <label class="field"><span class="lbl">Justificativa do ajuste manual (obrigatória)</span>
+        <textarea name="inss_justificativa" rows="2" placeholder="Por que este contrato não usa uma regra do catálogo?">{{ c.inss_justificativa or '' }}</textarea></label>
     </div>
   </fieldset>
 
-  <fieldset class="card card-b">
+  {# ---------------- ISS por município (único tributo configurado direto no contrato) ---------------- #}
+  <fieldset class="card card-b sec-iss">
+    <legend>ISS por município <span class="lbl" style="font-weight:400">— LC 116/2003</span> <span class="info-tip" tabindex="0" role="note" aria-label="Ajuda da seção" data-tip="Único tributo configurado direto no contrato. Alíquota, retenção e documento variam por município (todos de MG).">i</span></legend>
+
+    {# Subitem é único no contrato (não muda de um município para o outro) — fica no topo.
+       Digitação corrida (702) é formatada para 7.02 ao sair do campo; aceita já pontuado. #}
+    <div class="grid-2">
+      <label class="field"><span class="lbl">Subitem da lista (LC 116)</span>
+        <input type="text" name="iss_subitem_lista" id="iss-subitem" inputmode="numeric" data-mask="subitem" value="{{ c.iss_subitem_lista or '' }}"></label>
+      <label class="field"><span class="lbl">Local de incidência (art. 3º) <span class="info-tip" tabindex="0" role="note" aria-label="Ajuda do campo" data-tip="Pré-selecionado pela LC 116/2003 conforme o subitem. Retifique se necessário.">i</span></span>
+        <select name="iss_local_incidencia" id="iss-local">
+          {% for chave, rotulo in vocab.iss_local.items() %}<option value="{{ chave }}" {{ 'selected' if c.iss_local_incidencia == chave }}>{{ rotulo }}</option>{% endfor %}
+        </select></label>
+    </div>
+    {# Descrição oficial do subitem (LC 116/2003) — largura toda da seção, no máx. 2 linhas
+       (o excedente fica oculto com reticências; o texto completo vai no title). Renderizada
+       para o valor salvo e atualizada ao vivo pelo JS. Não localizada → aviso, não inventa (I-6). #}
+    <span class="lc116-desc" id="iss-subitem-desc" title="{{ subitem_desc or '' }}">{{ subitem_desc or '' }}</span>
+    <label class="opt block"><input type="checkbox" name="iss_deduz_material" {{ 'checked' if c.iss_deduz_material }}> Admite dedução de material da base (subitens 7.02/7.05)</label>
+
+    <div id="mun-lista" class="mun-lista">
+      {% for m in iss_rows %}
+      <div class="mun-row" data-idx="{{ loop.index0 }}">
+        <label class="mun-campo"><span class="lbl">Município</span>
+          <select name="mun_municipio" class="mun-municipio" data-atual="{{ m.municipio or '' }}"></select></label>
+        <label class="mun-campo mun-campo-aliq"><span class="lbl">Alíquota (%)</span>
+          <input type="text" name="mun_aliquota" class="mun-aliquota" inputmode="decimal" value="{{ m.iss_aliquota or '' }}"></label>
+        <label class="mun-campo mun-campo-chk"><span class="lbl">Retenção</span>
+          <span class="mun-chk"><input type="checkbox" name="mun_retido" value="{{ loop.index0 }}" class="mun-retido" {{ 'checked' if m.iss_retido }}> retido</span></label>
+        <label class="mun-campo"><span class="lbl">Tipo de documento</span>
+          <select name="mun_recolhimento" class="mun-recolhimento">
+            <option value="">—</option>
+            {% for chave, rotulo in vocab.iss_recolhimento.items() %}<option value="{{ chave }}" {{ 'selected' if m.iss_recolhimento == chave }}>{{ rotulo }}</option>{% endfor %}
+          </select></label>
+        <button type="button" class="link-inline mun-remover" aria-label="Remover município">remover</button>
+      </div>
+      {% else %}
+      <div class="mun-row" data-idx="0">
+        <label class="mun-campo"><span class="lbl">Município</span>
+          <select name="mun_municipio" class="mun-municipio" data-atual=""></select></label>
+        <label class="mun-campo mun-campo-aliq"><span class="lbl">Alíquota (%)</span>
+          <input type="text" name="mun_aliquota" class="mun-aliquota" inputmode="decimal" value=""></label>
+        <label class="mun-campo mun-campo-chk"><span class="lbl">Retenção</span>
+          <span class="mun-chk"><input type="checkbox" name="mun_retido" value="0" class="mun-retido"> retido</span></label>
+        <label class="mun-campo"><span class="lbl">Tipo de documento</span>
+          <select name="mun_recolhimento" class="mun-recolhimento">
+            <option value="">—</option>
+            {% for chave, rotulo in vocab.iss_recolhimento.items() %}<option value="{{ chave }}">{{ rotulo }}</option>{% endfor %}
+          </select></label>
+        <button type="button" class="link-inline mun-remover" aria-label="Remover município">remover</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" id="mun-add" class="btn ghost mt-2"><svg class="icon"><use href="#i-doc"/></svg> Adicionar município</button>
+  </fieldset>
+
+  <fieldset class="card card-b sec-dados">
     <legend>Observações / fundamentação</legend>
     <label class="field"><textarea name="observacoes" rows="3">{{ c.observacoes or '' }}</textarea></label>
   </fieldset>
@@ -185,14 +252,29 @@
   </div>
 </form>
 
-{# UF → município a partir da base oficial do IBGE (servida localmente, offline). #}
+{# Modelo de linha de município (clonado pelo botão "Adicionar"). #}
+<template id="mun-template">
+  <div class="mun-row" data-idx="">
+    <label class="mun-campo"><span class="lbl">Município</span>
+      <select name="mun_municipio" class="mun-municipio" data-atual=""></select></label>
+    <label class="mun-campo mun-campo-aliq"><span class="lbl">Alíquota (%)</span>
+      <input type="text" name="mun_aliquota" class="mun-aliquota" inputmode="decimal"></label>
+    <label class="mun-campo mun-campo-chk"><span class="lbl">Retenção</span>
+      <span class="mun-chk"><input type="checkbox" name="mun_retido" value="" class="mun-retido"> retido</span></label>
+    <label class="mun-campo"><span class="lbl">Tipo de documento</span>
+      <select name="mun_recolhimento" class="mun-recolhimento">
+        <option value="">—</option>
+        {% for chave, rotulo in vocab.iss_recolhimento.items() %}<option value="{{ chave }}">{{ rotulo }}</option>{% endfor %}
+      </select></label>
+    <button type="button" class="link-inline mun-remover" aria-label="Remover município">remover</button>
+  </div>
+</template>
+
+{# UF → município a partir da base oficial do IBGE (servida localmente, offline). Vale para
+   o prestador e para cada linha de ISS por município. #}
 <script>
 (function () {
-  var ufSel = document.getElementById("prest_uf");
-  var muniSel = document.getElementById("prest_municipio");
-  if (!ufSel || !muniSel) return;
-  var ufAtual = ufSel.dataset.atual || "";
-  var muniAtual = muniSel.dataset.atual || "";
+  var BASE_URL = "{{ url_for('static', filename='dados/municipios_ibge.json') }}";
 
   function opcoes(sel, itens, atual, placeholder) {
     sel.innerHTML = "";
@@ -206,25 +288,82 @@
     });
   }
 
-  fetch("{{ url_for('static', filename='dados/municipios_ibge.json') }}")
-    .then(function (r) { return r.json(); })
-    .then(function (base) {
-      opcoes(ufSel, base.ufs.map(function (u) { return u.sigla; }), ufAtual, "—");
-      function preencheMunicipios() {
-        var lista = base.municipios[ufSel.value] || [];
-        opcoes(muniSel, lista, muniAtual, lista.length ? "Selecione…" : "Escolha a UF primeiro");
-      }
-      preencheMunicipios();
-      ufSel.addEventListener("change", function () { muniAtual = ""; preencheMunicipios(); });
-    })
-    .catch(function () {
-      // Sem a base (ex.: arquivo ausente): degrada para campo de texto, não trava o form.
-      [ufSel, muniSel].forEach(function (sel) {
-        var inp = document.createElement("input");
-        inp.type = "text"; inp.name = sel.name; inp.value = sel.dataset.atual || "";
-        sel.parentNode.replaceChild(inp, sel);
+  function fallbackTexto(sel) {
+    var inp = document.createElement("input");
+    inp.type = "text"; inp.name = sel.name; inp.value = sel.dataset.atual || "";
+    sel.parentNode.replaceChild(inp, sel);
+  }
+
+  fetch(BASE_URL).then(function (r) { return r.json(); }).then(function (base) {
+    var ufs = base.ufs.map(function (u) { return u.sigla; });
+
+    // Prestador (selects únicos).
+    var ufSel = document.getElementById("prest_uf");
+    var muniSel = document.getElementById("prest_municipio");
+    if (ufSel && muniSel) {
+      var muniAtual = muniSel.dataset.atual || "";
+      opcoes(ufSel, ufs, ufSel.dataset.atual || "", "—");
+      var preenche = function () {
+        opcoes(muniSel, base.municipios[ufSel.value] || [], muniAtual,
+               (base.municipios[ufSel.value] || []).length ? "Selecione…" : "Escolha a UF primeiro");
+      };
+      preenche();
+      ufSel.addEventListener("change", function () { muniAtual = ""; preenche(); });
+    }
+
+    // Linha de ISS por município: só município, sempre de Minas Gerais (todos os
+    // contemplados são de MG — não há seleção de UF).
+    var MUNICIPIOS_MG = base.municipios["MG"] || [];
+    function ligaLinha(row) {
+      var mun = row.querySelector(".mun-municipio");
+      if (!mun) return;
+      opcoes(mun, MUNICIPIOS_MG, mun.dataset.atual || "", "Município…");
+    }
+
+    var lista = document.getElementById("mun-lista");
+    if (!lista) return;
+    Array.prototype.forEach.call(lista.querySelectorAll(".mun-row"), ligaLinha);
+
+    // Reindexa os checkboxes "retido" pela posição da linha (o servidor casa por índice).
+    function reindexar() {
+      Array.prototype.forEach.call(lista.querySelectorAll(".mun-row"), function (row, i) {
+        row.dataset.idx = i;
+        var chk = row.querySelector(".mun-retido");
+        if (chk) chk.value = i;
       });
+    }
+    reindexar();
+
+    var add = document.getElementById("mun-add");
+    var tpl = document.getElementById("mun-template");
+    if (add && tpl) {
+      add.addEventListener("click", function () {
+        var node = tpl.content.firstElementChild.cloneNode(true);
+        lista.appendChild(node);
+        ligaLinha(node);
+        reindexar();
+      });
+    }
+    lista.addEventListener("click", function (e) {
+      var btn = e.target.closest(".mun-remover");
+      if (!btn) return;
+      var rows = lista.querySelectorAll(".mun-row");
+      if (rows.length <= 1) {            // nunca remove a última: limpa a linha
+        btn.closest(".mun-row").querySelectorAll("input, select").forEach(function (el) {
+          if (el.type === "checkbox") el.checked = false; else el.value = "";
+        });
+      } else {
+        btn.closest(".mun-row").remove();
+      }
+      reindexar();
     });
+  }).catch(function () {
+    // Sem a base (arquivo ausente): degrada os selects de UF/município para texto.
+    ["prest_uf", "prest_municipio"].forEach(function (id) {
+      var sel = document.getElementById(id); if (sel) fallbackTexto(sel);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".mun-municipio"), fallbackTexto);
+  });
 })();
 
 // Ajuste manual dos federais: a alíquota agregada (IN 1234/2012) preenche os tributos.
@@ -243,6 +382,42 @@
     document.getElementById("ct-pis").checked = pos(c.pis);
     var suj = document.getElementById("ct-sujeito");
     if (suj && !suj.checked) suj.checked = true;
+  });
+})();
+
+// ISS — descrição oficial do subitem (LC 116/2003) abaixo do código + pré-seleção do
+// local de incidência (art. 3º). Ambos são conveniência: o operador pode retificar.
+(function () {
+  var LC116 = {{ lc116 | tojson }};
+  var LOCAL_PRESTACAO = {{ local_prestacao_subitens | tojson }};
+  var campo = document.getElementById("iss-subitem");
+  var alvo = document.getElementById("iss-subitem-desc");
+  var local = document.getElementById("iss-local");
+  if (!campo || !alvo) return;
+  function chave(v) {
+    var d = (v || "").replace(/\D/g, "");
+    if (d.length < 3) return "";
+    // item sem zero à esquerda + "." + 2 últimas casas (702 -> "7.02"; 1702 -> "17.02").
+    return String(parseInt(d.slice(0, d.length - 2), 10)) + "." + d.slice(d.length - 2);
+  }
+  function atualizaDesc(k) {
+    if (!k) { alvo.textContent = ""; alvo.removeAttribute("title"); return; }
+    // Não localizada → aviso, nunca inventa descrição (I-6).
+    var desc = LC116[k] || "Descrição não localizada na LC 116/2003.";
+    alvo.textContent = desc;
+    alvo.title = desc;   // texto completo no hover (a exibição corta em 2 linhas)
+  }
+  // Pré-seleciona o local de incidência pelo art. 3º; só reage à ação do operador
+  // (digitar/alterar o subitem) — não mexe no valor salvo ao abrir a página.
+  function preSelecionaLocal(k) {
+    if (!local || !k || !LC116[k]) return;   // subitem inválido/desconhecido: não mexe
+    local.value = (LOCAL_PRESTACAO.indexOf(k) >= 0) ? "local_prestacao" : "estabelecimento_prestador";
+  }
+  campo.addEventListener("input", function () { atualizaDesc(chave(campo.value)); });
+  campo.addEventListener("blur", function () {
+    var k = chave(campo.value);
+    atualizaDesc(k);
+    preSelecionaLocal(k);
   });
 })();
 </script>

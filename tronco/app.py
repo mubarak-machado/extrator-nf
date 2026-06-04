@@ -27,19 +27,21 @@ from tronco.notas import StoreNotas, reconstruir, ConflitoDeChave
 from tronco.operador import StoreOperador, Operador
 from tronco.npp import StoreNPP, NPP
 from tronco.validacao_retencao import StoreValidacaoRetencao, TRIBUTOS, ACOES
-from tronco.contratos import (StoreContratos, Contrato,
+from tronco.contratos import (StoreContratos, Contrato, MunicipioIss,
                               NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS,
-                              IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL)
+                              IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL, ISS_RECOLHIMENTO)
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
 from tronco import formato, redefinicao, orgaos
 from tronco.portais import portal_consulta
 from tronco.retencao_federal import pct_txt
-from galho_nfse.lc116 import descricao_servico
+from galho_nfse.lc116 import descricao_servico, LISTA_LC116, SUBITENS_LOCAL_PRESTACAO
 from tronco.util import agora as agora_maquina
 from galho_nfse.material import sugerir_material
 from galho_nfse import retencao, enquadramento, tabela_in1234
 from galho_nfse.enquadramento import RegraEnquadramento
+from galho_nfse.inss import RegraInss
 from galho_nfse.catalogo_federal import StoreRegrasFederais
+from galho_nfse.catalogo_inss import StoreRegrasInss
 
 RAIZ = Path(__file__).resolve().parent.parent
 PASTA_EXEMPLOS = RAIZ / "exemplos"
@@ -51,7 +53,7 @@ app = Flask(__name__,
 app.secret_key = "mvp-poc-extrator-nf"
 
 for nome in ("moeda", "numero", "data", "datahora", "competencia",
-             "cnpj", "percent", "chave", "simnao", "npp_curto"):
+             "cnpj", "cpf", "documento", "percent", "chave", "simnao", "npp_curto"):
     app.jinja_env.filters[nome] = getattr(formato, nome)
 
 # Razão social canônica de um órgão tomador conhecido (por CNPJ) — só exibição,
@@ -516,7 +518,8 @@ def redefinir_executar():
 _VOCAB_CONTRATO = {"naturezas": NATUREZAS, "categorias": CATEGORIAS,
                    "materiais": MATERIAL_PREVISAO, "bases": BASES_MINIMAS,
                    "ir_percentuais": IR_PERCENTUAIS, "inss_adicional": INSS_ADICIONAL,
-                   "iss_local": ISS_LOCAL, "anexos": ["I", "II", "III", "IV", "V"],
+                   "iss_local": ISS_LOCAL, "iss_recolhimento": ISS_RECOLHIMENTO,
+                   "anexos": ["I", "II", "III", "IV", "V"],
                    # IN 1234/2012: valores de IR p/ a lista e os códigos agregados (autopreenchimento)
                    "ir_valores": tabela_in1234.IR_VALORES,
                    "codigos_in": tabela_in1234.opcoes_agregadas()}
@@ -541,8 +544,10 @@ def _contrato_do_form(form, id_=None) -> Contrato:
         prest_im=s("prest_im"),
         numero=(form.get("numero") or "").strip(),
         ano=(form.get("ano") or "").strip(),
-        vigencia_inicio=s("vigencia_inicio"),
-        vigencia_fim=s("vigencia_fim"),
+        vigencia_inicio=formato.parse_competencia(form.get("vigencia_inicio")),
+        vigencia_fim=formato.parse_competencia(form.get("vigencia_fim")),
+        pgea_contratacao=s("pgea_contratacao"),
+        pgea_liquidacao=s("pgea_liquidacao"),
         objeto=s("objeto"),
         categoria_servico=form.get("categoria_servico", "geral"),
         material_previsao=form.get("material_previsao", "nao"),
@@ -553,18 +558,42 @@ def _contrato_do_form(form, id_=None) -> Contrato:
         ret_federal_cofins=form.get("ret_federal_cofins") == "on",
         ret_federal_pis=form.get("ret_federal_pis") == "on",
         ret_federal_justificativa=s("ret_federal_justificativa"),
+        # INSS: os campos de efeito são preenchidos por `_aplicar_enquadramento_inss`
+        # (regra do catálogo ou ajuste manual). O que vem do form direto é só o ajuste.
         inss_cessao_mao_obra=form.get("inss_cessao_mao_obra") == "on",
         inss_aliquota=s("inss_aliquota"),
         inss_base_minima_pct=s("inss_base_minima_pct"),
         inss_adicional_pct=s("inss_adicional_pct"),
-        iss_retido_tomador=form.get("iss_retido_tomador") == "on",
-        iss_aliquota=s("iss_aliquota"),
-        iss_subitem_lista=s("iss_subitem_lista"),
+        inss_justificativa=s("inss_justificativa"),
+        iss_subitem_lista=formato.parse_subitem(form.get("iss_subitem_lista")),
         iss_local_incidencia=form.get("iss_local_incidencia", "estabelecimento_prestador"),
-        iss_municipio=s("iss_municipio"),
         iss_deduz_material=form.get("iss_deduz_material") == "on",
         observacoes=s("observacoes"),
+        municipios=_municipios_do_form(form),
     )
+
+
+def _municipios_do_form(form) -> list[MunicipioIss]:
+    """Lê as linhas de ISS por município dos campos indexados do form (`mun_*[]`).
+    Linha sem município é descartada na gravação (StoreContratos). O 'retido' por
+    linha vem como `mun_retido` com o índice no value (checkbox não envia índice)."""
+    municipios = (form.getlist("mun_municipio") or [])
+    ufs = form.getlist("mun_uf")
+    aliquotas = form.getlist("mun_aliquota")
+    recolhimentos = form.getlist("mun_recolhimento")
+    retidos = set(form.getlist("mun_retido"))   # values são os índices marcados
+    linhas = []
+    for i, mun in enumerate(municipios):
+        if not (mun or "").strip():
+            continue
+        linhas.append(MunicipioIss(
+            municipio=mun.strip(),
+            uf=(ufs[i].strip() or None) if i < len(ufs) else None,
+            iss_aliquota=(aliquotas[i].strip() or None) if i < len(aliquotas) else None,
+            iss_retido=str(i) in retidos,
+            iss_recolhimento=(recolhimentos[i].strip() or None) if i < len(recolhimentos) else None,
+        ))
+    return linhas
 
 
 def _catalogo_federal():
@@ -574,12 +603,63 @@ def _catalogo_federal():
     return regras
 
 
+def _catalogo_inss():
+    """Carrega o catálogo de regras de INSS do banco (ordenado)."""
+    store = StoreRegrasInss(); regras = store.listar(); store.fechar()
+    return regras
+
+
 def _render_contrato_form(c, novo):
-    """Renderiza o form com o catálogo de regras federais para o operador SELECIONAR
+    """Renderiza o form com os catálogos (federal e INSS) para o operador SELECIONAR
     (sem sugestão automática — decisão do humano). A gravação copia o efeito da regra
     escolhida para o contrato (I-3: o sistema estrutura, não decide)."""
     return render_template("contrato_form.html", contrato=c, vocab=_VOCAB_CONTRATO,
-                           novo=novo, regras_federais=_catalogo_federal())
+                           novo=novo, regras_federais=_catalogo_federal(),
+                           regras_inss=_catalogo_inss(), lc116=LISTA_LC116,
+                           subitem_desc=descricao_servico(c.iss_subitem_lista),
+                           local_prestacao_subitens=sorted(SUBITENS_LOCAL_PRESTACAO))
+
+
+def _aplicar_enquadramento_inss(c, form):
+    """Resolve o grupo de INSS de `c` antes de salvar — espelha o federal. **Seleção de
+    regra** (padrão): copia o efeito da regra escolhida no catálogo (origem 'derivado').
+    **Ajuste manual**: usa o que o operador digitou, exige justificativa, registra
+    autor/data (I-4). **Sem INSS** (nada selecionado e sem ajuste): o contrato fica sem
+    INSS — não é erro (nem todo contrato retém INSS). Devolve (ok, erro)."""
+    if form.get("inss_ajustar") == "on":
+        if not (c.inss_justificativa or "").strip():
+            return False, "Justifique o ajuste manual do INSS. Nada foi salvo."
+        c.inss_origem = "ajustado"
+        c.inss_regra_codigo = None
+        c.inss_ajustado_por = "operador"
+        c.inss_ajustado_em = agora_maquina().isoformat()
+        return True, None  # inss_* já vieram do form via _contrato_do_form
+    regra_id = (form.get("inss_regra_id") or "").strip()
+    if not regra_id:
+        # Sem INSS configurado — zera o efeito (contrato sem retenção de INSS).
+        c.inss_cessao_mao_obra = False
+        c.inss_regra_codigo = None
+        c.inss_origem = "derivado"
+        c.inss_justificativa = c.inss_ajustado_por = c.inss_ajustado_em = None
+        return True, None
+    store = StoreRegrasInss()
+    try:
+        regra = store.obter(int(regra_id))
+    except (ValueError, TypeError):
+        regra = None
+    finally:
+        store.fechar()
+    if not regra:
+        return False, "Regra de INSS não encontrada no catálogo. Nada foi salvo."
+    c.inss_regra_codigo = regra.codigo
+    c.inss_origem = "derivado"
+    c.inss_cessao_mao_obra = regra.cessao_mao_obra
+    c.inss_aliquota = regra.aliquota
+    c.inss_base_minima_pct = regra.base_minima_pct
+    c.inss_adicional_pct = regra.adicional_pct
+    c.inss_justificativa = None
+    c.inss_ajustado_por = c.inss_ajustado_em = None
+    return True, None
 
 
 def _aplicar_enquadramento_federal(c, form):
@@ -627,7 +707,23 @@ def contratos():
     return render_template("contratos.html", contratos=lista, vocab=_VOCAB_CONTRATO)
 
 
-def _regra_do_form(form, id_=None) -> RegraEnquadramento:
+# O catálogo tem dois grupos: 'federal' (IR/CSLL/COFINS/PIS, tronco) e 'inss' (galho).
+# Cada um tem seu prefixo de código; as rotas despacham pelo `grupo`.
+_PREFIXO_REGRA = {"federal": "TF", "inss": "INSS"}
+
+
+def _grupo_regra(form_ou_args) -> str:
+    g = (form_ou_args.get("grupo") or "federal").strip()
+    return g if g in _PREFIXO_REGRA else "federal"
+
+
+def _store_regra(grupo):
+    # Resolve os nomes a cada chamada (não capturar a classe) para o monkeypatch dos
+    # testes (que troca os atributos do módulo) valer também aqui.
+    return StoreRegrasInss() if grupo == "inss" else StoreRegrasFederais()
+
+
+def _regra_federal_do_form(form, id_=None) -> RegraEnquadramento:
     """Monta uma RegraEnquadramento a partir do formulário. A natureza do prestador é
     seleção ÚNICA (radio); categoria saiu (não é mais condição). O `codigo` é controlado
     pelo sistema (sequencial) — não vem do form em regra nova. Só guarda o que o
@@ -635,10 +731,6 @@ def _regra_do_form(form, id_=None) -> RegraEnquadramento:
     def s(campo):
         v = (form.get(campo) or "").strip()
         return v or None
-    try:
-        ordem = int(form.get("ordem") or 0)
-    except ValueError:
-        ordem = 0
     natureza = (form.get("natureza") or "").strip()
     return RegraEnquadramento(
         id=id_,
@@ -654,64 +746,113 @@ def _regra_do_form(form, id_=None) -> RegraEnquadramento:
         cofins=form.get("cofins") == "on",
         pis=form.get("pis") == "on",
         codigo_receita=s("codigo_receita"),
-        ordem=ordem,
+        ordem=_int(form.get("ordem")),
     )
+
+
+def _regra_inss_do_form(form, id_=None) -> RegraInss:
+    """Monta uma RegraInss a partir do formulário (espelha a federal)."""
+    def s(campo):
+        v = (form.get(campo) or "").strip()
+        return v or None
+    natureza = (form.get("natureza") or "").strip()
+    return RegraInss(
+        id=id_,
+        codigo=(form.get("codigo") or "").strip(),
+        descricao=(form.get("descricao") or "").strip(),
+        fundamento=(form.get("fundamento") or "").strip(),
+        naturezas=(natureza,) if natureza else (),
+        categorias=(),
+        materiais=tuple(form.getlist("materiais")),
+        cessao_mao_obra=form.get("cessao_mao_obra") == "on",
+        aliquota=s("aliquota"),
+        base_minima_pct=s("base_minima_pct"),
+        adicional_pct=s("adicional_pct"),
+        ordem=_int(form.get("ordem")),
+    )
+
+
+def _int(v) -> int:
+    try:
+        return int(v or 0)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _regra_do_form(grupo, form, id_=None):
+    return (_regra_inss_do_form(form, id_) if grupo == "inss"
+            else _regra_federal_do_form(form, id_))
+
+
+def _regra_invalida(grupo, r) -> str | None:
+    """Validação mínima por grupo (I-6: barra, não chuta). Devolve a mensagem ou None."""
+    if not r.descricao:
+        return "Informe ao menos a descrição da regra. Nada foi salvo."
+    if grupo == "federal" and r.sujeito and not r.ir_pct:
+        return ("Como os tributos federais incidem nesta regra, defina o percentual de "
+                "IR. Nada foi salvo.")
+    if grupo == "inss" and r.cessao_mao_obra and not r.aliquota:
+        return "Como o INSS incide nesta regra, defina a alíquota (11% ou 3,5%). Nada foi salvo."
+    return None
+
+
+def _render_regra_form(grupo, r, novo, codigo_previsto):
+    return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=novo,
+                           grupo=grupo, codigo_previsto=codigo_previsto)
 
 
 @app.route("/regras")
 def regras():
     """Catálogo de regras de tratamento tributário — cadastrado pelo especialista. A
-    primeira regra cuja condição casar um contrato sugere o enquadramento (I-3)."""
-    store = StoreRegrasFederais(); catalogo = store.listar(); store.fechar()
-    return render_template("regras.html", catalogo=catalogo, vocab=_VOCAB_CONTRATO)
+    primeira regra cuja condição casar um contrato sugere o enquadramento (I-3). Dois
+    grupos: tributos federais e INSS."""
+    sf = StoreRegrasFederais(); catalogo_federal = sf.listar(); sf.fechar()
+    si = StoreRegrasInss(); catalogo_inss = si.listar(); si.fechar()
+    return render_template("regras.html", catalogo_federal=catalogo_federal,
+                           catalogo_inss=catalogo_inss, vocab=_VOCAB_CONTRATO)
 
 
 @app.route("/regras/nova")
 def regra_nova():
-    store = StoreRegrasFederais()
+    grupo = _grupo_regra(request.args)
+    store = _store_regra(grupo)
     ordem = store.proxima_ordem()
-    codigo_previsto = store.proximo_codigo("TF")   # federal; INSS-/ISS- quando houver grupos
+    codigo_previsto = store.proximo_codigo(_PREFIXO_REGRA[grupo])
     store.fechar()
-    nova = RegraEnquadramento(codigo="", descricao="", fundamento="", ordem=ordem)
-    return render_template("regra_form.html", regra=nova, vocab=_VOCAB_CONTRATO, novo=True,
-                           codigo_previsto=codigo_previsto)
+    cls = RegraInss if grupo == "inss" else RegraEnquadramento
+    nova = cls(codigo="", descricao="", fundamento="", ordem=ordem)
+    return _render_regra_form(grupo, nova, True, codigo_previsto)
 
 
 @app.route("/regras/<int:id_>/editar")
 def regra_editar(id_):
-    store = StoreRegrasFederais(); r = store.obter(id_); store.fechar()
+    grupo = _grupo_regra(request.args)
+    store = _store_regra(grupo); r = store.obter(id_); store.fechar()
     if not r:
         flash("Regra não encontrada.", "erro")
         return redirect(url_for("regras"))
-    return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO, novo=False,
-                           codigo_previsto=r.codigo)
+    return _render_regra_form(grupo, r, False, r.codigo)
 
 
 @app.route("/regras", methods=["POST"])
 @app.route("/regras/<int:id_>", methods=["POST"])
 def regra_salvar(id_=None):
-    r = _regra_do_form(request.form, id_)
-    store = StoreRegrasFederais()
+    grupo = _grupo_regra(request.form)
+    r = _regra_do_form(grupo, request.form, id_)
+    store = _store_regra(grupo)
     if id_ is None:
-        r.codigo = store.proximo_codigo("TF")      # código sequencial, controlado pelo sistema
-    if not r.descricao:
+        r.codigo = store.proximo_codigo(_PREFIXO_REGRA[grupo])
+    erro = _regra_invalida(grupo, r)
+    if erro:
         store.fechar()
-        flash("Informe ao menos a descrição da regra. Nada foi salvo.", "erro")
-        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO,
-                               novo=(id_ is None), codigo_previsto=r.codigo)
-    if r.sujeito and not r.ir_pct:
-        store.fechar()
-        flash("Como os tributos federais incidem nesta regra, defina o percentual de IR. "
-              "Nada foi salvo.", "erro")
-        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO,
-                               novo=(id_ is None), codigo_previsto=r.codigo)
+        flash(erro, "erro")
+        return _render_regra_form(grupo, r, id_ is None, r.codigo)
     try:
         store.salvar(r)
     except Exception as exc:
         store.fechar()
         flash(f"Não foi possível salvar a regra ({type(exc).__name__}).", "erro")
-        return render_template("regra_form.html", regra=r, vocab=_VOCAB_CONTRATO,
-                               novo=(id_ is None), codigo_previsto=r.codigo)
+        return _render_regra_form(grupo, r, id_ is None, r.codigo)
     store.fechar()
     flash(f"Regra {r.codigo} salva.", "ok")
     return redirect(url_for("regras"))
@@ -719,7 +860,8 @@ def regra_salvar(id_=None):
 
 @app.route("/regras/<int:id_>/remover", methods=["POST"])
 def regra_remover(id_):
-    store = StoreRegrasFederais(); store.remover(id_); store.fechar()
+    grupo = _grupo_regra(request.form)
+    store = _store_regra(grupo); store.remover(id_); store.fechar()
     flash("Regra removida.", "ok")
     return redirect(url_for("regras"))
 
@@ -747,6 +889,10 @@ def contrato_salvar(id_=None):
               "Nada foi salvo.", "erro")
         return _render_contrato_form(c, novo=(id_ is None))
     ok, erro = _aplicar_enquadramento_federal(c, request.form)
+    if not ok:
+        flash(erro, "erro")
+        return _render_contrato_form(c, novo=(id_ is None))
+    ok, erro = _aplicar_enquadramento_inss(c, request.form)
     if not ok:
         flash(erro, "erro")
         return _render_contrato_form(c, novo=(id_ is None))

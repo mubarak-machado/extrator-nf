@@ -117,6 +117,47 @@ nenhum invariante tocado). **71 testes verdes.**
   e mostra **tooltip** de conferência (I-6). `_agregar_federal` agrupa por `chave`; partial
   novo `_linha_tributo_federal.html`; swap inline por nota (`data-federal-chave`).
 
+## Config de contratos — ISS por município, INSS por regra, máscaras e PGEA: FEITO (2026-06-04) — branch `feat/config-contratos`
+
+Pedido do humano. Configuração (entrada do especialista — guarda, não apura, I-3) + máscaras
+de entrada (apresentação, I-2). **83 testes verdes** (77 + 6). Nenhum invariante quebrado.
+
+- **ISS por município (tabela filha `contrato_municipios`):** o contrato passou a contemplar
+  **vários municípios**; cada linha guarda **alíquota**, **se é retido** (a lei municipal
+  nomeou o tomador substituto tributário) e a **forma de recolhimento** — **GUIA** (site da
+  prefeitura, código de barras) ou **DAR** (convênio SIAFI). É o **único tributo configurado
+  direto no contrato**. `Contrato.linhas_iss()` materializa o ISS escalar legado como uma
+  linha (migração não-destrutiva). A conferência (`galho_nfse/retencao._achado_iss`) **escolhe
+  a alíquota do município da nota**; município fora da lista → ISS **indefinido visível** (I-6).
+- **INSS por regra de catálogo (espelha o federal):** novo motor `galho_nfse/inss.py`
+  (`RegraInss` + `aplicar_catalogo_inss`) e store `galho_nfse/catalogo_inss.py`
+  (`StoreRegrasInss`, prefixo `INSS-`). A tela **Regras** ganhou a 2ª aba (federal + INSS,
+  rotas com `?grupo=`). O contrato **seleciona** a regra ou **ajusta manualmente** com
+  justificativa + autor/data (I-4). [[catalogo-regras-codificadas]]
+- **Máscaras de entrada (progressive enhancement, `data-mask` em `app.js`):** datas digitadas
+  (`052026` → `05/2026`) e **CNPJ/CPF** no padrão br ao sair do campo, aceitando pontuação
+  manual. Servidor canoniza com `formato.parse_competencia` e normaliza o documento por
+  dígitos; inválido volta cru/visível (I-6). Novos filtros `cpf`/`documento`.
+- **PGEA:** campos **"PGEA da contratação"** (documentos da contratação, incl. o contrato) e
+  **"PGEA da liquidação"** (PGEA anual dos documentos de pagamento da execução).
+- **Descrição do serviço (LC 116/2003)** abaixo do subitem: redação oficial (`lc116.py`,
+  `descricao_servico` + mapa exposto ao JS p/ atualização ao vivo). Largura toda da seção,
+  truncada em 2 linhas (reticências; texto completo no `title`).
+- **Pré-seleção do local de incidência (art. 3º LC 116):** `lc116.local_incidencia_de` +
+  `SUBITENS_LOCAL_PRESTACAO` (exceções assentadas, incisos II–XXII). **Default sugerido,
+  sempre retificável** (I-3); itens da **LC 157/2016 suspensos pelo STF (ADI 5835)** — planos
+  de saúde 4.22/4.23/5.09, cartões 15.01, leasing 10.04/15.09 — ficam na **regra geral**
+  (estab. do prestador), não se chuta o contestado (I-6). JS pré-seleciona ao alterar o subitem.
+- **Retrabalho visual da tela:** seções com **acento de cor à esquerda** espelhando os grupos
+  de impostos (dados=neutro, federal=`--declarado`, INSS=`--primary`, ISS=`--ok`),
+  cabeçalho com marcador colorido. O bloco "Enquadramento" foi **partido em dois cartões**
+  (Tributos federais · INSS).
+- **Textos de ajuda em tooltips (`.info-tip`):** a pedido do humano, as explicações de seção/
+  campo saíram do corpo da tela e viraram **tooltips ⓘ** (CSS próprio, fonte legível ~13px,
+  bolha compacta; hover + foco por teclado). Texto curto no `data-tip`.
+
+*Pendente:* mergear na main.
+
 ## Revisão geral da interface — apresentação das NPPs: FEITO (2026-06-04) — branch `refit/revisao-interface`
 
 Rodada de refino visual/UX da jornada por NPP pedida pelo humano. **Só Fase 1/apresentação;
