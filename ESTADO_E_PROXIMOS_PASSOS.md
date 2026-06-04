@@ -117,6 +117,37 @@ nenhum invariante tocado). **71 testes verdes.**
   e mostra **tooltip** de conferência (I-6). `_agregar_federal` agrupa por `chave`; partial
   novo `_linha_tributo_federal.html`; swap inline por nota (`data-federal-chave`).
 
+## Refit visual da aba de Impostos da NPP: FEITO (2026-06-04) — branch `refit-grupo-impostos` (mergeada+removida)
+
+Refino visual da aba "Grupos de impostos" pedido pelo humano (direção escolhida:
+**grupos fechados com resumo no cabeçalho** + **reorganização moderada**). **Só Fase 1/
+apresentação e UX da validação Fase 2; nenhum invariante quebrado.** **71 testes verdes.**
+
+- **Grupos viraram cartões colapsáveis fechados por padrão.** O cabeçalho resume status e
+  total para o operador abrir só o que precisa (I-6: pendência/divergência visíveis com o
+  grupo fechado). Cabeçalho em **duas linhas fixas** — título na 1ª, chips + total na 2ª —
+  para os cartões não desequilibrarem (um em 1 linha, outro estourando p/ 2).
+- **Chips de status no cabeçalho:** `N divergências encontradas` / `N divergências tratadas`
+  / `N a validar` / `validado`. "encontradas" só fica amarelo (`.alarme`) enquanto houver
+  alguma **não tratada** — amarelo reservado ao que ainda exige conferência (I-6). Contadores
+  por grupo no backend (`n_total/n_pendentes/n_diverge_total/n_diverge_tratadas` em
+  `_grupos_impostos`); o JS recomputa os chips por DOM na validação inline via marca
+  persistente `data-diverge` (não some ao validar).
+- **Acento de cor por camada** nas thead das 3 colunas (borda inferior, sem recolorir o
+  texto — preserva AA): destaque = `--declarado` (I-2), sugestão = `--ink-3`/referência
+  (I-3), validação = `--primary` (ação do operador).
+- **Resumo federal retraído harmonizado com INSS/ISS:** o agregado por nota deixou o flex
+  solto e virou **grade de células rotuladas** (rótulo em cima, valor embaixo) espelhando as
+  colunas e a densidade das tabelas (Município/Nota/Tributo/Destacado/Sugerido/Situação),
+  duas linhas por item; colunas de identidade em `fr` + valor/ação fixas → alinham na
+  vertical entre as linhas. Fallback empilhado < 820px.
+- **Célula do tributo sem duplicação:** a `regra` começava pelo nome (ex.: "INSS 11%"),
+  então a exibição mostra só o detalhe ("11%") nos três grupos.
+- **Carimbo de validação sem autor** (operador único; segue persistido/rastreável no
+  store/histórico/exportação — I-4); também harmoniza a altura da linha entre os grupos.
+- **Removidos da aba:** banner "N nota(s) com material não conferido" e a legenda das três
+  camadas. A pendência de material continua visível na aba "Documentos de origem" (I-6).
+
 ## Redesenho da NPP — abas + federal agregado por código: FEITA (2026-06-03) — federal superado pelo "por nota" acima
 
 Referência: tela "Grupo de Imposto" do Cosmos MPU. Detalhe da NPP reorganizado em
