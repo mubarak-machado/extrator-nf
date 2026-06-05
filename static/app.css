@@ -1027,3 +1027,21 @@ input[type="file"]::file-selector-button:hover { background: var(--surface); }
 }
 .regra-derivada p { margin: 0 0 var(--sp-1); }
 .regra-derivada p:last-child { margin-bottom: 0; }
+
+/* ---- Backup e sincronização ---- */
+/* Ações agrupadas à direita de uma list-row (editar/abrir + exportar). */
+.row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+/* Pacotes de exportação, empilhados com separador fino. */
+.backup-opts { display: flex; flex-direction: column; margin-top: var(--sp-3); }
+.backup-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+  flex-wrap: wrap; padding: var(--sp-3) 0; border-top: 1px solid var(--line);
+}
+.backup-opt:first-child { border-top: 0; }
+.backup-opt-txt { flex: 1 1 280px; min-width: 0; }
+.backup-opt-txt p { margin: .15rem 0 0; }
+/* Plano de importação: chips de resumo, radios de resolução e lista de novos. */
+.resumo-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
+.res-opcoes label { display: block; margin: .12rem 0; white-space: nowrap; }
+.plano-novos { margin: var(--sp-2) 0 0; padding-left: 1.1rem; }
+.plano-novos li { margin: .1rem 0; }

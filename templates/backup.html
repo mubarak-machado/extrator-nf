@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Backup e sincronização · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head">
+  <h2>Backup e sincronização</h2>
+  <p>Exporta o que o sistema guarda em arquivos <code>.json</code> que você sobe manualmente na
+     pasta do Google Drive da equipe — e importa de volta com conferência antes de gravar. Nada
+     entra sozinho: a importação mostra o que muda e <strong>você confirma</strong>.</p>
+</div>
+
+{# ---------------- Exportar ---------------- #}
+<section class="card mt-3"><div class="card-b">
+  <div class="page-head row"><div><h3>Exportar</h3></div></div>
+  <p class="note">Cada exportação gera um arquivo novo e imutável. Para exportar
+     <strong>um</strong> item específico, use o botão <em>Exportar</em> na própria tela:
+     <a href="{{ url_for('npps') }}">NPPs</a>, <a href="{{ url_for('contratos') }}">Contratos</a>
+     ou <a href="{{ url_for('regras') }}">Regras</a>.</p>
+
+  <div class="backup-opts">
+    {% for chave, info in escopos.items() %}
+    <div class="backup-opt">
+      <div class="backup-opt-txt">
+        <strong>{{ info[0] }}</strong>
+        <p class="muted small">{{ info[1] }}</p>
+      </div>
+      <a class="btn ghost btn-sm" href="{{ url_for('backup_exportar', escopo=chave) }}">
+        <svg class="icon"><use href="#i-exportar"/></svg> Baixar .json</a>
+    </div>
+    {% endfor %}
+  </div>
+
+  <p class="muted small mt-3">No banco agora: {{ contagem.contratos }} contrato(s) ·
+     {{ contagem.regras_federais + contagem.regras_inss }} regra(s) ·
+     {{ contagem.npps }} NPP(s) · {{ contagem.notas }} nota(s).</p>
+</div></section>
+
+{# ---------------- Importar ---------------- #}
+<section class="card mt-3"><div class="card-b">
+  <div class="page-head row"><div><h3>Importar</h3></div></div>
+  <p class="note">Selecione um arquivo <code>.json</code> gerado por este sistema. Você verá um
+     <strong>plano</strong> — o que é novo, o que já é idêntico e quais conflitos pedem decisão —
+     <strong>antes</strong> de qualquer gravação. Um backup do estado atual é salvo
+     automaticamente antes de aplicar, então dá para desfazer.</p>
+  <form method="post" action="{{ url_for('backup_importar') }}" enctype="multipart/form-data"
+        class="perigo-form">
+    <label class="field">
+      <span class="lbl">Arquivo de snapshot</span>
+      <input type="file" name="arquivo" accept="application/json,.json" required>
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn">
+        <svg class="icon"><use href="#i-seta"/></svg> Conferir o que será importado</button>
+    </div>
+  </form>
+</div></section>
+{% endblock %}

@@ -61,7 +61,11 @@ tributário (só movem dado já gravado). A fronteira Fase 1/2 não é cruzada.
 
 **A. Configuração (compartilhável — Drive da equipe)**
 - `contratos.sqlite` — chave natural `(prest_documento, numero, ano)` (UNIQUE no store).
+  **Inclui a tabela filha `contrato_municipios`** (ISS por município, adicionada 2026-06-04):
+  vai junto, sem rowid, na serialização do contrato.
 - `catalogo_federal.sqlite` — chave natural `codigo` (UNIQUE).
+- `catalogo_inss.sqlite` — chave natural `codigo` (UNIQUE), adicionado 2026-06-04. "Regras"
+  no escopo `configuracao` = federais **+** INSS.
 
 **B. Dados de trabalho (backup pessoal — sensível a I-1)**
 - `notas.sqlite` — chave natural `chave` (44 díg / id NFS-e), **globalmente única e portátil**.
@@ -196,6 +200,50 @@ sincronização"** com "Gerar snapshot" (escolhe escopo, baixa `.json`) e "Impor
 5. (Fase B) integração Drive via API, conforme a decisão de auth (junto da #4 Sheets).
 
 Cada passo passa pelo protocolo do CLAUDE.md e mantém os testes verdes (hoje 61).
+
+## Refinamentos e decisões do humano — 2026-06-05
+
+Ao iniciar a implementação (branch `feat/backup-export-import`), o humano refinou o plano
+(decisões registradas via pergunta direta):
+
+1. **Export/import item-a-item, além dos pacotes em bloco.** Cada arquivo que compõe o
+   sistema pode ser exportado/importado individualmente: **uma** NPP, **um** contrato, **uma**
+   regra (federal ou INSS) — somado ao backup completo e ao pacote `configuracao`. O envelope
+   é único; cada ponto de exportação preenche um subconjunto do bloco `dados`; o importador é
+   genérico (classifica o que estiver presente).
+2. **NPP individual carrega o contrato EMBUTIDO** (não só a referência por chave natural):
+   o arquivo é 100% portátil. Em quem importa, o contrato novo entra; idêntico é no-op;
+   divergente vira conflito visível (I-6).
+3. **Ledger de exportação viaja sempre junto e se une append-only em QUALQUER máquina**
+   (supera a redação original da decisão #1, que uniria o ledger só entre máquinas do mesmo
+   operador). Motivo, levantado e ratificado com o humano: ao entregar a outro operador uma
+   NPP já exportada, **não** unir o ledger deixaria as notas reaparecerem como exportáveis no
+   destino → risco de pagamento em duplicidade (I-1, o pior erro). Marcar uma chave como já
+   exportada só pode **impedir** um pagamento, nunca causá-lo — logo unir é seguro por
+   construção. A procedência (quem/quando exportou) fica visível.
+4. **Nome do arquivo de NPP herda o `numero`** (`NPP_<iniciais>_<AAAAMMDD>_<NNNN>.json`) — as
+   iniciais do operador no nome evitam que NPPs de operadores diferentes se confundam na pasta
+   do Drive.
+
+## Estado de implementação — 2026-06-05 (branch `feat/backup-export-import`)
+
+- **Passos 1–3 do plano: FEITOS e testados.** `tronco/backup.py` (envelope + exportações
+  individuais e em bloco; FK por chave natural; hash) e `tronco/sincronizacao.py`
+  (`planejar_importacao` dry-run + `aplicar_importacao` transacional com backup automático
+  pré-import e resolução de conflito). Métodos novos nos stores: `historico`/`importar`
+  preservando autoria (`marcacoes`, `validacoes_retencao`); `obter_por_chave_natural`
+  (`contratos`), `obter_por_codigo` (catálogos), `obter_por_numero`/`importar` (`npp`),
+  `importar` (união do ledger, `idempotencia`). **+17 testes por invariante (102 verdes).**
+- **Passo 4 (UI): FEITO** (branch `feat/backup-ui`). Tela "Backup e sincronização" no menu
+  Configuração: exportar por escopo (`configuracao`/`completo`/`pessoal`, download `.json`) e
+  importar via upload, que mostra o **plano** (novos/idênticos/conflitos com diff campo-a-campo
+  e resolução por conflito: pular/usar do arquivo/manter local) **antes** de gravar; aplicar faz
+  backup automático do estado atual antes (I-6). Botão **Exportar** item-a-item nas telas de
+  NPPs, Contratos e Regras (rotas `GET /backup/exportar/...`). Rotas em `tronco/app.py`; telas
+  `templates/backup.html` + `templates/backup_plano.html`. Correção de comparação:
+  `sincronizacao._diff` normaliza os dois lados via JSON (tupla×lista não é mais falso conflito)
+  — coberto por `test_config_com_listas_reimporta_sem_falso_conflito`. **103 testes verdes.**
+- **Passo 5 (API Drive): futuro**, junto da decisão #4 (Sheets).
 
 ## Riscos sinalizados
 

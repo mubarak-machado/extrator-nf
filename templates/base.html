@@ -68,7 +68,8 @@
 
     {% set ep_contratos = ['contratos', 'contrato_novo', 'contrato_editar', 'contrato_salvar'] %}
     {% set ep_regras = ['regras', 'regra_nova', 'regra_editar', 'regra_salvar'] %}
-    {% set ep_config = ep_contratos + ep_regras %}
+    {% set ep_backup = ['backup_tela', 'backup_importar', 'backup_aplicar'] %}
+    {% set ep_config = ep_contratos + ep_regras + ep_backup %}
     <nav class="nav" aria-label="Módulos">
       <a href="{{ url_for('hub') }}"{{ ' class=on' if request.endpoint == 'hub' }}>Início</a>
       <a href="{{ url_for('npps') }}"{{ ' class=on' if request.endpoint in ['npps', 'npp_nova', 'npp_criar', 'npp_detalhe', 'npp_editar', 'npp_salvar', 'npp_validar', 'npp_exportar', 'detalhe'] }}>NPPs</a>
@@ -85,6 +86,7 @@
         <div class="dropdown-panel nav-config-panel">
           <a href="{{ url_for('contratos') }}"{{ ' class=on' if request.endpoint in ep_contratos }}>Contratos</a>
           <a href="{{ url_for('regras') }}"{{ ' class=on' if request.endpoint in ep_regras }}>Regras</a>
+          <a href="{{ url_for('backup_tela') }}"{{ ' class=on' if request.endpoint in ep_backup }}>Backup e sincronização</a>
         </div>
       </details>
     </nav>

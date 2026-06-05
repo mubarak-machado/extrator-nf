@@ -47,7 +47,10 @@
     <div class="amount">
       <div class="total{{ ' zero' if card.total is ezero else '' }}">{{ card.total | moeda }}</div>
     </div>
-    <a class="btn ghost btn-sm" href="{{ url_for('npp_detalhe', id_=card.npp.id) }}">Abrir NPP <svg class="icon"><use href="#i-seta"/></svg></a>
+    <div class="row-actions">
+      <a class="btn ghost btn-sm" href="{{ url_for('npp_detalhe', id_=card.npp.id) }}">Abrir NPP <svg class="icon"><use href="#i-seta"/></svg></a>
+      <a class="btn ghost btn-sm" href="{{ url_for('backup_exportar_npp', id_=card.npp.id) }}" title="Exportar esta NPP (.json, com contrato e notas)"><svg class="icon"><use href="#i-exportar"/></svg> Exportar</a>
+    </div>
   </div>
   {% endfor %}
 </section>

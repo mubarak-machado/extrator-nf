@@ -84,5 +84,24 @@ class RegistroDeExportacao:
         )
         self._conn.commit()
 
+    def importar(self, registros: list[dict]) -> int:
+        """União append-only do ledger I-1 a partir de um snapshot. INSERT OR IGNORE
+        PRESERVANDO `lote_id` e `exportado_em` originais; chave já presente é no-op.
+
+        Por que unir é seguro em QUALQUER máquina (decisão do humano): marcar uma chave
+        como já exportada só pode IMPEDIR um pagamento futuro, nunca causá-lo. O ledger
+        nunca perde uma chave nem reabre uma nota paga como exportável — é a trava que
+        impede pagamento em duplicidade ao transportar/restaurar trabalho. Retorna quantas
+        chaves novas entraram."""
+        antes = self._conn.execute("SELECT COUNT(*) FROM exportacoes").fetchone()[0]
+        self._conn.executemany(
+            "INSERT OR IGNORE INTO exportacoes (chave, tipo, lote_id, exportado_em) "
+            "VALUES (?, ?, ?, ?)",
+            [(r["chave"], r["tipo"], r["lote_id"], r["exportado_em"]) for r in registros],
+        )
+        self._conn.commit()
+        depois = self._conn.execute("SELECT COUNT(*) FROM exportacoes").fetchone()[0]
+        return depois - antes
+
     def fechar(self) -> None:
         self._conn.close()

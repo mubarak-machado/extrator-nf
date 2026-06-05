@@ -71,6 +71,40 @@ class StoreValidacaoRetencao:
         return {"chave": chave, "tributo": tributo, "acao": acao, "valor": val,
                 "autor": autor, "validado_em": agora}
 
+    def historico(self) -> list[dict]:
+        """Todas as validações já gravadas (append-only), em ordem cronológica (id). O
+        backup precisa do rastro completo para que a decisão humana que embasou um líquido
+        permaneça auditável após um round-trip de snapshot (I-4)."""
+        cur = self._conn.execute(
+            "SELECT chave, tributo, acao, valor, autor, validado_em "
+            "FROM validacoes_retencao ORDER BY id"
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    def importar(self, chave: str, tributo: str, acao: str, valor: str,
+                 autor: str, validado_em: str) -> bool:
+        """Insere uma validação vinda de um snapshot PRESERVANDO autor e data originais
+        (I-4) — diferente de `validar`, que carimba o relógio local. Idempotente: linha
+        idêntica (mesma tupla) não duplica. Retorna True se inseriu, False se já existia."""
+        if tributo not in TRIBUTOS:
+            raise ValueError(f"tributo inválido: {tributo!r}")
+        if acao not in ACOES:
+            raise ValueError(f"ação inválida: {acao!r}")
+        ja = self._conn.execute(
+            "SELECT 1 FROM validacoes_retencao WHERE chave = ? AND tributo = ? AND acao = ? "
+            "AND valor = ? AND autor = ? AND validado_em = ?",
+            (chave, tributo, acao, valor, autor, validado_em),
+        ).fetchone()
+        if ja is not None:
+            return False
+        self._conn.execute(
+            "INSERT INTO validacoes_retencao (chave, tributo, acao, valor, autor, validado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (chave, tributo, acao, valor, autor, validado_em),
+        )
+        self._conn.commit()
+        return True
+
     def atual(self, chave: str, tributo: str) -> dict | None:
         """Validação vigente (a última) para (chave, tributo), ou None se nunca validado."""
         row = self._conn.execute(

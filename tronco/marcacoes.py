@@ -56,6 +56,39 @@ class StoreMarcacoes:
         )
         self._conn.commit()
 
+    def historico(self) -> list[dict]:
+        """Todas as marcações já gravadas (append-only), em ordem cronológica (id). O
+        backup precisa do rastro completo, não só da vigente — preservar autoria e data
+        originais é o que mantém o I-4 auditável após um round-trip de snapshot."""
+        cur = self._conn.execute(
+            "SELECT chave, valor, valor_material, autor, marcado_em "
+            "FROM marcacoes_material ORDER BY id"
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    def importar(self, chave: str, valor: str, autor: str, marcado_em: str,
+                 valor_material: str | None = None) -> bool:
+        """Insere uma marcação vinda de um snapshot PRESERVANDO autor e data originais
+        (I-4) — diferente de `marcar`, que carimba o relógio local. Idempotente: linha
+        idêntica (mesma tupla) não duplica. Retorna True se inseriu, False se já existia."""
+        if valor not in ("sim", "nao"):
+            raise ValueError("valor de marcação deve ser 'sim' ou 'nao'")
+        vm = valor_material if valor == "sim" else None
+        ja = self._conn.execute(
+            "SELECT 1 FROM marcacoes_material WHERE chave = ? AND valor = ? "
+            "AND IFNULL(valor_material, '') = IFNULL(?, '') AND autor = ? AND marcado_em = ?",
+            (chave, valor, vm, autor or "desconhecido", marcado_em),
+        ).fetchone()
+        if ja is not None:
+            return False
+        self._conn.execute(
+            "INSERT INTO marcacoes_material (chave, valor, valor_material, autor, marcado_em) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (chave, valor, vm, autor or "desconhecido", marcado_em),
+        )
+        self._conn.commit()
+        return True
+
     def atual(self, chave: str) -> dict | None:
         """Última marcação vigente para a chave (ou None se nunca marcada)."""
         cur = self._conn.execute(
