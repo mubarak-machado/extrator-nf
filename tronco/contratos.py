@@ -292,6 +292,16 @@ class StoreContratos:
         row = cur.fetchone()
         return self._do_row(row) if row else None
 
+    def obter_por_chave_natural(self, prest_documento: str, numero: str,
+                                ano: str) -> Contrato | None:
+        """Busca pela chave natural (doc, número, ano) — a UNIQUE da tabela. É por ela
+        que a NPP referencia o contrato num snapshot (o rowid local não é portátil)."""
+        cur = self._conn.execute(
+            "SELECT * FROM contratos WHERE prest_documento = ? AND numero = ? AND ano = ?",
+            (prest_documento, numero, ano))
+        row = cur.fetchone()
+        return self._do_row(row) if row else None
+
     def remover(self, id_: int) -> None:
         # Apaga as linhas filhas explicitamente (não depender do PRAGMA da conexão).
         self._conn.execute("DELETE FROM contrato_municipios WHERE contrato_id = ?", (id_,))

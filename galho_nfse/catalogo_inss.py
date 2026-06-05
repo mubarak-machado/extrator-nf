@@ -85,6 +85,13 @@ class StoreRegrasInss:
         row = cur.fetchone()
         return self._do_row(row) if row else None
 
+    def obter_por_codigo(self, codigo: str) -> RegraInss | None:
+        """Busca pelo `codigo` (a UNIQUE) — chave natural da regra num snapshot."""
+        cur = self._conn.execute(
+            "SELECT * FROM regras_inss WHERE codigo = ?", (codigo,))
+        row = cur.fetchone()
+        return self._do_row(row) if row else None
+
     def proxima_ordem(self) -> int:
         cur = self._conn.execute("SELECT COALESCE(MAX(ordem), 0) + 1 AS n FROM regras_inss")
         return cur.fetchone()["n"]

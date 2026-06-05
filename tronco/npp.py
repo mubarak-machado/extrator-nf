@@ -128,6 +128,28 @@ class StoreNPP:
         row = self._conn.execute("SELECT * FROM npps WHERE id = ?", (id_,)).fetchone()
         return self._do_row(row) if row else None
 
+    def obter_por_numero(self, numero: str) -> NPP | None:
+        """Busca pela identidade portátil (`numero`). Base da idempotência/conflito na
+        importação de snapshot: a mesma NPP nunca duplica entre máquinas (numero UNIQUE)."""
+        row = self._conn.execute(
+            "SELECT * FROM npps WHERE numero = ?", (numero,)).fetchone()
+        return self._do_row(row) if row else None
+
+    def importar(self, npp: NPP) -> NPP:
+        """Insere uma NPP vinda de um snapshot PRESERVANDO o `numero` (identidade portátil)
+        e a autoria/datas originais (I-4) — diferente de `criar`, que gera `numero` novo e
+        carimba o relógio local. O `contrato_id` já vem resolvido para o rowid local (a
+        partir da chave natural). UNIQUE(numero) impede duplicar a mesma NPP."""
+        cur = self._conn.execute(
+            "INSERT INTO npps (numero, contrato_id, competencia, rotulo, observacoes, "
+            "criada_por, criada_em, atualizada_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (npp.numero, npp.contrato_id, npp.competencia, npp.rotulo, npp.observacoes,
+             npp.criada_por, npp.criada_em, npp.atualizada_em),
+        )
+        self._conn.commit()
+        npp.id = cur.lastrowid
+        return npp
+
     def listar_por_contrato(self, contrato_id: int) -> list[NPP]:
         cur = self._conn.execute(
             "SELECT * FROM npps WHERE contrato_id = ? ORDER BY competencia DESC, id DESC",
