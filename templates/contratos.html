@@ -31,7 +31,10 @@
       </div>
       <span class="sub">{{ c.objeto or '— (objeto não informado)' }}</span>
     </div>
-    <a class="btn ghost btn-sm" href="{{ url_for('contrato_editar', id_=c.id) }}">Editar contrato <svg class="icon"><use href="#i-seta"/></svg></a>
+    <div class="row-actions">
+      <a class="btn ghost btn-sm" href="{{ url_for('contrato_editar', id_=c.id) }}">Editar contrato <svg class="icon"><use href="#i-seta"/></svg></a>
+      <a class="btn ghost btn-sm" href="{{ url_for('backup_exportar_contrato', id_=c.id) }}" title="Exportar este contrato (.json)"><svg class="icon"><use href="#i-exportar"/></svg> Exportar</a>
+    </div>
   </div>
   {% endfor %}
 </section>

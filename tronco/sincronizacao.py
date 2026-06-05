@@ -21,6 +21,7 @@ Merge por entidade (00_PRINCIPIOS) — declarado antes de codar:
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 
 from tronco import backup
@@ -105,9 +106,18 @@ def validar_envelope(snapshot: dict) -> str:
 
 # ---------- comparação campo-a-campo ----------
 
+def _norm(d: dict) -> dict:
+    """Normaliza pelo mesmo caminho que o snapshot percorreu (JSON): tuplas viram listas
+    etc. Sem isto, `naturezas` (tupla no objeto local via asdict) compararia diferente da
+    lista que volta do arquivo — um falso conflito a cada round-trip."""
+    return json.loads(json.dumps(d, ensure_ascii=False))
+
+
 def _diff(local: dict, snap: dict, ignorar: set) -> list:
     """Campos em que `local` e `snap` divergem (fora os de auditoria). Cada item é
-    (campo, valor_local, valor_snapshot)."""
+    (campo, valor_local, valor_snapshot). Ambos os lados são normalizados via JSON para
+    não acusar diferença só por tupla×lista."""
+    local, snap = _norm(local), _norm(snap)
     campos = (set(local) | set(snap)) - ignorar
     out = []
     for c in sorted(campos):

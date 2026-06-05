@@ -11,13 +11,15 @@ Rodar:  uv run python -m tronco.app
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import tempfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import (Flask, render_template, request, redirect, url_for, flash,
+                   jsonify, Response)
 from werkzeug.utils import secure_filename
 
 from tronco.ingestao import ingerir, ingerir_pasta
@@ -31,7 +33,8 @@ from tronco.contratos import (StoreContratos, Contrato, MunicipioIss,
                               NATUREZAS, CATEGORIAS, MATERIAL_PREVISAO, BASES_MINIMAS,
                               IR_PERCENTUAIS, INSS_ADICIONAL, ISS_LOCAL, ISS_RECOLHIMENTO)
 from tronco.exportador import ExportadorCsvLocal, novo_lote_id
-from tronco import formato, redefinicao, orgaos
+from tronco import formato, redefinicao, orgaos, backup, sincronizacao
+from tronco.backup import Bancos
 from tronco.portais import portal_consulta
 from tronco.retencao_federal import pct_txt
 from galho_nfse.lc116 import descricao_servico, LISTA_LC116, SUBITENS_LOCAL_PRESTACAO
@@ -914,6 +917,162 @@ def contrato_remover(id_):
     store = StoreContratos(); store.remover(id_); store.fechar()
     flash("Contrato removido.", "ok")
     return redirect(url_for("contratos"))
+
+
+# ---------- Backup e sincronização (snapshot JSON; tronco/infra) ----------
+# Exporta o que o sistema guarda em arquivos .json (transporte manual via Drive, Fase A) e
+# importa de volta com conferência antes de gravar. Nada decide nada de tributário (move
+# dado já gravado); a importação mostra o plano e o humano confirma (I-6). Detalhe em
+# docs/planos/backup-e-sincronizacao.md.
+
+# Pacotes em bloco (rótulo, descrição). O item-a-item vive nas telas das entidades.
+_ESCOPOS_BACKUP = {
+    "configuracao": ("Configuração da equipe",
+                     "Todos os contratos e todas as regras (federais + INSS)."),
+    "completo": ("Backup completo",
+                 "Configuração + todo o trabalho: NPPs, notas, marcações, validações e "
+                 "registro de exportação."),
+    "pessoal": ("Backup pessoal desta máquina",
+                "Tudo do backup completo + a identidade do operador (não vai no pacote da "
+                "equipe; só restaura na sua máquina)."),
+}
+
+
+def _baixar_snapshot(envelope: dict) -> Response:
+    """Devolve o envelope como download .json (artefato novo, imutável — espírito I-5).
+    O nome do arquivo herda o `numero` quando é uma NPP (iniciais do operador no nome)."""
+    corpo = json.dumps(envelope, ensure_ascii=False, indent=2)
+    resp = Response(corpo, mimetype="application/json; charset=utf-8")
+    resp.headers["Content-Disposition"] = \
+        f'attachment; filename="{backup.nome_arquivo(envelope)}"'
+    return resp
+
+
+@app.route("/backup")
+def backup_tela():
+    b = Bancos.abrir()
+    try:
+        contagem = {"contratos": len(b.contratos.listar()),
+                    "regras_federais": len(b.federais.listar()),
+                    "regras_inss": len(b.inss.listar()),
+                    "npps": len(b.npps.listar()),
+                    "notas": b.notas.contar()}
+    finally:
+        b.fechar()
+    return render_template("backup.html", contagem=contagem, escopos=_ESCOPOS_BACKUP)
+
+
+@app.route("/backup/exportar/<escopo>")
+def backup_exportar(escopo):
+    if escopo not in _ESCOPOS_BACKUP:
+        flash("Escopo de exportação desconhecido.", "erro")
+        return redirect(url_for("backup_tela"))
+    b = Bancos.abrir()
+    try:
+        if escopo == "configuracao":
+            env = backup.exportar_configuracao(b)
+        elif escopo == "completo":
+            env = backup.exportar_completo(b)
+        else:
+            env = backup.exportar_pessoal(b)
+    except ValueError as e:                       # vínculo órfão etc. — visível (I-6)
+        flash(str(e), "erro")
+        return redirect(url_for("backup_tela"))
+    finally:
+        b.fechar()
+    return _baixar_snapshot(env)
+
+
+def _exportar_item(exporta, *args, voltar):
+    """Roda uma exportação item-a-item e devolve o download, ou volta com erro visível."""
+    b = Bancos.abrir()
+    try:
+        env = exporta(b, *args)
+    except ValueError as e:
+        flash(str(e), "erro")
+        return redirect(url_for(voltar))
+    finally:
+        b.fechar()
+    return _baixar_snapshot(env)
+
+
+@app.route("/backup/exportar/contrato/<int:id_>")
+def backup_exportar_contrato(id_):
+    return _exportar_item(backup.exportar_contrato, id_, voltar="contratos")
+
+
+@app.route("/backup/exportar/regra-federal/<int:id_>")
+def backup_exportar_regra_federal(id_):
+    return _exportar_item(backup.exportar_regra_federal, id_, voltar="regras")
+
+
+@app.route("/backup/exportar/regra-inss/<int:id_>")
+def backup_exportar_regra_inss(id_):
+    return _exportar_item(backup.exportar_regra_inss, id_, voltar="regras")
+
+
+@app.route("/backup/exportar/npp/<int:id_>")
+def backup_exportar_npp(id_):
+    return _exportar_item(backup.exportar_npp, id_, voltar="npps")
+
+
+@app.route("/backup/importar", methods=["POST"])
+def backup_importar():
+    """Recebe o .json, monta o PLANO (dry-run) e o exibe para conferência. Não grava nada
+    aqui — a gravação só acontece em /backup/aplicar, após a confirmação humana (I-6)."""
+    arquivo = request.files.get("arquivo")
+    if not arquivo or not arquivo.filename:
+        flash("Selecione um arquivo .json de snapshot para importar.", "erro")
+        return redirect(url_for("backup_tela"))
+    try:
+        bruto = arquivo.read().decode("utf-8")
+        snapshot = json.loads(bruto)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        flash("Arquivo inválido: não é um JSON legível.", "erro")
+        return redirect(url_for("backup_tela"))
+    b = Bancos.abrir()
+    try:
+        plano = sincronizacao.planejar_importacao(snapshot, b)
+    finally:
+        b.fechar()
+    return render_template("backup_plano.html", plano=plano, snapshot_json=bruto,
+                           nome=arquivo.filename)
+
+
+@app.route("/backup/aplicar", methods=["POST"])
+def backup_aplicar():
+    """Aplica a importação conforme as resoluções escolhidas. Reanexa o snapshot do campo
+    oculto e revalida (hash/schema) — adulterar o caminho não passa do envelope (I-6).
+    Antes de gravar, um backup automático do estado atual é salvo (desfazer é possível)."""
+    bruto = request.form.get("snapshot_json", "")
+    try:
+        snapshot = json.loads(bruto)
+    except json.JSONDecodeError:
+        flash("Não foi possível reler o snapshot para aplicar. Reenvie o arquivo.", "erro")
+        return redirect(url_for("backup_tela"))
+    resolucoes = {k[len("res:"):]: v for k, v in request.form.items()
+                  if k.startswith("res:")}
+    b = Bancos.abrir()
+    try:
+        resumo = sincronizacao.aplicar_importacao(snapshot, b, resolucoes)
+    finally:
+        b.fechar()
+    barrado = next((d for d in resumo.detalhes if d[0] == "barrado"), None)
+    if barrado:
+        flash(f"Importação barrada: {barrado[1]}", "erro")
+        return redirect(url_for("backup_tela"))
+    if resumo.aplicados == 0 and resumo.conflitos_pendentes == 0:
+        flash("Nada novo a importar — o estado local já estava em dia.", "info")
+    else:
+        partes = [f"{resumo.aplicados} item(ns) aplicado(s)",
+                  f"{resumo.ignorados} ignorado(s)"]
+        if resumo.conflitos_pendentes:
+            partes.append(f"{resumo.conflitos_pendentes} conflito(s) deixado(s) sem resolver")
+        msg = "Importação concluída: " + ", ".join(partes) + "."
+        if resumo.backup_previo:
+            msg += f" Backup do estado anterior salvo em {resumo.backup_previo}."
+        flash(msg, "ok" if not resumo.conflitos_pendentes else "info")
+    return redirect(url_for("backup_tela"))
 
 
 # ---------- Cadastro do operador (bootstrap; I-4) ----------

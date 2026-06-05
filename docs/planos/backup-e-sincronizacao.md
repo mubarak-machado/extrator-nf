@@ -234,8 +234,15 @@ Ao iniciar a implementação (branch `feat/backup-export-import`), o humano refi
   preservando autoria (`marcacoes`, `validacoes_retencao`); `obter_por_chave_natural`
   (`contratos`), `obter_por_codigo` (catálogos), `obter_por_numero`/`importar` (`npp`),
   `importar` (união do ledger, `idempotencia`). **+17 testes por invariante (102 verdes).**
-- **Passo 4 (UI): PENDENTE** — tela "Backup e sincronização" no menu Configuração (gerar/baixar
-  por escopo e item; importar mostrando o plano novos/idênticos/conflitos com resolução).
+- **Passo 4 (UI): FEITO** (branch `feat/backup-ui`). Tela "Backup e sincronização" no menu
+  Configuração: exportar por escopo (`configuracao`/`completo`/`pessoal`, download `.json`) e
+  importar via upload, que mostra o **plano** (novos/idênticos/conflitos com diff campo-a-campo
+  e resolução por conflito: pular/usar do arquivo/manter local) **antes** de gravar; aplicar faz
+  backup automático do estado atual antes (I-6). Botão **Exportar** item-a-item nas telas de
+  NPPs, Contratos e Regras (rotas `GET /backup/exportar/...`). Rotas em `tronco/app.py`; telas
+  `templates/backup.html` + `templates/backup_plano.html`. Correção de comparação:
+  `sincronizacao._diff` normaliza os dois lados via JSON (tupla×lista não é mais falso conflito)
+  — coberto por `test_config_com_listas_reimporta_sem_falso_conflito`. **103 testes verdes.**
 - **Passo 5 (API Drive): futuro**, junto da decisão #4 (Sheets).
 
 ## Riscos sinalizados

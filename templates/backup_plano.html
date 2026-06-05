@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Plano de importação · Extrator NF{% endblock %}
+{% block conteudo %}
+
+<div class="page-head">
+  <h2>Plano de importação</h2>
+  <p>Arquivo <code>{{ nome }}</code> · escopo <span class="chip">{{ plano.escopo }}</span>
+     {% if plano.gerado_por %}· gerado por {{ plano.gerado_por.nome }}
+     ({{ plano.gerado_por.iniciais }}){% endif %}</p>
+</div>
+
+{% if not plano.valido %}
+  {# Envelope barrado (hash/schema/formato) — não se adivinha, não se aplica (I-6). #}
+  <div class="card perigo-card">
+    <div class="perigo-head">
+      <svg class="icon" aria-hidden="true"><use href="#i-alerta"/></svg>
+      <h3>Importação barrada</h3>
+    </div>
+    <p class="perigo-lead">{{ plano.erro }}</p>
+    <div class="actions"><a class="btn ghost" href="{{ url_for('backup_tela') }}">Voltar</a></div>
+  </div>
+{% else %}
+  {% set resumo = plano.resumo() %}
+  {% set conflitos = plano.conflitos %}
+  {% set novos = plano.por_situacao('novo') %}
+
+  <div class="card mt-3"><div class="card-b">
+    <p class="resumo-chips">
+      <span class="chip ok-chip">{{ resumo.novo }} novo(s)</span>
+      <span class="chip">{{ resumo.identico }} idêntico(s)</span>
+      <span class="chip{{ ' flag warn' if resumo.conflito }}">{{ resumo.conflito }} conflito(s)</span>
+    </p>
+    <p class="muted small">Os <strong>novos</strong> entram; os <strong>idênticos</strong> são
+       ignorados; cada <strong>conflito</strong> só muda o local se você escolher “usar do
+       arquivo”. O padrão é não tocar no que já está aqui.</p>
+  </div></div>
+
+  <form method="post" action="{{ url_for('backup_aplicar') }}">
+    {# Snapshot reanexado para a gravação; o servidor revalida o hash ao aplicar (I-6). #}
+    <input type="hidden" name="snapshot_json" value="{{ snapshot_json }}">
+
+    {% if conflitos %}
+    <section class="card mt-3"><div class="card-b">
+      <h3>Conflitos — decida um a um</h3>
+      <p class="muted small">O sistema nunca sobrescreve sozinho. Escolha o que fazer com cada
+         item divergente.</p>
+      <table class="conf-tab">
+        <thead><tr><th>O quê</th><th>Item</th><th>Divergência</th><th>Decisão</th></tr></thead>
+        <tbody>
+        {% for it in conflitos %}
+          <tr>
+            <td class="small">{{ it.entidade|replace('_', ' ') }}</td>
+            <td class="small"><code>{{ it.rotulo }}</code>
+              {% if it.motivo %}<br><span class="muted">{{ it.motivo }}</span>{% endif %}</td>
+            <td class="small">
+              {% for campo, local, snap in it.diffs %}
+                <div><strong>{{ campo }}</strong>:
+                  <span class="muted">local</span> {{ local if local is not none else '—' }}
+                  →
+                  <span class="muted">arquivo</span> {{ snap if snap is not none else '—' }}</div>
+              {% else %}
+                <span class="muted">—</span>
+              {% endfor %}
+            </td>
+            <td class="small res-opcoes">
+              <label><input type="radio" name="res:{{ it.id }}" value="pular" checked> Pular</label>
+              <label><input type="radio" name="res:{{ it.id }}" value="usar_snapshot"> Usar do arquivo</label>
+              <label><input type="radio" name="res:{{ it.id }}" value="manter_local"> Manter local</label>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div></section>
+    {% endif %}
+
+    {% if novos %}
+    <details class="card mt-3" open>
+      <summary class="card-b"><strong>{{ novos|length }} item(ns) novo(s)</strong> — entram na importação</summary>
+      <div class="card-b">
+        <ul class="plano-novos">
+          {% for it in novos %}
+          <li class="small">{{ it.entidade|replace('_', ' ') }} · <code>{{ it.rotulo }}</code></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </details>
+    {% endif %}
+
+    <div class="actions mt-3">
+      <button type="submit" class="btn">Aplicar importação</button>
+      <a class="btn ghost" href="{{ url_for('backup_tela') }}">Cancelar</a>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

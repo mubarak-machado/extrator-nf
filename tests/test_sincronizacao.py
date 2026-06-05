@@ -100,6 +100,21 @@ def test_reimportar_e_idempotente(origem, destino):
     assert len(destino.validacoes.historico()) == 1
 
 
+def test_config_com_listas_reimporta_sem_falso_conflito(origem, destino):
+    # Regra com naturezas/categorias preenchidas: tupla no objeto (asdict), lista após o
+    # round-trip JSON. Reimportar não pode acusar conflito só por tupla×lista.
+    a, ref = origem
+    a.federais.salvar(RegraEnquadramento(
+        codigo="TF-009", descricao="Específica", fundamento="IN 1234/2012",
+        naturezas=("nao_optante",), categorias=("geral", "vigilancia"),
+        sujeito=True, ir_pct="4.8"))
+    snap = backup.exportar_configuracao(a)
+    sincronizacao.aplicar_importacao(snap, destino, backup_previo=False)   # 1ª: cria tudo
+    plano = sincronizacao.planejar_importacao(snap, destino)               # 2ª: tudo idêntico
+    assert plano.resumo()["conflito"] == 0
+    assert plano.resumo()["novo"] == 0
+
+
 # ---------- I-4: autoria e timestamps originais preservados ----------
 
 def test_marcacao_e_validacao_preservam_autor_e_data(origem, destino):
